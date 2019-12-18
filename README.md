@@ -15,15 +15,36 @@ After running the above tools, we may confirm with some degree of certainty that
 By running this set of tools across a machine set's network infrastructure, we hope to properly isolate, identify and investigate RDMA-based failures. 
 
 ## Setup and Requirements
+- Machine Set - Preferably within Cluster
+    - If no cluster present, user must go into Test-RDMA.ps1 script and edit 'machine list.' This will be an editable in command in the future
+- CTS Traffic must be allowed through the firewall on all machhines
+    - Including script file to copy over from repo to each machine in set (given user enters in machines)
+    - must create c:\cmd\tools\CTS-Traffic on each machine - Script and Test-RDMA looks for c:\cmd\tools\CTS-Traffic on each machine for exe
+    - .exe and .sys files currently packaged in with repo in \tools\CTS-Traffic
+    - Must allow CTS-Traffic through machine firewalls 
+- NDK Perf must be installed on all machines and the machines configured properly
+    - Including script file to copy over from repo to each machine in set (given user enters in machines)
+    - Must create c:\perf\ and c:\perf\driver on each machine - Script and Test-RDMA looks for the ndkperf .exe and .sys in the following directory on each machine C:\perf\
+    - Run sc create NDKPerf type=kernel binpath=C:\perf\NDKPerf.sys to allow driver **assumes folder c:\perf**
+    - This will not be hard-coded in the long run 
+    - .exe and .sys files currently packaged in with repo in \tools\NDKPerf
+- Once the above is complete, user can run ./Test-RDMA
+
+## Test-RDMA Stage 0 -- Network Discovery
+Before testing the network infrastructure, Test-RDMA attempts to 'construct' a local image of the network by querying information about each machine's NICs. This process entails collecting information on each NICs subnet, VLAN, Ip Address, RDMA Capability, etc. A copy of this local image is output in the Test-RDMA-Network-Info text file during a run of Test-RDMA. This construct is used for the remainder of the script run to construct networking tool queries and track success/failure information. 
 
 ## Test-RDMA Stage 1 & 2 -- Ping
+Test-RDMA executes ping in two different stages amongst NIC pairs within the same Subnet and VLAN. The first stage's intent is to verify basic upper-layer connectivity. A simple ping is sent and then checked for success. 
+The second stage of Test-RDMA uses ping with the -l and -f commands enabled. The -l command dictates the size of the send buffer and -f represents the "Don't Fragment" flag. In short, the second stage attempts to find the Maximum Transmission Unit (MTU) via ping. 
 
 ## Test-RDMA Stage 3 -- CTS Traffic
+Test-RDMA executes the network performance and reliability tool -- CTS Traffic -- to stress the synthetic connection amongst NIC pairs within the same Subnet and VLAN. This stage's intent is to verify that a TCP connection over, for example, two 40 Gbs NICs can reach a reasonable percentage (50%) of the configured throughput. 
 
 ## Test-RDMA Stage 4 -- NDK Ping 
+Test-RDMA executes its first RDMA-based network tool -- NDK Ping -- to verify that a basic connection between NIC pairs within the same subnet and VLAN can be established and tested with RDMA traffic. Here, the Network Direct Kernel Provider Interface (NDKPI) is used to send a small message (analogous to a ping) via the RDMA protocol. NDK Ping is an in-box driver that can be natively run from the command line. 
 
 ## Test-RDMA Stage 5 & 6 -- NDK Perf
-
+The final two stages of Test-RDMA invoke another RDMA-based network tool called NDK Perf. This driver attempts to establish a connection between NIC pairs within the same subnet and VLAN and consequently stress the connection to its limit with RDMA traffic. Stage 5 attempts to congest the connection between only two nodes -- one client and one server. Stage 6, however, attempts a many-to-one stress test, where multiple client NICs output maximum throughput to a single server NIC. The intent of these two stages is to isolate and identify software- or hardware-based rdma configuration issues. Physical wire bottle-necks, for example, can be better identified via RDMA stress than more traditional upper-layer stress. 
 
 # Contributing
 
