@@ -360,6 +360,8 @@ Describe "Test RDMA Congestion`r`n" {
                 Write-Host "VERBOSE: Testing Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
                 "VERBOSE: Testing Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 
+                $ClientStatus = $_.Status
+
                 $SubNetTable = $_.SubNetMembers
 
                 $SourceIp = $SubNetTable.Keys[0]
@@ -370,7 +372,7 @@ Describe "Test RDMA Congestion`r`n" {
 
                     $TargetIP = $_
 
-                    if ($SourceIp -NotLike $TargetIp -and $ClientStatus.Status) {
+                    if ($SourceIp -NotLike $TargetIp -and $ClientStatus) {
                         
                         It "Basic Connectivity (ping) -- Verify Basic Connectivity: Between $($TargetIP) and $($SourceIP))`r`n" {
                             
@@ -383,6 +385,9 @@ Describe "Test RDMA Congestion`r`n" {
                             $Success | Should Be $True
                         }
                         
+                    } else {
+                        Write-Host "`tNIC PAIR NOT ENABLED`r`n"
+                        "`tNIC PAIR NOT ENABLED`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
                     }
 
                 }   
@@ -440,7 +445,7 @@ Describe "Test RDMA Congestion`r`n" {
                             
                             $PacketSize = 1024
                             $Success = $True
-                            $Error = $False
+                            $Failure = $False
                             while($Success) {
                                 
                                 Write-Host "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f`r`n"
@@ -448,15 +453,15 @@ Describe "Test RDMA Congestion`r`n" {
 
                                 $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP -l $Using:PacketSize -f" }
                                 $Success = ("$Output" -match "Received = 4")
-                                $Error = ("$Output" -match "General Failure") -or ("$Output" -match "Destination host unreachable")
-                                $Success = $Success -and -not $Error
+                                $Failure = ("$Output" -match "General Failure") -or ("$Output" -match "Destination host unreachable")
+                                $Success = $Success -and -not $Failure
 
                                 Write-Host "PING STATUS: $(If ($Success) {"SUCCESS"} Else {"FAILURE"}) FOR MTU: $PacketSize`r`n"
                                 "PING STATUS: $(If ($Success) {"SUCCESS"} Else {"FAILURE"}) FOR MTU: $PacketSize`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
                                 
                                 if ($Success) {
                                     $PacketSize *= 2
-                                } elseif ($Error) {
+                                } elseif ($Failure) {
                                     Write-Host "PING STATUS: General FAILURE - Host May Be Unreachable`r`n"
                                     "PING STATUS: General FAILURE - Host May Be Unreachable`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
                                 } else {
@@ -467,19 +472,19 @@ Describe "Test RDMA Congestion`r`n" {
 
                             $Success = $False
 
-                            while((-not $Success) -and (-not $Error)) {
+                            while((-not $Success) -and (-not $Failure)) {
 
                                 Write-Host "ping $($TargetIP) -S $($SourceIP) -L $PacketSize -F`r`n"
                                 "ping $($TargetIP) -S $($SourceIP) -L $PacketSize -F`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 
                                 $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP -l $Using:PacketSize -f" }
                                 $Success = ("$Output" -match "Received = 4")
-                                $Error = ("$Output" -match "General Failure") -or ("$Output" -match "Destination host unreachable")
-                                $Success = $Success -and -not $Error
+                                $Failure = ("$Output" -match "General Failure") -or ("$Output" -match "Destination host unreachable")
+                                $Success = $Success -and -not $Failure
 
                                 if (-not $Success) {
                                     $PacketSize = [math]::Round($PacketSize - ($PacketSize * .2))
-                                } elseif ($Error) {
+                                } elseif ($Failure) {
                                     Write-Host "PING STATUS: General FAILURE - Host May Be Unreachable`r`n"
                                     "PING STATUS: General FAILURE - Host May Be Unreachable`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
                                 } else {
@@ -489,10 +494,15 @@ Describe "Test RDMA Congestion`r`n" {
                                 }
                             }
                             $Success | Should Be $True
-                        }
+                        } 
 
                         Write-Host "####################################`r`n"
                         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                    } else {
+
+                        Write-Host "`tNIC PAIR NOT ENABLED`r`n"
+                        "`tNIC PAIR NOT ENABLED`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+
                     }
 
                 }   
@@ -605,6 +615,11 @@ Describe "Test RDMA Congestion`r`n" {
                             }
                             Write-Host "####################################`r`n"
                             "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                        } else {
+
+                            Write-Host "`tNIC PAIR NOT ENABLED`r`n"
+                            "`tNIC PAIR NOT ENABLED`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                            
                         }
                     }
                 }
@@ -710,6 +725,11 @@ Describe "Test RDMA Congestion`r`n" {
 
                                 $Success | Should Be $True
                             }
+                        } else {
+
+                            Write-Host "`tNIC PAIR NOT ENABLED`r`n"
+                            "`tNIC PAIR NOT ENABLED`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                            
                         }
                     }
                 }
@@ -809,6 +829,11 @@ Describe "Test RDMA Congestion`r`n" {
                                 $Success = $ServerSuccess -and $ClientSuccess
                                 $Success | Should Be $True
                             }
+                        } else {
+
+                            Write-Host "`tNIC PAIR NOT ENABLED`r`n"
+                            "`tNIC PAIR NOT ENABLED`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                            
                         }
                     }
                 }
@@ -912,6 +937,11 @@ Describe "Test RDMA Congestion`r`n" {
                                 $Success = $ServerSuccess -and $ClientSuccess
                                 $Success | Should Be $True
                             }
+                        } else {
+
+                            Write-Host "`tNIC PAIR NOT ENABLED`r`n"
+                            "`tNIC PAIR NOT ENABLED`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                            
                         }
                     }
                 }
@@ -1030,4 +1060,10 @@ Describe "Test RDMA Congestion`r`n" {
         }
 
     }
+
+    
+    $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+    Write-Host "Ending Test-RDMA: $endTime`r`n"
+    "Ending Test-RDMA: $endTime`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 }
