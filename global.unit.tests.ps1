@@ -1010,7 +1010,6 @@ Describe "Test RDMA Congestion`r`n" {
                                 $ServerIP = $Using:ServerIP
                                 $ServerIF = $Using:ServerIF
                                 $j = $Using:j
-                                Write-Host "C:\Test-RDMA\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($Using:ServerIP):900$Using:j  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1"
                                 Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-RDMA\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($Using:ServerIP):900$Using:j  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
                             }
 
@@ -1019,7 +1018,6 @@ Describe "Test RDMA Congestion`r`n" {
                                 $ClientIP = $Using:ClientIP
                                 $ClientIF = $Using:ClientIF
                                 $j = $Using:j
-                                Write-Host "C:\Test-RDMA\tools\NDK-Perf\NdkPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):900$Using:j -ClientAddr $($Using:ClientIP) -ClientIf $($Using:ClientIF) -TestType rping 2>&1"
                                 Invoke-Command -Computername $Using:ClientName -ScriptBlock { cmd /c "C:\Test-RDMA\tools\NDK-Perf\NdkPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):900$Using:j -ClientAddr $($Using:ClientIP) -ClientIf $($Using:ClientIF) -TestType rping 2>&1" }
                             }
                             Start-Sleep -Seconds 1
