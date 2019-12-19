@@ -15,6 +15,21 @@ After running the above tools, we may confirm with some degree of certainty that
 By running this set of tools across a machine set's network infrastructure, we hope to properly isolate, identify and investigate RDMA-based failures. 
 
 ## Setup and Requirements
+In order to run Test-RDMA, a few short steps are necessary to setup and enable each individual stage within the tool and the tool itself. A script has been provided that completes most of the setup, however, there are still a number of required manual steps. 
+
+First and foremost, it is necessary to clone this repository to a domain-joined host's C:\ drive. Specifically, clone the repo to a new directory called "Test-RDMA." The setup script depends on the repository's location being in C:\Test-RDMA. 
+
+Once the repository is cloned, navigate to .\Test-RDMA\scripts and run setup.ps1. At the top of setup.ps1, it is necessary to enter the machine names that you plan to run Test-RDMA amongst. Specifically, edit the $MachineList variable to be a series of machine names, in quotations (""), separated by spaces. Ex. "Machine One", "Machine Two", "Machine Three", etc. 
+This setup script does the following:
+- Create a new parent directory on each machine called C:\Test-RDMA. It then creates subdirectories for each NDK Perf and CTS-Traffic. These subdirectories go by C:\Test-RDMA\tools\NDK-Perf and C:\Test-RDMA\tools\CTS-Traffic. 
+- Next, the script copies over the relevant .sys and .exe files for NDK Perf and CTS-Traffic to their respective directories. 
+- After copying over the files, setup.ps1 runs `sc create NDKPerf type=kernel binpath=C:\Test-RDMA\tools\NDKPerf.sys` to allow for the new driver to be run on each remote system. 
+- Finally, a new Firewall rule is created to allow inbound CTS-Traffic communcication on each remote system. 
+
+After running setup.ps1, run the global.unit.test.ps1 to run the full suite of Test-RDMA pester tests. 
+
+(below are notes, disregard)
+
 - Machine Set - Preferably within Cluster
     - If no cluster present, user must go into Test-RDMA.ps1 script and edit 'machine list.' This will be an editable in command in the future
 - CTS Traffic must be allowed through the firewall on all machhines

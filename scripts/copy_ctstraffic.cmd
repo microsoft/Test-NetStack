@@ -23,3 +23,5 @@ copy .\tools\CTS-Traffic\ctsTraffic.pdb z:\cmd\tools\CTS-Traffic
 
 copy .\tools\CTS-Traffic\ctsTraffic.exe w:\cmd\tools\CTS-Traffic
 copy .\tools\CTS-Traffic\ctsTraffic.pdb w:\cmd\tools\CTS-Traffic
+
+mkdir 
