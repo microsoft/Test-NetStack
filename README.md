@@ -19,8 +19,8 @@ In order to run Test-RDMA, a few short steps are necessary to setup and enable e
 
 First and foremost, it is necessary to clone this repository to a domain-joined host's C:\ drive. Specifically, clone the repo to a new directory called "Test-RDMA." The setup script depends on the repository's location being in C:\Test-RDMA. 
 
-Once the repository is cloned, navigate to .\Test-RDMA\scripts and run setup.ps1. At the top of setup.ps1, it is necessary to enter the machine names that you plan to run Test-RDMA amongst. Specifically, edit the $MachineList variable to be a series of machine names, in quotations (""), separated by spaces.
-`Ex. "Machine One" "Machine Two" "Machine Three" etc.` 
+Once the repository is cloned, navigate to .\Test-RDMA\scripts and run setup.ps1. At the top of setup.ps1, it is necessary to enter the machine names that you plan to run Test-RDMA amongst. Specifically, edit the $MachineList variable to be a series of machine names, in quotations (""), separated by commas.
+`Ex. "Machine One", "Machine Two", "Machine Three" etc.` 
 This setup script does the following:
 - Create a new parent directory on each machine called C:\Test-RDMA. It then creates subdirectories for each NDK Perf and CTS-Traffic. These subdirectories go by C:\Test-RDMA\tools\NDK-Perf and C:\Test-RDMA\tools\CTS-Traffic. 
 - Next, the script copies over the relevant .sys and .exe files for NDK Perf and CTS-Traffic to their respective directories. 
