@@ -112,7 +112,7 @@ Describe "Test RDMA Congestion`r`n" {
     "Starting Test-RDMA: $startTime`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 
     $machineName = $env:computername
-    $sddcFlag = $true
+    $sddcFlag = $false
     $MachineList = "RRN44-14-09 RRN44-14-11 RRN44-14-13 RRN44-14-15"
 
     if ($MachineList.count -ne 0) {
@@ -325,9 +325,9 @@ Describe "Test RDMA Congestion`r`n" {
 
     Connect-Network -NetworkData $TestNetwork -NetworkConnectivity $NetworkConnectivity
 
-    $TestNetworkJson = ConvertTo-Json $TestNetwork -Depth 99
+    # $TestNetworkJson = ConvertTo-Json $TestNetwork -Depth 99
 
-    $TestNetworkJson | Set-Content "C:\Test-RDMA\Test-RDMA-Network-Info.txt"
+    # $TestNetworkJson | Set-Content "C:\Test-RDMA\Test-RDMA-Network-Info.txt"
 
     
     ####################################
@@ -589,7 +589,7 @@ Describe "Test RDMA Congestion`r`n" {
 
                                     $ServerRecvBps = ($FlatServerOutput | Measure-Object -Maximum).Maximum * 8
                                     $ClientRecvBps = ($FlatClientOutput | Measure-Object -Maximum).Maximum * 8
-                                    $Success = ($ServerRecvBps -gt $ServerLinkSpeed * .5) -and ($ClientRecvBps -gt $ClientLinkSpeed * .5)
+                                    $Success = ($ServerRecvBps -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object).Minimum * .5) -and ($ClientRecvBps -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object).Minimum * .5)
                                     Write-Host "Server Bps $ServerRecvBps and Client Bps $ClientRecvBps`r`n"
                                     "Server Bps $ServerRecvBps and Client Bps $ClientRecvBps`r`n"| Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 
@@ -1056,7 +1056,10 @@ Describe "Test RDMA Congestion`r`n" {
 
     }
 
-    
+    $TestNetworkJson = ConvertTo-Json $TestNetwork -Depth 99
+
+    $TestNetworkJson | Set-Content "C:\Test-RDMA\Test-RDMA-Network-Info.txt"
+
     $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
 
     Write-Host "Ending Test-RDMA: $endTime`r`n"

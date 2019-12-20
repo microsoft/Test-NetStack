@@ -27,7 +27,7 @@ This setup script does the following:
 - After copying over the files, setup.ps1 runs `sc create NDKPerf type=kernel binpath=C:\Test-RDMA\tools\NDKPerf.sys` to allow for the new driver to be run on each remote system. 
 - Finally, a new Firewall rule is created to allow inbound CTS-Traffic communcication on each remote system. 
 
-After running setup.ps1, run the global.unit.test.ps1 to run the full suite of Test-RDMA pester tests. 
+After running setup.ps1, run the global.unit.test.ps1 or Assert-RDMA.ps1 to run the full suite of Test-RDMA pester tests. 
 
 
 

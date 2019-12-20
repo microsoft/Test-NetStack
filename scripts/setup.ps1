@@ -24,10 +24,9 @@ $MachineList | ForEach-Object {
     Copy-Item C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -Destination C:\Test-RDMA\tools\NDK-Perf -ToSession $DestinationSession
 
     Copy-Item C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\Test-RDMA\tools\CTS-Traffic -ToSession $DestinationSession
-    Copy-Item C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.pdb -Destination C:\Test-RDMA\tools\CTS-Traffic -ToSession $DestinationSession
 
     Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc create NDKPerf type=kernel binpath=C:\Test-RDMA\tools\NDKPerf.sys"}
-    
-    New-NetFirewallRule -ComputerName $MachineName -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow
+
+    Invoke-Command -ComputerName $MachineName -scriptBlock {New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow}
 
 } 
