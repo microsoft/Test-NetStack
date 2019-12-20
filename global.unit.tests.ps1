@@ -265,10 +265,11 @@ Describe "Test RDMA Congestion`r`n" {
 
         }
         
+        $rdmaEnabledNics = (Get-NetAdapterRdma -CimSession $newNode.Name | Where-Object Enabled -eq $true).Name
         Write-Host "VERBOSE: RDMA Adapters"
         "VERBOSE: RDMA Adapters" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
-        Write-Host (Get-NetAdapterRdma -CimSession $newNode.Name).Name
-        (Get-NetAdapterRdma -CimSession $newNode.Name).Name | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
+        Write-Host ($rdmaEnabledNics )
+        $rdmaEnabledNics | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         Write-Host "`r`n"
         "`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
