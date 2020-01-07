@@ -115,7 +115,7 @@ Describe "Test RDMA Congestion`r`n" {
 
     $machineName = $env:computername
     $sddcFlag = $false
-    $MachineList = "RRN44-14-09 RRN44-14-11 RRN44-14-13 RRN44-14-15"
+    $MachineList = "RRN44-14-09 RRN44-14-11"
 
     if ($MachineList.count -ne 0) {
 
@@ -350,8 +350,8 @@ Describe "Test RDMA Congestion`r`n" {
         "VERBOSE: Testing Connectivity Stage 1: PING`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
-        $Results["STAGE 1: PING"] = @()
-        $Failures["STAGE 1: PING"] = @()
+        $Results["STAGE 1: PING"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| CONNECTIVITY`t|")
+        $Failures["STAGE 1: PING"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| CONNECTIVITY`t|")
 
         $TestNetwork | ForEach-Object {
             
@@ -391,9 +391,9 @@ Describe "Test RDMA Congestion`r`n" {
                                 $Success = "$Output" -match "(0% Loss)"
                                 "PING STATUS SUCCESS: $Success`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
                                 
-                                $Results["STAGE 1: PING"] += "| SOURCE MACHINE ($hostName) NIC ($SourceIP)`t| TARGET NIC ($TargetIP)`t| Connectiviy: $Success |"
+                                $Results["STAGE 1: PING"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetIP)`t| $Success`t`t|"
                                 if (-not $Success) {
-                                    $Failures["STAGE 1: PING"] += "| SOURCE MACHINE ($hostName) NIC ($SourceIP)`t| TARGET NIC ($TargetIP)`t| Connectiviy: $Success |"
+                                    $Failures["STAGE 1: PING"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetIP)`t| $Success`t`t|"
                                 }
                                 $Success | Should Be $True
                             }
@@ -429,8 +429,8 @@ Describe "Test RDMA Congestion`r`n" {
         "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
-        $Results["STAGE 2: PING -L -F"] = @()
-        $Failures["STAGE 2: PING -L -F"] = @()
+        $Results["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| MTU`t`t|")
+        $Failures["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| MTU`t`t|")
 
         $TestNetwork | ForEach-Object {
 
@@ -516,7 +516,7 @@ Describe "Test RDMA Congestion`r`n" {
                                     }
                                 }
 
-                                $Results["STAGE 2: PING -L -F"] += "| SOURCE MACHINE ($hostName) NIC ($SourceIP)`t| TARGET NIC ($TargetIP)`t| MTU: $PacketSize Bytes |"
+                                $Results["STAGE 2: PING -L -F"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetIP)`t| $PacketSize Bytes`t|"
 
                                 $Success | Should Be $True
                             } 
@@ -559,8 +559,8 @@ Describe "Test RDMA Congestion`r`n" {
         "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
-        $Results["STAGE 3: TCP CTS Traffic"] = @()
-        $Failures["STAGE 3: TCP CTS Traffic"] = @()
+        $Results["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t|")
+        $Failures["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t|")
 
         $TestNetwork | ForEach-Object {
 
@@ -647,9 +647,9 @@ Describe "Test RDMA Congestion`r`n" {
                                     $ClientOutput[($ClientOutput.Count-3)..$ClientOutput.Count] | ForEach-Object {$_ | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8}
                                     "`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 
-                                    $Results["STAGE 3: TCP CTS Traffic"] += "| SERVER MACHINE ($ServerName) NIC ($ServerIP)`t| INPUT: $ServerRecvBps bps`t| CLIENT MACHINE ($ClientName) NIC ($ClientIP)`t| OUTPUT: $ClientRecvBps bps |"
+                                    $Results["STAGE 3: TCP CTS Traffic"] += "|($ServerName)`t| ($ServerIP)`t| $ServerRecvBps bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientRecvBps bps |"
                                     if (-not $Success) {
-                                        $Failures["STAGE 3: TCP CTS Traffic"] += "| SERVER MACHINE ($ServerName) NIC ($ServerIP)`t| INPUT: $ServerRecvBps bps`t| CLIENT MACHINE ($ClientName) NIC ($ClientIP)`t| OUTPUT: $ClientRecvBps bps |"
+                                        $Failures["STAGE 3: TCP CTS Traffic"] += "|($ServerName)`t| ($ServerIP)`t| $ServerRecvBps bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientRecvBps bps |"
                                     }
 
                                     $Success | Should Be $True
@@ -800,8 +800,8 @@ Describe "Test RDMA Congestion`r`n" {
         "VERBOSE: Testing Connectivity Stage 5: NDK Ping`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         
-        $Results["STAGE 4: NDK Ping"] = @()
-        $Failures["STAGE 4: NDK Ping"] = @()
+        $Results["STAGE 4: NDK Ping"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CONNECTIVITY`t|")
+        $Failures["STAGE 4: NDK Ping"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CONNECTIVITY`t|")
 
         $TestNetwork | ForEach-Object {
     
@@ -883,9 +883,9 @@ Describe "Test RDMA Congestion`r`n" {
 
                                     $Success = $ServerSuccess -and $ClientSuccess
 
-                                    $Results["STAGE 4: NDK Ping"] += "| SERVER MACHINE ($ServerName) NIC ($ServerIP)`t| CLIENT MACHINE ($ClientName) NIC ($ClientIP)`t| Connectivity: $Success |"
+                                    $Results["STAGE 4: NDK Ping"] += "| ($ServerName)`t`t| ($ServerIP)`t| ($ClientName)`t`t| ($ClientIP)`t| $Success`t`t|"
                                     if (-not $Success) {
-                                        $Failures["STAGE 4: NDK Ping"] += "| SERVER MACHINE ($ServerName) NIC ($ServerIP)`t| CLIENT MACHINE ($ClientName) NIC ($ClientIP)`t| Connectivity: $Success |"
+                                        $Failures["STAGE 4: NDK Ping"] += "| ($ServerName)`t`t| ($ServerIP)`t| ($ClientName)`t`t| ($ClientIP)`t| $Success`t`t|"
                                     }
 
                                     $Success | Should Be $True
@@ -922,8 +922,8 @@ Describe "Test RDMA Congestion`r`n" {
         "VERBOSE: Testing Connectivity Stage 6: NDK Perf`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
-        $Results["STAGE 5: NDK Perf"] = @()
-        $Failures["STAGE 5: NDK Perf"] = @()
+        $Results["STAGE 5: NDK Perf"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| TEST PASS`t|")
+        $Failures["STAGE 5: NDK Perf"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| TEST PASS`t|")
 
         $TestNetwork | ForEach-Object {
 
@@ -1009,9 +1009,9 @@ Describe "Test RDMA Congestion`r`n" {
     
                                     $Success = $ServerSuccess -and $ClientSuccess
 
-                                    $Results["STAGE 5: NDK Perf"] += "| SERVER MACHINE ($ServerName) NIC ($ServerIP)`t| CLIENT MACHINE ($ClientName) NIC ($ClientIP)`t| TEST PASS: $Success |"
+                                    $Results["STAGE 5: NDK Perf"] += "| ($ServerName)`t`t| ($ServerIP)`t| ($ClientName)`t`t| ($ClientIP)`t| $Success`t`t|"
                                     if (-not $Success) {
-                                        $Failures["STAGE 5: NDK Perf"] += "| SERVER MACHINE ($ServerName) NIC ($ServerIP)`t| CLIENT MACHINE ($ClientName) NIC ($ClientIP)`t| TEST PASS: $Success |"
+                                        $Failures["STAGE 5: NDK Perf"] += "| ($ServerName)`t`t| ($ServerIP)`t| ($ClientName)`t`t| ($ClientIP)`t| $Success`t`t|"
                                     }
 
                                     $Success | Should Be $True
@@ -1046,8 +1046,8 @@ Describe "Test RDMA Congestion`r`n" {
         "VERBOSE: Testing Connectivity Stage 7: NDK Perf (N : 1)`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
-        $Results["STAGE 6: NDK Perf (N : 1)"] = @()
-        $Failures["STAGE 6: NDK Perf (N : 1)"] = @()
+        $Results["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| TEST PASS`t|")
+        $Failures["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| TEST PASS`t|")
 
         $TestNetwork | ForEach-Object {
 
@@ -1136,9 +1136,9 @@ Describe "Test RDMA Congestion`r`n" {
 
                         $Success = $ServerSuccess -and $ClientSuccess
                         
-                        $ResultString = "| SERVER MACHINE ($ServerName) NIC ($ServerIP) |"
+                        $ResultString = "| ($ServerName)`t`t| ($ServerIP)`t|"
                         $RandomClientNodes | ForEach-Object {
-                            $ResultString +=  "`r`t| CLIENT MACHINE $($_.Name) NIC $($_.IpAddress)`t| TEST PASS: $Success |"
+                            $ResultString +=  "`r|`t`t`t`t`t`t| ($ClientName)`t`t| ($ClientIP)`t| $Success`t`t|"
                         }
                         $Results["STAGE 6: NDK Perf (N : 1)"] += $ResultString
                         if (-not $Success) {
@@ -1167,12 +1167,8 @@ Describe "Test RDMA Congestion`r`n" {
     }
 
 
-    Write-Host "FAILURES STAGES 1-6`r`n"
-    "FAILURES STAGES 1-6`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-
-    # $FailuresJson = ConvertTo-Json $Failures -Depth 99
-
-    # $FailuresJson | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+    Write-Host "`r`nFAILURES STAGES 1-6`r`n"
+    "`r`nFAILURES STAGES 1-6`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 
     ($Failures.Keys | Sort-Object) | ForEach-Object {
 
