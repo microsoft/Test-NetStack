@@ -341,80 +341,80 @@ Describe "Test RDMA Congestion`r`n" {
     # Test Machines for PING Capability
     ####################################
 
-    Context "Basic Connectivity (ping)`r`n" {
+    # Context "Basic Connectivity (ping)`r`n" {
 
-        Write-Host "####################################`r`n"
-        Write-Host "VERBOSE: Testing Connectivity Stage 1: PING`r`n"
-        Write-Host "####################################`r`n"
-        "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
-        "VERBOSE: Testing Connectivity Stage 1: PING`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
-        "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
+    #     Write-Host "####################################`r`n"
+    #     Write-Host "VERBOSE: Testing Connectivity Stage 1: PING`r`n"
+    #     Write-Host "####################################`r`n"
+    #     "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
+    #     "VERBOSE: Testing Connectivity Stage 1: PING`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
+    #     "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
-        $Results["STAGE 1: PING"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| CONNECTIVITY`t|")
-        $Failures["STAGE 1: PING"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| CONNECTIVITY`t|")
+    #     $Results["STAGE 1: PING"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| CONNECTIVITY`t|")
+    #     $Failures["STAGE 1: PING"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| CONNECTIVITY`t|")
 
-        $TestNetwork | ForEach-Object {
+    #     $TestNetwork | ForEach-Object {
             
-            Write-Host "VERBOSE: Testing Ping Connectivity on Machine: $($_.Name)`r`n"
-            "VERBOSE: Testing Ping Connectivity on Machine: $($_.Name)`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-            $hostName = $_.Name
+    #         Write-Host "VERBOSE: Testing Ping Connectivity on Machine: $($_.Name)`r`n"
+    #         "VERBOSE: Testing Ping Connectivity on Machine: $($_.Name)`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+    #         $hostName = $_.Name
 
-            $ValidInterfaceList = $_.InterfaceListStruct.Values | where IPAddress -ne "" 
+    #         $ValidInterfaceList = $_.InterfaceListStruct.Values | where IPAddress -ne "" 
 
-            $ValidInterfaceList | ForEach-Object {
+    #         $ValidInterfaceList | ForEach-Object {
                 
-                $SourceStatus = $_.Status
+    #             $SourceStatus = $_.Status
 
-                if ($SourceStatus) {
+    #             if ($SourceStatus) {
                     
-                    Write-Host "VERBOSE: Testing Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
-                    "VERBOSE: Testing Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+    #                 Write-Host "VERBOSE: Testing Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
+    #                 "VERBOSE: Testing Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
     
-                    $SubNetTable = $_.SubNetMembers
+    #                 $SubNetTable = $_.SubNetMembers
     
-                    $SourceIp = $SubNetTable.Keys[0]
+    #                 $SourceIp = $SubNetTable.Keys[0]
     
-                    $PeerNetList = $SubNetTable[$SourceIp] | where $_ -notlike $SourceIp
+    #                 $PeerNetList = $SubNetTable[$SourceIp] | where $_ -notlike $SourceIp
                     
-                    $PeerNetList | ForEach-Object {
+    #                 $PeerNetList | ForEach-Object {
     
-                        $TargetIP = $_
+    #                     $TargetIP = $_
     
-                        if ($SourceIp -NotLike $TargetIp -and $SourceStatus) {
+    #                     if ($SourceIp -NotLike $TargetIp -and $SourceStatus) {
                             
-                            It "Basic Connectivity (ping) -- Verify Basic Connectivity: Between $($TargetIP) and $($SourceIP))" {
+    #                         It "Basic Connectivity (ping) -- Verify Basic Connectivity: Between $($TargetIP) and $($SourceIP))" {
                                 
-                                Write-Host "ping $($TargetIP) -S $($SourceIP)`r`n"
-                                "ping $($TargetIP) -S $($SourceIP)`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+    #                             Write-Host "ping $($TargetIP) -S $($SourceIP)`r`n"
+    #                             "ping $($TargetIP) -S $($SourceIP)`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
                                     
-                                $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP" } | findstr /R "Ping Packets"
-                                $Success = "$Output" -match "(0% Loss)"
-                                "PING STATUS SUCCESS: $Success`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+    #                             $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP" } | findstr /R "Ping Packets"
+    #                             $Success = "$Output" -match "(0% Loss)"
+    #                             "PING STATUS SUCCESS: $Success`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
                                 
-                                $Results["STAGE 1: PING"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetIP)`t| $Success`t`t|"
-                                if (-not $Success) {
-                                    $Failures["STAGE 1: PING"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetIP)`t| $Success`t`t|"
-                                }
-                                $Success | Should Be $True
-                            }
-                            Write-Host "`r`n####################################`r`n"
-                            "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-                        } 
-                    }   
-                }
-            }
-        }
-    }
+    #                             $Results["STAGE 1: PING"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetIP)`t| $Success`t`t|"
+    #                             if (-not $Success) {
+    #                                 $Failures["STAGE 1: PING"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetIP)`t| $Success`t`t|"
+    #                             }
+    #                             $Success | Should Be $True
+    #                         }
+    #                         Write-Host "`r`n####################################`r`n"
+    #                         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+    #                     } 
+    #                 }   
+    #             }
+    #         }
+    #     }
+    # }
     
-    Write-Host "RESULTS Stage 1: PING`r`n"
-    "RESULTS Stage 1: PING`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+    # Write-Host "RESULTS Stage 1: PING`r`n"
+    # "RESULTS Stage 1: PING`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
     
-    ($Results["STAGE 1: PING"]) | ForEach-Object {
+    # ($Results["STAGE 1: PING"]) | ForEach-Object {
 
-        Write-Host $_ 
-        $_ | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+    #     Write-Host $_ 
+    #     $_ | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 
-    }
+    # }
 
     # ###################################
     # Test Machines for PING -L -F Capability
@@ -453,6 +453,8 @@ Describe "Test RDMA Congestion`r`n" {
 
                     $InterfaceName = $TestInterface.Name
 
+                    $InterfaceIfIndex = $TestInterface.IfIndex
+
                     $SubNetTable = $_.SubNetMembers
 
                     $SourceIp = $SubNetTable.Keys[0]
@@ -467,49 +469,53 @@ Describe "Test RDMA Congestion`r`n" {
                             
                             It "MTU Connectivity -- Verify Connectivity and Discover MTU: Between Target $($TargetIP) and Source $($SourceIP)" {
                                 
+                                $PacketSize = 0
                                 try {
                                     $PacketSize = [Int](Get-NetAdapterAdvancedProperty | where Name -eq $InterfaceName | where DisplayName -eq "Jumbo Packet").RegistryValue[0]
                                 } catch {
-                                    $PacketSize = [Int](Get-NetIPInterface | where InterfaceAlias -eq $InterfaceName | where AddressFamily -eq "IPv4").nlMtu
+                                    $PacketSize = [Int](Get-NetIPInterface | where ifIndex -eq $InterfaceIfIndex | where AddressFamily -eq "IPv4").nlMtu
                                 }
                                 
-                                if ($PacketSize -eq 1514) {
-                                    $PacketSize -= 42
-                                } elseif ($PacketSize -eq 1500) {
-                                    $PacketSize -= 28
-                                }
-
-                                $Success = $True
+                                # if ($PacketSize -eq 1514) {
+                                #     $PacketSize -= 42
+                                #     $MTU = $PacketSize
+                                # } elseif ($PacketSize -eq 1500) {
+                                #     $PacketSize -= 28
+                                #     $MTU = $PacketSize
+                                # }
+                                $Success = $False
                                 $Failure = $False
 
-                                while($Success) {
-                                    
-                                    Write-Host "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n"
-                                    "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                                if ($PacketSize -eq 0) {
 
-                                    $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP -l $Using:PacketSize -f" }
-                                    $Success = ("$Output" -match "Received = 1")
-                                    $Failure = ("$Output" -match "General Failure") -or ("$Output" -match "Destination host unreachable")
-                                    $Success = $Success -and -not $Failure
+                                    $PacketSize = 1000
+                                    $Success = $True
 
-                                    Write-Host "PING STATUS: $(If ($Success) {"SUCCESS"} Else {"FAILURE"}) FOR MTU: $PacketSize`r`n"
-                                    "PING STATUS: $(If ($Success) {"SUCCESS"} Else {"FAILURE"}) FOR MTU: $PacketSize`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                                    while($Success) {
                                     
-                                    if ($Success) {
-                                        $PacketSize *= 2
-                                    } elseif ($Failure) {
-                                        Write-Host "PING STATUS: General FAILURE - Host May Be Unreachable`r`n"
-                                        "PING STATUS: General FAILURE - Host May Be Unreachable`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-                                    } else {
-                                        Write-Host "Upper Bound of $PacketSize found. Working to find specific value.`r`n"
-                                        "Upper Bound of $PacketSize found. Working to find specific value.`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                                        Write-Host "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n"
+                                        "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+
+                                        $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP -l $Using:PacketSize -f -n 1" } | Out-String
+                                        $Success = ("$Output" -match "Received = 1")
+                                        $Failure = ("$Output" -match "General Failure") -or ("$Output" -match "Destination host unreachable")
+                                        $Success = $Success -and -not $Failure
+                                        Write-Host "PING STATUS: $(If ($Success) {"SUCCESS"} Else {"FAILURE"}) FOR MTU: $PacketSize`r`n"
+                                        "PING STATUS: $(If ($Success) {"SUCCESS"} Else {"FAILURE"}) FOR MTU: $PacketSize`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                                        
+                                        if ($Success) {
+                                            $PacketSize *= 2
+                                        } elseif ($Failure) {
+                                            Write-Host "PING STATUS: General FAILURE - Host May Be Unreachable`r`n"
+                                            "PING STATUS: General FAILURE - Host May Be Unreachable`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                                        } else {
+                                            Write-Host "Upper Bound of $PacketSize found. Working to find specific value.`r`n"
+                                            "Upper Bound of $PacketSize found. Working to find specific value.`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                                        }
                                     }
                                 }
 
                                 while((-not $Success) -and (-not $Failure)) {
-                                    
-                                    Write-Host "Iterating on 10% MTU decreases.`r`n"
-                                    "Iterating on 10% MTU decreases.`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 
                                     Write-Host "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n"
                                     "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
@@ -520,7 +526,9 @@ Describe "Test RDMA Congestion`r`n" {
                                     $Success = $Success -and -not $Failure
 
                                     if (-not $Success) {
-                                        $PacketSize = [math]::Round($PacketSize - ($PacketSize * .1))
+                                        Write-Host "Attempting to find MTU Estimate. Iterating on 10% MTU decreases.`r`n"
+                                        "Attempting to find MTU Estimate. Iterating on 10% MTU decreases.`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                                        $PacketSize = [math]::Round($PacketSize - ($PacketSize * .05))
                                     } elseif ($Failure) {
                                         Write-Host "PING STATUS: General FAILURE - Host May Be Unreachable`r`n"
                                         "PING STATUS: General FAILURE - Host May Be Unreachable`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
@@ -574,8 +582,8 @@ Describe "Test RDMA Congestion`r`n" {
         "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
-        $Results["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
-        $Failures["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t|")
+        $Results["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
+        $Failures["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t|")
 
         $TestNetwork | ForEach-Object {
 
@@ -611,7 +619,7 @@ Describe "Test RDMA Congestion`r`n" {
                             
                             if (($ServerIP -NotLike $ClientIP) -And ($ServerSubnet -Like $ClientSubnet) -And ($ServerVLAN -Like $ClientVLAN) -And ($ClientStatus)) {
 
-                                It "Synthetic Connection Test (TCP) -- Verify Throughput is >50% reported: Client $($ClientIP) to Server $($ServerIP)`r`n" {
+                                It "Synthetic Connection Test (TCP) -- Verify Throughput is >80% reported: Client $($ClientIP) to Server $($ServerIP)`r`n" {
                                     
                                     $Success = $False
                                     Write-Host "Server $ServerName CMD: C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe -listen:$($ServerIP) -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000`r`n"
@@ -690,118 +698,6 @@ Describe "Test RDMA Congestion`r`n" {
     }
     
 
-    # ####################################
-    # # Test Machines for UDP CTS Traffic Capability
-    # ####################################
-
-    # Context "Synthetic Connectivity Test (UDP)`r`n" {
-        
-    #     Write-Host "####################################`r`n"
-    #     Write-Host "VERBOSE: Testing Connectivity Stage 4: UDP CTS Traffic`r`n"
-    #     Write-Host "####################################`r`n"
-    #     "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
-    #     "VERBOSE: Testing Connectivity Stage 4: UDP CTS Traffic`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
-    #     "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
-    
-    #     $TestNetwork | ForEach-Object {
-    
-    #         "VERBOSE: Testing CTS Traffic (UDP) Connectivity on Machine: $($_.Name)" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-    #         $ServerNetworkNode = $_
-    #         $ServerName = $_.Name
-            
-    #         $ServerNetworkNode.InterfaceListStruct.Values | where VLAN -ne 0 | ForEach-Object {
-    
-    #             Write-Host "VERBOSE: Testing CTS Traffic (UDP) Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
-    #             "VERBOSE: Testing CTS Traffic (UDP) Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-    
-    #             $ServerIP = $_.IpAddress
-    #             $ServerSubnet = $_.Subnet
-    #             $ServerVLAN = $_.VLAN
-    #             $ServerLinkSpeed = $_.LinkSpeed
-
-    #             $TestNetwork | ForEach-Object {
-    
-    #                 $ClientNetworkNode = $_
-    #                 $ClientName = $_.Name
-    
-    #                 $ClientNetworkNode.InterfaceListStruct.Values | where VLAN -ne 0 | ForEach-Object {
-    
-    #                     $ClientIP = $_.IpAddress
-    #                     $ClientSubnet = $_.Subnet
-    #                     $ClientVLAN = $_.VLAN
-    #                     $ClientLinkSpeed = $_.LinkSpeed
-    #                     $ClientStatus = $_.Status
-
-    #                     if (($ServerIP -NotLike $ClientIP) -And ($ServerSubnet -Like $ClientSubnet) -And ($ServerVLAN -Like $ClientVLAN) -And $ClientStatus) {
-                            
-    #                         It "Synthetic Connection Test (UDP) -- Verify Throughput is >50% reported: Client $($ClientIP) to Server $($ServerIP)`r`n" { 
-                                
-    #                             $Success = $False
-    #                             Write-Host "Server $ServerName CMD: C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe -listen:$ServerIP -protocol:udp -bitspersecond:$ServerLinkSpeed -framerate:1000 -streamlength:10 -consoleverbosity:1 -TimeLimit:15000 -Buffer:1000000 `r`n"
-    #                             "Server $ServerName CMD: ctsTraffic.exe -listen:$ServerIP -protocol:udp -bitspersecond:$ServerLinkSpeed -framerate:1000 -streamlength:10 -consoleverbosity:1 -TimeLimit:15000 -Buffer:1000000 `r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-    #                             Write-Host "Client $ClientName CMD: C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe -target:$ServerIP -bind:$ClientIP -protocol:udp -bitspersecond:$ClientLinkSpeed -framerate:1000 -streamlength:10 -consoleverbosity:1 -connections:64 -iterations:1 -Buffer:1000000`r`n"
-    #                             "Client $ClientName CMD: ctsTraffic.exe -target:$ServerIP -bind:$ClientIP -protocol:udp -bitspersecond:$ClientLinkSpeed -framerate:1000 -streamlength:10 -consoleverbosity:1 -connections:64 -iterations:1 -Buffer:1000000 `r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-        
-    #                             $ServerOutput = Start-Job -ScriptBlock {
-    #                                 $ServerIP = $Using:ServerIP
-    #                                 $ServerLinkSpeed = $Using:ServerLinkSpeed
-    #                                 Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe -listen:$Using:ServerIP -protocol:udp -bitspersecond:40000000 -framerate:100 -streamlength:10 -consoleverbosity:1 -TimeLimit:10000 2>&1 -Buffer:1000000" }
-    #                             }
-                                
-    #                             Start-Sleep 1
-
-    #                             $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe -target:$Using:ServerIP -bind:$Using:ClientIP -protocol:udp -bitspersecond:40000000 -framerate:100 -streamlength:10 -consoleverbosity:1 -connections:64 -iterations:1 -Buffer:1000000 2>&1" }
-        
-    #                             Start-Sleep 3
-                                
-    #                             $ServerOutput = Receive-Job $ServerOutput
-    #                             $FlatServerOutput = @()
-    #                             $FlatClientOutput = @()
-    #                             $ServerOutput[20..($ServerOutput.Count-2)] | ForEach-Object {If ($_ -ne "") {$FlatServerOutput += ($_ -split '\D+' | Sort-Object -Unique)}}
-    #                             $ClientOutput[20..($ClientOutput.Count-10)] | ForEach-Object {If ($_ -ne "") {$FlatClientOutput += ($_ -split '\D+' | Sort-Object -Unique)}}
-    #                             $FlatServerOutput = ForEach($num in $FlatServerOutput) {if ($num -ne "") {[Long]::Parse($num)}} 
-    #                             $FlatClientOutput = ForEach($num in $FlatClientOutput) {if ($num -ne "") {[Long]::Parse($num)}}
-
-    #                             $ServerRecvBps = ($FlatServerOutput | Measure-Object -Maximum).Maximum
-    #                             $ClientRecvBps = ($FlatClientOutput | Measure-Object -Maximum).Maximum
-    #                             $Success = ($ServerRecvBps -gt $ServerLinkSpeed * .5) -and ($ClientRecvBps -gt $ClientLinkSpeed * .5)
-    #                             Write-Host "Server RevBps: $ServerRecvBps, Client Bps: $ClientRecvBps`r`n"
-
-    #                             Write-Host "UDP CTS Traffic Server Output: "
-    #                             Write-Host ($ServerOutput -match "SuccessfulConnections")
-    #                             $ServerOutput[($ServerOutput.Count-1)..$ServerOutput.Count] | ForEach-Object {Write-Host $_}
-    #                             Write-Host "`r`n"
-    #                             "UDP CTS Traffic Server Output: "| Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-    #                             ($ServerOutput -match "SuccessfulConnections") | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-    #                             $ServerOutput[($ServerOutput.Count-1)..$ServerOutput.Count] | ForEach-Object {$_ | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8}
-    #                             "`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-        
-    #                             Write-Host "UDP CTS Traffic Client Output: "
-    #                             Write-Host ($ClientOutput -match "SuccessfulConnections")
-    #                             $ClientOutput[($ClientOutput.Count-6)..$ClientOutput.Count] | ForEach-Object {Write-Host $_}
-    #                             Write-Host "`r`n"
-    #                             "UDP CTS Traffic Client Output: "| Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-    #                             ($ClientOutput -match "SuccessfulConnections") | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-    #                             $ClientOutput[($ClientOutput.Count-6)..$ClientOutput.Count] | ForEach-Object {$_ | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8}
-    #                             "`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-
-    #                             $Success | Should Be $True
-    #                         }
-    #                     } else {
-
-    #                         Write-Host "`tNIC PAIR NOT VALID`r`n"
-    #                         "`tNIC PAIR NOT VALID`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-                            
-    #                     }
-    #                 }
-    #             }
-    #             Write-Host "####################################`r`n"
-    #             "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-    #         }
-    #     }
-    # }
-    
-
     ####################################
     # Test Machines for NDK Ping Capability
     ####################################
@@ -809,10 +705,10 @@ Describe "Test RDMA Congestion`r`n" {
     Context "Basic RDMA Connectivity Test (NDK Ping)`r`n" {
 
         Write-Host "####################################`r`n"
-        Write-Host "VERBOSE: Testing Connectivity Stage 5: NDK Ping`r`n"
+        Write-Host "VERBOSE: Testing Connectivity Stage 4: NDK Ping`r`n"
         Write-Host "####################################`r`n"
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
-        "VERBOSE: Testing Connectivity Stage 5: NDK Ping`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
+        "VERBOSE: Testing Connectivity Stage 4: NDK Ping`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         
         $Results["STAGE 4: NDK Ping"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CONNECTIVITY`t|")
@@ -931,10 +827,10 @@ Describe "Test RDMA Congestion`r`n" {
     Context "1:1 RDMA Congestion Test (NDK Perf)`r`n" {
         
         Write-Host "####################################`r`n"
-        Write-Host "VERBOSE: Testing Connectivity Stage 6: NDK Perf`r`n"
+        Write-Host "VERBOSE: Testing Connectivity Stage 5: NDK Perf`r`n"
         Write-Host "####################################`r`n"
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
-        "VERBOSE: Testing Connectivity Stage 6: NDK Perf`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
+        "VERBOSE: Testing Connectivity Stage 5: NDK Perf`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
         $Results["STAGE 5: NDK Perf"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| TEST PASS`t|")
@@ -1055,10 +951,10 @@ Describe "Test RDMA Congestion`r`n" {
 
     Context "(N:1) RDMA Congestion Test (NDK Perf)`r`n" {
         Write-Host "####################################`r`n"
-        Write-Host "VERBOSE: Testing Connectivity Stage 7: NDK Perf (N : 1)`r`n"
+        Write-Host "VERBOSE: Testing Connectivity Stage 6: NDK Perf (N : 1)`r`n"
         Write-Host "####################################"
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
-        "VERBOSE: Testing Connectivity Stage 7: NDK Perf (N : 1)`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
+        "VERBOSE: Testing Connectivity Stage 6: NDK Perf (N : 1)`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
         $Results["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t| TEST PASS`t|")
@@ -1086,7 +982,7 @@ Describe "Test RDMA Congestion`r`n" {
                 $ResultString += "| ($ServerName)`t`t| ($ServerIP)`t|"
                 $ClientNetwork = $TestNetwork | where Name -ne $ServerName
 
-                for ($i = 0; $i -lt $MachineCluster.Count - 1; $i++) {
+                for ($i = 1; $i -lt $MachineCluster.Count - 1; $i++) {
                     
                     It "(N:1) RDMA Congestion Test (Client $ClientIP to Server $ServerIP)" {
 
@@ -1107,7 +1003,6 @@ Describe "Test RDMA Congestion`r`n" {
                             $ClientInterface = $_.InterfaceListStruct.Values | where Name -In $_.RdmaNetworkAdapters.Name | where Subnet -Like $ServerSubnet | where VLAN -Like $ServerVLAN
                             $ClientIP = $ClientInterface.IpAddress
                             $ClientIF = $ClientInterface.IfIndex
-                            # $ResultString +=  "`r|`t`t`t`t`t`t| $($ClientName)`t`t| $($ClientIP)`t|"
 
                             Write-Host "Server $ServerName CMD: C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($ServerIP):900$j  -ServerIf $ServerIF -TestType rping -W 5`r`n"
                             "Server $ServerName CMD: C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($ServerIP):900$j  -ServerIf $ServerIF -TestType rping -W 5`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8

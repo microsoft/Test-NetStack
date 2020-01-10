@@ -33,7 +33,7 @@ function Assert-RDMA {
 
 
     $testFile = Join-Path -Path $here -ChildPath "\global.unit.tests.ps1"
-    $launch_deploy = Invoke-Pester -Script $testFile #-Show Summary, Failed
+    $launch_deploy = Invoke-Pester -Script $testFile -Show Summary, Failed
     # $launch_deploy = Invoke-Pester -Script $testFile -PassThru
     # $launch_deploy | Select-Object -Property TagFilter, Time, TotalCount, PassedCount, FailedCount, SkippedCount, PendingCount | Format-Table -AutoSize
 

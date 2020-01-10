@@ -27,11 +27,28 @@ CompanyName = 'Microsoft'
 Copyright = '(c) 2019 Inc. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Test-RDMA is a module that validates the RDMA and Data Center Bridging (DCB) configuration best practices on Windows. DCB is a suite of standards used to provide hardware based bandwidth reservations and flow control.  This is not required for iWARP RDMA traffic, however it is mandatory for RoCE RDMA traffic.'
+Description = 'Test-RDMA is a module that can be used to exercise enterprise customer network infrastructure, and, in particular, their RDMA infrastructure. In particualr, Test-RDMA is a pester-integrated powershell tool that attempts to stress and strain the network fabric in order to isolate RDMA issues and failures.' 
+
+# Minimum version of the Windows PowerShell engine required by this module
+# PowerShellVersion = ''
+
+# Name of the Windows PowerShell host required by this module
+# PowerShellHostName = ''
+
+# Minimum version of the Windows PowerShell host required by this module
+# PowerShellHostVersion = ''
+
+# Minimum version of Microsoft .NET Framework required by this module. This prerequisite is valid for the PowerShell Desktop edition only.
+# DotNetFrameworkVersion = ''
+
+# Minimum version of the common language runtime (CLR) required by this module. This prerequisite is valid for the PowerShell Desktop edition only.
+# CLRVersion = ''
+
+# Processor architecture (None, X86, Amd64) required by this module
+# ProcessorArchitecture = ''
 
 # Modules that must be imported into the global environment prior to importing this module
-RequiredModules = @(@{ModuleName = 'Test-RDMA'; ModuleVersion = '20191008.1.1.1'; }, 
-                    @{ModuleName = 'Show-Calendar'; ModuleVersion = '20191008.1.1.1'})
+RequiredModules = @(@{ModuleName = 'Test-RDMA'; ModuleVersion = '20200110.1.1.1'; })
 
 # RequiredModules = @(@{ModuleName = 'NetworkingDSC'; ModuleVersion = '6.3.0.0'; }, 
 #                @{ModuleName = 'xHyper-V'; ModuleVersion = '3.16.0.0'; }, 
@@ -55,7 +72,7 @@ RequiredModules = @(@{ModuleName = 'Test-RDMA'; ModuleVersion = '20191008.1.1.1'
 # NestedModules = @()
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = 'Assert-RDMA','Show-Calendar'
+FunctionsToExport = 'Assert-RDMA'
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
 CmdletsToExport = @()

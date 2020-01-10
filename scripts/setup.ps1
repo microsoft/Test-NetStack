@@ -1,7 +1,7 @@
 # Setup Script for Test-RDMA
 
 $HostName = "RRN44-14-09"
-$MachineList = "RRN44-14-11"
+$MachineList = "RRN44-14-09","RRN44-14-11"
 
 $domain = "cfdev"
 $userpwd = "wolfpack"
@@ -25,7 +25,7 @@ $MachineList | ForEach-Object {
 
     Copy-Item C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\Test-RDMA\tools\CTS-Traffic -ToSession $DestinationSession
 
-    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc create NDKPerf type=kernel binpath=C:\Test-RDMA\tools\NDKPerf.sys"}
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc create NDKPerf type=kernel binpath=C:\Test-RDMA\tools\NDK-Perf\NDKPerf.sys"}
 
     Invoke-Command -ComputerName $MachineName -scriptBlock {New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow}
 
