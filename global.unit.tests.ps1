@@ -476,13 +476,13 @@ Describe "Test RDMA Congestion`r`n" {
                                     $PacketSize = [Int](Get-NetIPInterface | where ifIndex -eq $InterfaceIfIndex | where AddressFamily -eq "IPv4").nlMtu
                                 }
                                 
-                                # if ($PacketSize -eq 1514) {
-                                #     $PacketSize -= 42
-                                #     $MTU = $PacketSize
-                                # } elseif ($PacketSize -eq 1500) {
-                                #     $PacketSize -= 28
-                                #     $MTU = $PacketSize
-                                # }
+                                if ($PacketSize -eq 1514) {
+                                    $PacketSize -= 42
+                                    $MTU = $PacketSize
+                                } elseif ($PacketSize -eq 1500) {
+                                    $PacketSize -= 28
+                                    $MTU = $PacketSize
+                                }
                                 $Success = $False
                                 $Failure = $False
 
