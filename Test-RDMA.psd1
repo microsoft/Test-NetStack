@@ -12,10 +12,10 @@
 RootModule = 'Test-RDMA.psm1'
 
 # Version number of this module.
-ModuleVersion = '20191008.1.1.1'
+ModuleVersion = '20200110.1.1.1'
 
 # ID used to uniquely identify this module
-GUID = 'aad51a88-4b67-4c35-b840-0be9b0d914d2'
+GUID = 'aad51a88-4b67-b840-4c35-d914d20be9b0'
 
 # Author of this module
 Author = 'Noah Harper'
