@@ -6,6 +6,7 @@ class InterfaceData {
     [String]$Description
     [String]$RdmaImplementation
     [String]$vSwitch
+    [String]$vSwitchDescription
     [String]$pSwitch
     [Int]$SubnetMask
     [Int]$Vlan
@@ -115,7 +116,7 @@ Describe "Test RDMA Congestion`r`n" {
 
     $machineName = $env:computername
     $sddcFlag = $false
-    $MachineList = "RRN44-14-09 RRN44-14-11 RRN44-14-13 RRN44-14-15"
+    $MachineList = "RRN44-14-09 RRN44-14-13 RRN44-14-15"
 
     if ($MachineList.count -ne 0) {
 
@@ -243,8 +244,8 @@ Describe "Test RDMA Congestion`r`n" {
 
             } elseif ($vmTeamMapping.ParentAdapter -Like "*$($newInterface.Name)*") {
 
-                $newInterface.pSwitch = ($vmTeamMapping | where ParentAdapter -Like "*$($newInterface.Name)*") | select NetAdapterName
-
+                $newInterface.pSwitch = ($vmTeamMapping | where ParentAdapter -Like "*$($newInterface.Name)*").NetAdapterName
+            
             } else {
                 
                 $newInterface.vSwitch = "N/A"
@@ -583,7 +584,7 @@ Describe "Test RDMA Congestion`r`n" {
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
         $Results["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
-        $Failures["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t|")
+        $Failures["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
 
         $TestNetwork | ForEach-Object {
 
@@ -648,7 +649,7 @@ Describe "Test RDMA Congestion`r`n" {
 
                                     $ServerRecvBps = ($FlatServerOutput | Measure-Object -Maximum).Maximum * 8
                                     $ClientRecvBps = ($FlatClientOutput | Measure-Object -Maximum).Maximum * 8
-                                    $Success = ($ServerRecvBps -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object).Minimum * .8) -and ($ClientRecvBps -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object).Minimum * .8)
+                                    $Success = ($ServerRecvBps -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8) -and ($ClientRecvBps -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8)
                                     Write-Host "Server Bps $ServerRecvBps and Client Bps $ClientRecvBps`r`n"
                                     "Server Bps $ServerRecvBps and Client Bps $ClientRecvBps`r`n"| Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 
@@ -833,8 +834,8 @@ Describe "Test RDMA Congestion`r`n" {
         "VERBOSE: Testing Connectivity Stage 5: NDK Perf`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
-        $Results["STAGE 5: NDK Perf"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| TEST PASS`t|")
-        $Failures["STAGE 5: NDK Perf"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| TEST PASS`t|")
+        $Results["STAGE 5: NDK Perf"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
+        $Failures["STAGE 5: NDK Perf"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
 
         $TestNetwork | ForEach-Object {
 
@@ -859,7 +860,9 @@ Describe "Test RDMA Congestion`r`n" {
                     $ServerIF = $_.IfIndex
                     $ServerSubnet = $_.Subnet
                     $ServerVLAN = $_.VLAN
-    
+                    $ServerLinkSpeed = $_.LinkSpeed
+                    $ServerInterfaceDescription = $_.Description
+
                     $TestNetwork | ForEach-Object {
     
                         $ClientNetworkNode = $_
@@ -874,6 +877,8 @@ Describe "Test RDMA Congestion`r`n" {
                             $ClientSubnet = $_.Subnet
                             $ClientVLAN = $_.VLAN
                             $ClientStatus = $_.Status
+                            $ClientLinkSpeed = $_.LinkSpeed
+                            $ClientInterfaceDescription = $_.Description
     
                             if (($ServerIP -NotLike $ClientIP) -And ($ServerSubnet -Like $ClientSubnet) -And ($ServerVLAN -Like $ClientVLAN) -And $ClientStatus) {
     
@@ -890,16 +895,44 @@ Describe "Test RDMA Congestion`r`n" {
                                     "Server $ServerName CMD: C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rping -W 5`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
                                     Write-Host "Client $ClientName CMD: C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping`r`n"
                                     "Client $ClientName CMD: C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-    
+                                    
+                                    $ServerCounter = Start-Job -ScriptBlock {
+                                        $ServerName = $Using:ServerName
+                                        $ServerInterfaceDescription = $Using:ServerInterfaceDescription
+                                        Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 5 #-ErrorAction Ignore
+                                    }
+
                                     $ServerOutput = Start-Job -ScriptBlock {
                                         $ServerIP = $Using:ServerIP
                                         $ServerIF = $Using:ServerIF
                                         Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
                                     }
+
                                     Start-Sleep -Seconds 1
+                                    
+                                    $ClientCounter = Start-Job -ScriptBlock {
+                                        $ClientName = $Using:ClientName
+                                        $ClientInterfaceDescription = $Using:ClientInterfaceDescription
+                                        Get-Counter -ComputerName $ClientName -Counter "\RDMA Activity($ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 5
+                                    }
                                     
                                     $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rping 2>&1" }
                                     
+                                    $read = Receive-Job $ServerCounter
+                                    $written = Receive-Job $ClientCounter
+
+                                    $FlatServerOutput = $read.Readings.split(":") | ForEach-Object {
+                                        try {[uint64]($_) * 8} catch{}
+                                    }
+                                    $FlatClientOutput = $written.Readings.split(":") | ForEach-Object {
+                                        try {[uint64]($_) * 8} catch{}
+                                    }
+                                    $ServerBytesPerSecond = ($FlatServerOutput | Measure-Object -Maximum).Maximum
+                                    $ClientBytesPerSecond = ($FlatClientOutput | Measure-Object -Maximum).Maximum
+
+                                    Write-Host $ServerBytesPerSecond
+                                    Write-Host $ClientBytesPerSecond
+
                                     Start-Sleep -Seconds 5
                                     
                                     $ServerOutput = Receive-Job $ServerOutput
@@ -917,12 +950,12 @@ Describe "Test RDMA Congestion`r`n" {
                                     $ClientOutput | ForEach-Object {$_ | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8}
                                     Write-Host "`r`n##################################################`r`n"
                                     "`r`n##################################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-    
-                                    $Success = $ServerSuccess -and $ClientSuccess
+                                    
+                                    $Success = ($ServerBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8) -and ($ClientBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8)
 
-                                    $Results["STAGE 5: NDK Perf"] += "| ($ServerName)`t`t| ($ServerIP)`t| ($ClientName)`t`t| ($ClientIP)`t| $Success`t`t|"
+                                    $Results["STAGE 5: NDK Perf"] += "|($ServerName)`t| ($ServerIP)`t| $ServerBytesPerSecond bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientBytesPerSecond bps`t| $SUCCESS |"
                                     if (-not $Success) {
-                                        $Failures["STAGE 5: NDK Perf"] += "| ($ServerName)`t`t| ($ServerIP)`t| ($ClientName)`t`t| ($ClientIP)`t| $Success`t`t|"
+                                        $Failures["STAGE 5: NDK Perf"] += "|($ServerName)`t| ($ServerIP)`t| $ServerBytesPerSecond bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientBytesPerSecond bps`t| $SUCCESS |"
                                     }
 
                                     $Success | Should Be $True
@@ -957,9 +990,9 @@ Describe "Test RDMA Congestion`r`n" {
         "VERBOSE: Testing Connectivity Stage 6: NDK Perf (N : 1)`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
-        $Results["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t| TEST PASS`t|")
+        $Results["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
         $ResultString = ""
-        $Failures["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t| TEST PASS`t|")
+        $Failures["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
 
         $TestNetwork | ForEach-Object {
 
@@ -978,8 +1011,10 @@ Describe "Test RDMA Congestion`r`n" {
                 $ServerIF = $_.IfIndex
                 $ServerSubnet = $_.Subnet
                 $ServerVLAN = $_.VLAN
+                $ServerLinkSpeed = $_.LinkSpeed
+                $ServerInterfaceDescription = $_.Description
+
                 $ResultString = ""
-                $ResultString += "| ($ServerName)`t`t| ($ServerIP)`t|"
                 $ClientNetwork = $TestNetwork | where Name -ne $ServerName
 
                 for ($i = 1; $i -lt $MachineCluster.Count - 1; $i++) {
@@ -991,6 +1026,8 @@ Describe "Test RDMA Congestion`r`n" {
 
                         $ServerOutput = @()
                         $ClientOutput = @()
+                        $ServerCounter = @()
+                        $ClientCounter = @()
 
                         $ServerSuccess = $True
                         $ClientSuccess = $True
@@ -1003,17 +1040,30 @@ Describe "Test RDMA Congestion`r`n" {
                             $ClientInterface = $_.InterfaceListStruct.Values | where Name -In $_.RdmaNetworkAdapters.Name | where Subnet -Like $ServerSubnet | where VLAN -Like $ServerVLAN
                             $ClientIP = $ClientInterface.IpAddress
                             $ClientIF = $ClientInterface.IfIndex
+                            $ClientInterfaceDescription = $ClientInterface.Description
 
                             Write-Host "Server $ServerName CMD: C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($ServerIP):900$j  -ServerIf $ServerIF -TestType rping -W 5`r`n"
                             "Server $ServerName CMD: C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($ServerIP):900$j  -ServerIf $ServerIF -TestType rping -W 5`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
                             Write-Host "Client $($_.Name) CMD: C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):900$j -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping`r`n"
                             "Client $($_.Name) CMD: C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):900$j -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 
+                            $ServerCounter += Start-Job -ScriptBlock {
+                                $ServerName = $Using:ServerName
+                                $ServerInterfaceDescription = $Using:ServerInterfaceDescription
+                                Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 5 #-ErrorAction Ignore
+                            }
+
                             $ServerOutput += Start-Job -ScriptBlock {
                                 $ServerIP = $Using:ServerIP
                                 $ServerIF = $Using:ServerIF
                                 $j = $Using:j
                                 Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-RDMA\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($Using:ServerIP):900$Using:j  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
+                            }
+
+                            $ClientCounter += Start-Job -ScriptBlock {
+                                $ClientName = $Using:ClientName
+                                $ClientInterfaceDescription = $Using:ClientInterfaceDescription
+                                Get-Counter -ComputerName $ClientName -Counter "\RDMA Activity($ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 5
                             }
 
                             $ClientOutput += Start-Job -ScriptBlock {
@@ -1030,37 +1080,62 @@ Describe "Test RDMA Congestion`r`n" {
                         Start-Sleep -Seconds 10
                         Write-Host "##################################################`r`n"
                         "##################################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
+                        $ServerBytesPerSecond = 0
+                        $k = 0
+                        $ServerCounter | ForEach-Object {
+                            
+                            $read = Receive-Job $_
+
+                            $FlatServerOutput = $read.Readings.split(":") | ForEach-Object {
+                                try {[uint64]($_) * 8} catch{}
+                            }
+                            $ClientInterface = $RandomClientNodes[$k].InterfaceListStruct.Values | where Name -In $RandomClientNodes[$k].RdmaNetworkAdapters.Name | where Subnet -Like $ServerSubnet | where VLAN -Like $ServerVLAN
+                            $ClientLinkSpeed = $ClientInterface.LinkSpeed
+                            $ServerBytesPerSecond = ($FlatServerOutput | Measure-Object -Maximum).Maximum
+                            $ServerSuccess = $ServerSuccess -and ($ServerBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8)
+                            
+                            $k++
+                        }
+                        $ResultString += "| ($ServerName)`t`t| ($ServerIP)`t| $ServerBytesPerSecond `t`t|" 
+
                         $ServerOutput | ForEach-Object {
                             $job = Receive-Job $_
                             Write-Host $job
-                            $ServerSuccess = $ServerSuccess -and ($job[3] -match "completes")
                             $job | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
                         }
                         Write-Host "`r`n##################################################`r`n"
                         "`r`n##################################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-                        
+
+                        $k = 0
+                        $ClientCounter | ForEach-Object {
+                            
+                            $written = Receive-Job $_
+                            $FlatClientOutput = $written.Readings.split(":") | ForEach-Object {
+                                try {[uint64]($_) * 8} catch{}
+                            }
+                            $ClientName = $RandomClientNodes[$k].Name
+                            $ClientInterface = $RandomClientNodes[$k].InterfaceListStruct.Values | where Name -In $RandomClientNodes[$k].RdmaNetworkAdapters.Name | where Subnet -Like $ServerSubnet | where VLAN -Like $ServerVLAN
+                            $ClientIP = $ClientInterface.IpAddress
+                            $ClientLinkSpeed = $ClientInterface.LinkSpeed
+                            $ClientBytesPerSecond = ($FlatClientOutput | Measure-Object -Maximum).Maximum
+                            $ClientSuccess = $ClientSuccess -and ($ClientBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8) 
+                            
+                            $ResultString +=  "`r|`t`t`t`t`t`t`t`t`t| $($ClientName)`t`t| $($ClientIP)`t|"
+                            $ResultString += " $($job[3] -match "completes")`t`t`t| $ClientBytesPerSecond bps`t|"
+                            $k++
+                        }
+
                         $k = 0
                         $ClientOutput | ForEach-Object {
                             $job = Receive-Job $_
                             Write-Host $job
-                            $ClientSuccess = $ClientSuccess -and ($job[3] -match "completes")
-                            $ClientName = $RandomClientNodes[$k].Name
-                            $ClientInterface = $RandomClientNodes[$k].InterfaceListStruct.Values | where Name -In $RandomClientNodes[$k].RdmaNetworkAdapters.Name | where Subnet -Like $ServerSubnet | where VLAN -Like $ServerVLAN
-                            $ClientIP = $ClientInterface.IpAddress
-                            $ResultString +=  "`r|`t`t`t`t`t`t| $($ClientName)`t`t| $($ClientIP)`t|"
-                            $ResultString += " $($job[3] -match "completes")`t`t|"
                             $job | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-                            $k++
                         }
                         Write-Host "`r`n##################################################`r`n"
                         "`r`n##################################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 
                         $Success = $ServerSuccess -and $ClientSuccess
                         
-                        
-                        # $RandomClientNodes | ForEach-Object {
-                        #     $ResultString +=  "`r|`t`t`t`t`t`t| ($_.Name)`t`t| ($ClientIP)`t| $Success`t`t|"
-                        # }
                         $Results["STAGE 6: NDK Perf (N : 1)"] += $ResultString
                         if (-not $Success) {
                             $Failures["STAGE 6: NDK Perf (N : 1)"] += $ResultString
