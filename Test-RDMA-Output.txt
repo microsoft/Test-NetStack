@@ -1,0 +1,7 @@
+Test-RDMA Output File
+Starting Test-RDMA: 01-09-2020 15:53:06
+
+The Following List of Machines will be tested: RRN44-14-09 RRN44-14-11 RRN44-14-13 RRN44-14-15
+
+Beginning Network Construction.
+

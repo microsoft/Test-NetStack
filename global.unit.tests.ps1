@@ -44,7 +44,7 @@ function Connect-Network {
       [Parameter(Mandatory = $true)]
       [NodeNetworkData[]] $NetworkData,
       [Parameter(Mandatory = $true)]
-      [HashTable] $NetworkConnectivity
+      [HashTable] $TestSubNetworks
     )
 
     $NetworkConnectivityTemp = @{}
@@ -57,11 +57,14 @@ function Connect-Network {
 
         $_.InterfaceListStruct.Values | ForEach-Object {
 
-            if ($_.IpAddress -ne "") {
+            if ($_.Status -eq $true) {
 
                 $MaskVlanTuple = "$($_.Subnet), $($_.VLAN)"
                 $NetworkConnectivityTemp[$MaskVlanTuple] +=  @("$($_.IpAddress)")
-
+                $TestSubNetworks[$MaskVlanTuple] += @("$($_.IpAddress)")
+            }
+            if ($_.VLAN -ne 0) {
+                
             }
 
         }
@@ -87,6 +90,8 @@ function Connect-Network {
         
     }
 
+    
+
 }
 
 function Is-Numeric ($Value) {
@@ -99,11 +104,10 @@ Describe "Test RDMA Congestion`r`n" {
 
     [NodeNetworkData[]]$TestNetwork = @();
     [String[]]$MachineCluster = @()
-    [HashTable]$NetworkConnectivity = @{}
+    [HashTable]$TestSubNetworks = @{}
     [HashTable] $Results = @{}
     [HashTable] $Failures = @{}
 
-    
     Write-Host "Generating Test-RDMA-Output.txt"
     New-Item C:\Test-RDMA\Test-RDMA-Output.txt -ErrorAction SilentlyContinue
     $OutputFile = "Test-RDMA Output File"
@@ -175,8 +179,8 @@ Describe "Test RDMA Congestion`r`n" {
             $newInterface.Name = $_.Name
             $newInterface.Description = $_.InterfaceDescription
             $newInterface.IfIndex = $_.ifIndex
-            $newInterface.Status = If ($_.Status -match "Up") {$true} Else {$false}
             $newInterface.IpAddress = (Get-NetIpAddress -CimSession $newNode.Name | where InterfaceIndex -eq $_.ifIndex | where AddressFamily -eq "IPv4" | where SkipAsSource -Like "*False*").IpAddress
+            $newInterface.Status = If ($_.Status -match "Up" -and $newInterface.IpAddress -ne "") {$true} Else {$false}
             $newInterface.SubnetMask = (Get-NetIpAddress -CimSession $newNode.Name | where InterfaceIndex -eq $_.ifIndex | where AddressFamily -eq "IPv4" | where SkipAsSource -Like "*False*").PrefixLength
             
             $LinkSpeed = $_.LinkSpeed.split(" ")
@@ -326,13 +330,21 @@ Describe "Test RDMA Congestion`r`n" {
         $TestNetwork += $newNode
     }
 
+    Connect-Network -NetworkData $TestNetwork -TestSubNetworks $TestSubNetworks
 
-    Connect-Network -NetworkData $TestNetwork -NetworkConnectivity $NetworkConnectivity
+    Write-Host "####################################`r`n"
+    Write-Host "VERBOSE: BEGINNING TEST-RDMA CORE STAGES`r`n"
+    Write-Host "####################################`r`n"
+    "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
+    "VERBOSE: BEGINNING TEST-RDMA CORE STAGES`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
+    "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
-    # $TestNetworkJson = ConvertTo-Json $TestNetwork -Depth 99
+    Write-Host "# The Following Subnetworks Will Be Tested"
+    Write-Host "# Calculated According To Subnet and VLAN Configurations`r`n"
+    "# The Following Subnetworks Will Be Tested" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
+    "# Calculated According To Subnet and VLAN Configurations`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
-    # $TestNetworkJson | Set-Content "C:\Test-RDMA\Test-RDMA-Network-Info.txt"
-
+    Write-Host (ConvertTo-Json $TestSubNetworks)
     
     ####################################
     # BEGIN TEST-RDMA CONGESTION
@@ -583,8 +595,8 @@ Describe "Test RDMA Congestion`r`n" {
         "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
         "####################################`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8 
 
-        $Results["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
-        $Failures["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
+        $Results["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
+        $Failures["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
 
         $TestNetwork | ForEach-Object {
 

@@ -16,12 +16,12 @@ $MachineList | ForEach-Object {
     $MachineName = $_
     $DestinationSession = New-PSSession -ComputerName $MachineName -Credential $creds
 
-    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\Test-RDMA\tools"}
-    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\Test-RDMA\tools\NDK-Perf"}
-    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\Test-RDMA\tools\CTS-Traffic"}
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\Test-RDMA\tools"} -ErrorAction SilentlyContinue
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\Test-RDMA\tools\NDK-Perf"} -ErrorAction SilentlyContinue
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\Test-RDMA\tools\CTS-Traffic"} -ErrorAction SilentlyContinue
 
-    Copy-Item C:\Test-RDMA\tools\NDK-Perf\NDKPerf.sys -Destination C:\Test-RDMA\tools\NDK-Perf -ToSession $DestinationSession
-    Copy-Item C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -Destination C:\Test-RDMA\tools\NDK-Perf -ToSession $DestinationSession
+    Copy-Item C:\Test-RDMA\tools\NDK-Perf\NDKPerf.sys -Destination C:\Test-RDMA\tools\NDK-Perf -ToSession $DestinationSession -ErrorAction SilentlyContinue
+    Copy-Item C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -Destination C:\Test-RDMA\tools\NDK-Perf -ToSession $DestinationSession -ErrorAction SilentlyContinue
 
     Copy-Item C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\Test-RDMA\tools\CTS-Traffic -ToSession $DestinationSession
 
