@@ -48,13 +48,8 @@ Description = 'Test-RDMA is a module that can be used to exercise enterprise cus
 # ProcessorArchitecture = ''
 
 # Modules that must be imported into the global environment prior to importing this module
-RequiredModules = @(@{ModuleName = 'Test-RDMA'; ModuleVersion = '20200110.1.1.1'; })
 
-# RequiredModules = @(@{ModuleName = 'NetworkingDSC'; ModuleVersion = '6.3.0.0'; }, 
-#                @{ModuleName = 'xHyper-V'; ModuleVersion = '3.16.0.0'; }, 
-#                @{ModuleName = 'VMNetworkAdapter'; ModuleVersion = '0.0.0.4'; }, 
-#                @{ModuleName = 'DataCenterBridging'; ModuleVersion = '0.0.0.4'; }, 
-#                @{ModuleName = 'Pester'; ModuleVersion = '3.4.0'; })
+RequiredModules = @(@{ModuleName = 'Pester'; ModuleVersion = '4.9.0';})
 
 # Assemblies that must be loaded prior to importing this module
 # RequiredAssemblies = @()
