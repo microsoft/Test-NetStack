@@ -20,13 +20,6 @@ function Assert-RDMA {
 
     Clear-Host
 
-    # TODO: Once converted to module, just add pester to required modules
-
-    If (-not (Get-Module -Name Pester -ListAvailable)) {
-        Write-Output 'Pester is an inbox PowerShell Module included in Windows 10, Windows Server 2016, and later'
-        Throw 'Catastrophic Failure :: PowerShell Module Pester was not found'
-    }
-
     $here = Split-Path -Parent (Get-Module -Name Test-RDMA | Select-Object -First 1).Path
     $startTime = Get-Date -format:'yyyyMMdd-HHmmss'
     New-Item -Name 'Results' -Path $here -ItemType Directory -Force

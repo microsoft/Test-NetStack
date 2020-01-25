@@ -6,7 +6,7 @@ $MachineList = "RRN44-14-09","RRN44-14-11", "RRN44-14-13", "RRN44-14-15"
 $domain = "cfdev"
 $userpwd = "wolfpack"
 $username = "wolfpack"
-$domainUsername = "$domain\wolfpack"
+$domainUsername = "$domain\$username"
 $creds = New-Object System.Management.Automation.PSCredential($domainUsername,($userpwd | ConvertTo-SecureString -asPlainText -Force))
 
 $HostSession = New-PSSession -ComputerName $HostName -Credential $creds
