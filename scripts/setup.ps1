@@ -20,10 +20,10 @@ $MachineList | ForEach-Object {
     Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\Test-RDMA\tools\NDK-Perf"} -ErrorAction SilentlyContinue
     Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\Test-RDMA\tools\CTS-Traffic"} -ErrorAction SilentlyContinue
 
-    Copy-Item C:\Test-RDMA\tools\NDK-Perf\NDKPerf.sys -Destination C:\Test-RDMA\tools\NDK-Perf -ToSession $DestinationSession -ErrorAction SilentlyContinue
-    Copy-Item C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -Destination C:\Test-RDMA\tools\NDK-Perf -ToSession $DestinationSession -ErrorAction SilentlyContinue
+    Copy-Item C:\Test-RDMA\tools\NDK-Perf\NDKPerf.sys -Destination C:\Test-RDMA\tools\NDK-Perf -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
+    Copy-Item C:\Test-RDMA\tools\NDK-Perf\NDKPerfCmd.exe -Destination C:\Test-RDMA\tools\NDK-Perf -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
 
-    Copy-Item C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\Test-RDMA\tools\CTS-Traffic -ToSession $DestinationSession
+    Copy-Item C:\Test-RDMA\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\Test-RDMA\tools\CTS-Traffic -Force -ToSession $DestinationSession
 
     Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc delete NDKPerf type=kernel binpath=C:\Test-RDMA\tools\NDK-Perf\NDKPerf.sys"}
     Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc create NDKPerf type=kernel binpath=C:\Test-RDMA\tools\NDK-Perf\NDKPerf.sys"}
