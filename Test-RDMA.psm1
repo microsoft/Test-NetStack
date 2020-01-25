@@ -69,7 +69,7 @@ function Assert-RDMA {
 
     #TODO: We may want to consider showing all output (success and failures) for positive on-screen feedback
     $testFile = Join-Path -Path $here -ChildPath "tests\test-netstack.unit.tests.ps1"
-    $testNetStack = Invoke-Pester -Script $testFile -Show Summary, Failed
+    $testNetStack = Invoke-Pester -Script $testFile -Show Summary, Failed -PassThru
 
     If ($testNetStack.FailedCount -ne 0) {
         throw 'One or more tests failed. The system may not be ready to support production workloads. Please review the output, resolve the issues, then restart the tests'
