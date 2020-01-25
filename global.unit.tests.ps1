@@ -250,8 +250,6 @@ function Assert-InboundOutboundInterfaceSuccess {
 # Begin Pester Test and Network Imaging
 ########################################################################
 
-Clear-Host
-
 Describe "Test RDMA Congestion`r`n" {
     
     [NodeNetworkData[]]$TestNetwork = @();

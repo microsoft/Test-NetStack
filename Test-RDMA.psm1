@@ -60,6 +60,12 @@ function Assert-RDMA {
     $startTime = Get-Date -format:'yyyyMMdd-HHmmss'
     New-Item -Name 'Results' -Path $here -ItemType Directory -Force
 
+    $testFile    = Join-Path -Path $here -ChildPath "tests\prerequisite.unit.tests.ps1"
+    $prereqTests = Invoke-Pester -Script $testFile -Show All -PassThru
+
+    If ($prereqTests.FailedCount -ne 0) {
+        throw 'One or more prerequisite tests failed. Please review the test output, resolve the issues, then restart the tests'
+    }
 
     $testFile = Join-Path -Path $here -ChildPath "\global.unit.tests.ps1"
     $launch_deploy = Invoke-Pester -Script $testFile -Show Summary, Failed
