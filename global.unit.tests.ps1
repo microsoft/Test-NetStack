@@ -252,18 +252,6 @@ function Assert-InboundOutboundInterfaceSuccess {
 
 Clear-Host
 
-Write-Host "THE FOLLOWING STAGES ARE AVAILABLE FOR TEST-NETSTACK:`r`n
-########################################################`r`n
-Stage 1: PING -- Testing Connectivity                  #`r`n
-Stage 2: PING -L -F -- Testing MTU Configuration       #`r`n
-Stage 3: CTS Traffic (TCP) -- Testing TCP Throughput   #`r`n
-Stage 4: NDK Ping -- Testing RDMA Connectivity         #`r`n
-Stage 5: NDK Perf (1:1) -- Testing RDMA Congestion     #`r`n
-Stage 6: NDK Perf (N:1) -- Testing RDMA Congestion     #`r`n
-########################################################`r`n"
-
-$StageNumber = [Int] (Read-Host "Please Enter What Test Stage (1-6) To Run Through.`r`nEx. Selecting '2' Runs Stages 1 & 2.`r`n")
-Write-Host $StageNumber
 Describe "Test RDMA Congestion`r`n" {
     
     [NodeNetworkData[]]$TestNetwork = @();
@@ -289,16 +277,11 @@ Describe "Test RDMA Congestion`r`n" {
     Write-Host "Starting Test-RDMA: $startTime`r`n"
     "Starting Test-RDMA: $startTime`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
 
+    #TODO: Why are we declaring this since it's already available with $env:ComputerName?
     $machineName = $env:computername
     $sddcFlag = $false
-    $MachineList = "RRN44-14-09 RRN44-14-11"
 
-    if ($MachineList.count -ne 0) {
-
-        $MachineCluster = $MachineList.split(" ")
-
-    } else {
-
+    if (-not ($MachineList)) {
         try {
             
             Write-Host "VERBOSE: No list of machines passed to Test-RDMA. Assuming machine running in cluster.`r`n"
@@ -308,17 +291,19 @@ Describe "Test RDMA Congestion`r`n" {
         
         } catch {
             
+            #TODO: Exit will actually close the window if running in the shell. We should Write-Error to the screen.
             Write-Host "VERBOSE: An error has occurred. Machine $($machineName) is not running the cluster service. Exiting Test-RDMA.`r`n"
             "VERBOSE: An error has occurred. Machine $($machineName) is not running the cluster service. Exiting Test-RDMA.`r`n" | Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
             Exit
         
         }
-
+    }
+    Else {
+        $MachineCluster = $MachineList
     }
 
     Write-Host "The Following List of Machines will be tested: $MachineCluster`r`n"
     "The Following List of Machines will be tested: $MachineCluster`r`n"| Out-File 'C:\Test-RDMA\Test-RDMA-Output.txt' -Append -Encoding utf8
-
 
     $equalRdmaProtocol = $false
     $rdmaProtocol = ""
