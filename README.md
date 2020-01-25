@@ -1,20 +1,43 @@
 
-# Test-NetStack: A Network Congestion Tool
+# Test-NetStack: A network integration testing tool
 
-## Introduction
-Test-NetStack is a pester-integrated powershell tool that attempts to stress and strain the network fabric in order to isolate RDMA issues and failures. RDMA-based infrastructure is often difficult to properly configure and validate. Enterprise customers working within the realm of Software Defined Data Centers (SDDC), Software Defined Networking (SDN), and Storage Spaces Direct (S2D) find themselves without a tool that may allow them to identify network failures -- especially when it comes to the RDMA protocol. When networking failures occur, they can be sourced in 100 different software/firmware/hardware problems. Thus, we have built a tool that attempts to filter down the network stack, granting enterprise customers the ability to hone in on true RDMA issues by first confirming the more traditional network configurations. 
+## Synopsis
 
-The tool itself first runs a number of traditional networking tools (e.g. ping) with the intent of confirming upper-layer infrastructure. Given a set or cluster of machines, the Test-NetStack tool identifies the Network Interface Cards (NICs) that are on the same subnet and vlan. These traditional networking tools are then run across every permutation of NIC pairs within each subnet and vlan in the following order by Test-NetStack: 
-- ping
-- CTS Traffic
+Test-NetStack is a powershell-based testing tool that leverages stress-testing utilities to identify potential network (fabric and host) instability.
 
-After running the above tools, we may confirm with some degree of certainty that if there is truly a network failure, then it likely resides within the RDMA-based infrastructure. To confirm this notion, Test-NetStack runs the following RDMA-based network tools across every permutation of NIC pairs within each subnet and vlan: 
-- NDK Ping 
-- NDK Perf
+Specifically, Test-NetStack can help you test native, synthetic, and hardware offloaded (RDMA) data paths for issues with:
 
-By running this set of tools across a machine set's network infrastructure, we hope to properly isolate, identify and investigate RDMA-based failures. 
+- Connectivity
+- Packet fragmention
+- Low throughput
+- Congestion
 
-## Setup and Requirements
+This tool will be updated over time to provide enhanced recommendations
+
+## Description
+
+Network diagnosis poses a challenge for Windows Administrators as there are a number of configuration points on (e.g. Windows) and off-box (e.g. physical network infrastructure). This can be compounded by separate data paths (e.g. RDMA vs synthetic) and the fact that Windows Administrators do not always control the physical network.
+
+In addition, traditional testing has relied on tools that leverage upper-layer protocols (e.g. DiskSpd and SMB) to test and validate functionality which adds additional complexity to testing as more variables are added to the test.
+
+Using this tool along with other Network testing and diagnosis tools such as PacketMon and Validate-DCB, Software-defined Data Center customers (e.g. Azure Stack HCI including SDN and S2D) can isolate complex network failure scenarios.
+
+# Test Details
+
+Test-NetStack first runs networking tools (e.g. ping, CTSTraffic) with the intent of confirming upper-layer infrastructure for native or synthetic traffic. 
+
+Given a set or cluster of machines, Test-NetStack will identify the NICs that are on the same subnet and vlan. These networking tools are then run across every permutation of NIC pairs within each subnet and vlan in the following order by Test-NetStack: 
+
+- ping (checking for connectivity)
+- ping -f -l (checking for fragmentation)
+- CTS Traffic (stressing 1:N and many:1)
+
+If the above tests pass, we will attempt to perform the same validation for RDMA. To do this, Test-NetStack runs the following network tools across every permutation of NIC pairs within each subnet and vlan: 
+- NDK Ping (testing RDMA connectivity)
+- NDK Perf (stressing 1:1 and congesting with many:1)
+
+## Run the tool
+
 In order to run Test-NetStack, a few short steps are necessary to setup and enable each individual stage within the tool itself. A script has been provided that completes most of the setup, however, there are still a number of required manual steps. 
 
 First and foremost, it is necessary to clone this repository to a domain-joined host's C:\ drive. Specifically, clone the repo to a new directory called "Test-NetStack." The setup script depends on the repository's location being in C:\Test-NetStack. 
@@ -28,8 +51,6 @@ The setup script does the following:
 - Finally, a new Firewall rule is created to allow inbound CTS-Traffic communcication on each remote system. 
 
 After running setup.ps1, run the Test-NetStack.unit.test.ps1 or Assert-RDMA.ps1 to run the full suite of Test-NetStack pester tests. 
-
-
 
 
 (below are notes, disregard)
