@@ -67,10 +67,13 @@ function Assert-RDMA {
         throw 'One or more prerequisite tests failed. Please review the test output, resolve the issues, then restart the tests'
     }
 
-    $testFile = Join-Path -Path $here -ChildPath "\global.unit.tests.ps1"
-    $launch_deploy = Invoke-Pester -Script $testFile -Show Summary, Failed
-    # $launch_deploy = Invoke-Pester -Script $testFile -PassThru
-    # $launch_deploy | Select-Object -Property TagFilter, Time, TotalCount, PassedCount, FailedCount, SkippedCount, PendingCount | Format-Table -AutoSize
+    #TODO: We may want to consider showing all output (success and failures) for positive on-screen feedback
+    $testFile = Join-Path -Path $here -ChildPath "tests\test-netstack.unit.tests.ps1"
+    $testNetStack = Invoke-Pester -Script $testFile -Show Summary, Failed
+
+    If ($testNetStack.FailedCount -ne 0) {
+        throw 'One or more tests failed. The system may not be ready to support production workloads. Please review the output, resolve the issues, then restart the tests'
+    }
 
 }
 
