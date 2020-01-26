@@ -22,7 +22,7 @@ In addition, traditional testing has relied on tools that leverage upper-layer p
 
 Using this tool along with other Network testing and diagnosis tools such as PacketMon and Validate-DCB, Software-defined Data Center customers (e.g. Azure Stack HCI including SDN and S2D) can isolate complex network failure scenarios.
 
-# Test Details
+## Test Details
 
 Test-NetStack first runs networking tools (e.g. ping, CTSTraffic) with the intent of confirming upper-layer infrastructure for native or synthetic traffic. 
 
