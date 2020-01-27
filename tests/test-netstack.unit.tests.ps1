@@ -553,8 +553,6 @@ Describe "Test Network Stack`r`n" {
 
                                     if (-not $Success) {
                                         $Failures["STAGE 1: PING"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetIP)`t| $Success`t`t|"
-                                        # $IndividualRecommendations += "INDIVIDUAL FAILURE: Ping Failed From Source ($SourceIP) To Target ($TargetIP)."
-                                        # $IndividualRecommendations += "`tRECOMMENDATION: Verify Subnet And VLAN Settings For Relevant NICs."
                                     }
 
                                     $NewResultInformation.SourceMachine = $hostName
@@ -740,7 +738,9 @@ Describe "Test Network Stack`r`n" {
                                         $Success = $False   
                                     }
                                     $Results["STAGE 2: PING -L -F"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetMachine)`t`t| ($TargetIP)`t| $PacketSize Bytes`t| $Success`t|"
-
+                                    if (-not $Success) {
+                                        $Failures["STAGE 1: PING"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetMachine)`t`t| ($TargetIP)`t| $PacketSize Bytes`t| $Success`t|"
+                                    }
                                     $Success | Should Be $True
                                 } 
 
