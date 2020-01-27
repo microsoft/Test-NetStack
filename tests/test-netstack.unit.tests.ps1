@@ -621,7 +621,7 @@ Describe "Test Network Stack`r`n" {
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
 
             $Results["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET MACHINE`t`t|TARGET NIC`t`t| MTU`t`t| SUCCESS`t|")
-            $Failures["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET MACHINE`t`t|TARGET NIC`t`t| MTU`t`t|")
+            $Failures["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET MACHINE`t`t|TARGET NIC`t`t| MTU`t`t| SUCCESS`t|")
 
             $TestNetwork | ForEach-Object {
 
