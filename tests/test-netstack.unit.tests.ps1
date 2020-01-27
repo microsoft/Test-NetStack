@@ -115,10 +115,6 @@ function Connect-Network {
 
 }
 
-function Is-Numeric ($Value) {
-    return $Value -match "^[\d\.]+$"
-}
-
 ########################################################################
 # Test-NetStack Result Walker Functions For Recommendation Functionality 
 #####################################################################
@@ -250,9 +246,9 @@ function Assert-InboundOutboundInterfaceSuccess {
 # Begin Pester Test and Network Imaging
 ########################################################################
 
-Describe "Test RDMA Congestion`r`n" {
+Describe "Test Network Stack`r`n" {
     
-    [NodeNetworkData[]]$TestNetwork = @();
+    [NodeNetworkData[]]$TestNetwork = [NodeNetworkData[]]@();
     [String[]]$MachineCluster = @()
     [HashTable]$TestSubNetworks = @{}
     [HashTable] $Results = @{}
@@ -395,20 +391,6 @@ Describe "Test RDMA Congestion`r`n" {
                 }
 
             }
-
-            # if ($vmTeamMapping.NetAdapterName -Contains $newInterface.Name) {
-
-            #     $newInterface.vSwitch = ($vmTeamMapping | where NetAdapterName -Like "*$($newInterface.Name)*").ParentAdapter.Name 
-
-            # } elseif ($vmTeamMapping.ParentAdapter -Like "*$($newInterface.Name)*") {
-
-            #     $newInterface.pSwitch = ($vmTeamMapping | where ParentAdapter -Like "*$($newInterface.Name)*").NetAdapterName
-            
-            # } else {
-                
-            #     $newInterface.vSwitch = "N/A"
-            #     $newInterface.pSwitch = "N/A"
-            # }
 
             $newInterface.RdmaEnabled = $newInterface.Name -In ($newNode.RdmaNetworkAdapters | where Enabled -Like "True").Name
         
@@ -638,8 +620,8 @@ Describe "Test RDMA Congestion`r`n" {
             "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
 
-            $Results["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| MTU`t`t|")
-            $Failures["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| MTU`t`t|")
+            $Results["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET MACHINE`t`t|TARGET NIC`t`t| MTU`t`t|")
+            $Failures["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET MACHINE`t`t|TARGET NIC`t`t| MTU`t`t|")
 
             $TestNetwork | ForEach-Object {
 
@@ -680,19 +662,21 @@ Describe "Test RDMA Congestion`r`n" {
                                 It "MTU Connectivity -- Verify Connectivity and Discover MTU: Between Target $($TargetIP) and Source $($SourceIP)" {
                                     
                                     $PacketSize = 0
+                                    $ReportedMTU
                                     try {
-                                        $PacketSize = [Int](Get-NetAdapterAdvancedProperty | where Name -eq $InterfaceName | where DisplayName -eq "Jumbo Packet").RegistryValue[0]
+                                        $PacketSize = [Int](Get-NetAdapterAdvancedProperty -CimSession $hostName | where Name -eq $InterfaceName | where DisplayName -eq "Jumbo Packet").RegistryValue[0]
+                                        $ReportedMTU = $PacketSize
                                     } catch {
-                                        $PacketSize = [Int](Get-NetIPInterface | where ifIndex -eq $InterfaceIfIndex | where AddressFamily -eq "IPv4").nlMtu
+                                        $PacketSize = [Int](Get-NetIPInterface -CimSession $hostName | where ifIndex -eq $InterfaceIfIndex | where AddressFamily -eq "IPv4").nlMtu
+                                        $ReportedMTU = $PacketSize
                                     }
-                                    
-                                    if ($PacketSize -eq 1514) {
+
+                                    if ($PacketSize -eq 1514 -or $PacketSize -eq 9014) {
                                         $PacketSize -= 42
-                                        $MTU = $PacketSize
-                                    } elseif ($PacketSize -eq 1500) {
+                                    } elseif ($PacketSize -eq 1500 -or $PacketSize -eq 9000) {
                                         $PacketSize -= 28
-                                        $MTU = $PacketSize
                                     }
+
                                     $Success = $False
                                     $Failure = $False
 
@@ -748,8 +732,14 @@ Describe "Test RDMA Congestion`r`n" {
                                             $TestInterface.ConnectionMTU["$TargetIP"] = $PacketSize
                                         }
                                     }
+                                    
+                                    $ActualMTU = $PacketSize
 
-                                    $Results["STAGE 2: PING -L -F"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetIP)`t| $PacketSize Bytes`t|"
+                                    # VERIFY REPORTED = ~ACTUAL MTU. FAIL IF RANGE > 500 BYTES.
+                                    if ([Math]::Abs($ReportedMTU - $ActualMTU) -gt 500) { 
+                                        $Success = $False   
+                                    }
+                                    $Results["STAGE 2: PING -L -F"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetMachine)`t`t| ($TargetIP)`t| $PacketSize Bytes`t|"
 
                                     $Success | Should Be $True
                                 } 
