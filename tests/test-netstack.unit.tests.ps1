@@ -620,7 +620,7 @@ Describe "Test Network Stack`r`n" {
             "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
 
-            $Results["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET MACHINE`t`t|TARGET NIC`t`t| MTU`t`t|")
+            $Results["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET MACHINE`t`t|TARGET NIC`t`t| MTU`t`t| SUCCESS`t|")
             $Failures["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET MACHINE`t`t|TARGET NIC`t`t| MTU`t`t|")
 
             $TestNetwork | ForEach-Object {
@@ -739,7 +739,7 @@ Describe "Test Network Stack`r`n" {
                                     if ([Math]::Abs($ReportedMTU - $ActualMTU) -gt 500) { 
                                         $Success = $False   
                                     }
-                                    $Results["STAGE 2: PING -L -F"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetMachine)`t`t| ($TargetIP)`t| $PacketSize Bytes`t|"
+                                    $Results["STAGE 2: PING -L -F"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetMachine)`t`t| ($TargetIP)`t| $PacketSize Bytes`t| $Success`t|"
 
                                     $Success | Should Be $True
                                 } 
