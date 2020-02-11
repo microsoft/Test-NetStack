@@ -25,6 +25,8 @@ $MachineList | ForEach-Object {
 
     Copy-Item C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\Test-NetStack\tools\CTS-Traffic -Force -ToSession $DestinationSession
 
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "bcdedit -set TESTSIGNING OFF"}
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "bcdedit -set TESTSIGNING ON"}
     Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc delete NDKPerf type=kernel binpath=C:\Test-NetStack\tools\NDK-Perf\NDKPerf.sys"}
     Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc create NDKPerf type=kernel binpath=C:\Test-NetStack\tools\NDK-Perf\NDKPerf.sys"}
 

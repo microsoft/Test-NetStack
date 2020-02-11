@@ -245,8 +245,6 @@ function Assert-ServerClientInterfaceSuccess {
         
     }
 
-    # Write-Host (ConvertTo-Json $InterfaceServerSuccesses)
-
     $InterfaceList | ForEach-Object {
         
         $InterfaceServerSuccess = $InterfaceServerSuccesses[$_]
@@ -367,14 +365,8 @@ function Assert-ServerMultiClientInterfaceSuccess {
 
         switch ($StageString) {
             ("STAGE 6: NDK Perf (N : 1)") {
-                $InterfaceServerRecommendation = "INTERFACE FAILURE: At Least One NDK Perf (N:1) Congestion Test Failed When ($SourceCount)"
-                                                    + " Source Machines ($SourceMachines) With IPs ($SourceIps) Congested Their Connection With Target ($TargetIP) On Machine ($TargetMachine)."
-                                                    + " Success rate was ($SourceSuccesses), respectively.`r`n`tRECOMMENDATION: Retry NDK Perf (N:1) with relevant interfaces."
-                                                    + " Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well." 
-                                                    + " If the problem persists, consider checking NIC cabling or physical interlinks.`r`n`tREPRO COMMANDS: $ReproCommands`r`n"
-                $MachineServerRecommendation = "MACHINE FAILURE: NDK Perf (N:1) Failed Across All Source Machines for Target Machine {0}."
-                                                    + "`r`n`tRECOMMENDATION: Verify NIC RDMA provisioning and traffic class settings."
-                                                    + " If the problem persists, consider checking NIC cabling or physical interlinks.`r`n"
+                $InterfaceServerRecommendation = "INTERFACE FAILURE: At Least One NDK Perf (N:1) Congestion Test Failed When ($SourceCount) Source Machines ($SourceMachines) With IPs ($SourceIps) Congested Their Connection With Target ($TargetIP) On Machine ($TargetMachine). Success rate was ($SourceSuccesses), respectively.`r`n`tRECOMMENDATION: Retry NDK Perf (N:1) with relevant interfaces. Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks.`r`n`tREPRO COMMANDS: $ReproCommands`r`n"
+                $MachineServerRecommendation = "MACHINE FAILURE: NDK Perf (N:1) Failed Across All Source Machines for Target Machine {0}.`r`n`tRECOMMENDATION: Verify NIC RDMA provisioning and traffic class settings. If the problem persists, consider checking NIC cabling or physical interlinks.`r`n"
             
             }
             
@@ -441,11 +433,7 @@ Describe "Test Network Stack`r`n" {
     [HashTable] $Failures = @{}
 
     [HashTable]$ResultInformationList = @{}
-    # $ResultInformationList = @()
-    # $StageThreeInformationList = @()
-    # $StageFourInformationList = @()
-    # $StageFiveInformationList = @()
-    # $StageSixInformationList = @()
+    [HashTable]$StageSuccessList = @{}
 
     Write-Host "Generating Test-NetStack-Output.txt"
     New-Item C:\Test-NetStack\Test-NetStack-Output.txt -ErrorAction SilentlyContinue
@@ -474,7 +462,6 @@ Describe "Test Network Stack`r`n" {
             #TODO: Exit will actually close the window if running in the shell. We should Write-Error to the screen.
             Write-Host "VERBOSE: An error has occurred. Machine $($machineName) is not running the cluster service. Exiting Test-NetStack.`r`n"
             "VERBOSE: An error has occurred. Machine $($machineName) is not running the cluster service. Exiting Test-NetStack.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-            Exit
         
         }
     }
@@ -680,7 +667,7 @@ Describe "Test Network Stack`r`n" {
     # Test Machines for PING Capability
     ####################################
     if ($StageNumber -ge 1) {
-        
+
         Context "Basic Connectivity (ping)`r`n" {
 
             Write-Host "####################################`r`n"
@@ -693,7 +680,7 @@ Describe "Test Network Stack`r`n" {
             $Results["STAGE 1: PING"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| CONNECTIVITY`t|")
             $Failures["STAGE 1: PING"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| CONNECTIVITY`t|")
             $ResultInformationList["STAGE 1: PING"] = [ResultInformationData[]]@()
-            
+            $StageSuccessList["STAGE 1: PING"] = [Boolean[]]@()
 
             $TestNetwork | ForEach-Object {
                 
@@ -715,8 +702,6 @@ Describe "Test Network Stack`r`n" {
                         $SubNetTable = $_.SubNetMembers
                         $SourceIp = $SubNetTable.Keys[0]
                         $PeerNetList = $SubNetTable[$SourceIp] | where $_.IpAddress -notlike $SourceIp
-                        
-                        # $IndividualRecommendations = @()
 
                         $PeerNetList | ForEach-Object {
 
@@ -724,7 +709,7 @@ Describe "Test Network Stack`r`n" {
                             $TargetName = $_.MachineName
                             $TargetIP = $_.IpAddress
 
-                            $Success = $false
+                            $Success = $true
                             if ($SourceIp -NotLike $TargetIp -and $SourceStatus) {
                                 
                                 It "Basic Connectivity (ping) -- Verify Basic Connectivity: Between $($TargetIP) and $($SourceIP))" {
@@ -733,7 +718,7 @@ Describe "Test Network Stack`r`n" {
                                     "ping $($TargetIP) -S $($SourceIP)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                     $ReproCommand = "ping $($TargetIP) -S $($SourceIP)"
                                         
-                                    $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP" } #| findstr /R "Ping Packets"
+                                    $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP" } 
                                     $Success = ("$Output" -match "Reply from $TargetIP") -and ($Output -match "(0% loss)") -and ("$Output" -notmatch "Destination host unreachable/") 
 
                                     "PING STATUS SUCCESS: $Success`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
@@ -751,9 +736,13 @@ Describe "Test Network Stack`r`n" {
                                     $NewResultInformation.Success = $Success
                                     $NewResultInformation.ReproCommand = $ReproCommand
                                     $ResultInformationList["STAGE 1: PING"] += $NewResultInformation
+                                    
+                                    $StageSuccessList["STAGE 1: PING"] += $Success
 
                                     $Success | Should Be $True
                                 }
+
+                                # $StageSuccess = $StageSuccess -and $Success
 
                                 Write-Host "`r`n####################################`r`n"
                                 "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
@@ -763,9 +752,9 @@ Describe "Test Network Stack`r`n" {
                 }
             }
         }
+        
         Assert-ServerClientInterfaceSuccess -ResultInformationList $ResultInformationList -StageString "STAGE 1: PING"
 
-        Write-Host (ConvertTo-Json $ResultInformationList["STAGE 1: PING"])
         Write-Host "RESULTS Stage 1: PING`r`n"
         "RESULTS Stage 1: PING`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
@@ -775,6 +764,12 @@ Describe "Test Network Stack`r`n" {
             $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
         }
+        if ($StageSuccessList["STAGE 1: PING"] -contains $false) {
+            Write-Host "`r`nSTAGE 1: PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
+            "`r`nSTAGE 1: PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+            $StageNumber = 0
+        }
+
     }
 
     # ###################################
@@ -794,6 +789,7 @@ Describe "Test Network Stack`r`n" {
             $Results["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET MACHINE`t|TARGET NIC`t`t| REPORTED MTU`t| ACTUAL MTU | SUCCESS`t|")
             $Failures["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET MACHINE`t|TARGET NIC`t`t| REPORTED MTU`t| ACTUAL MTU | SUCCESS`t|")
             $ResultInformationList["STAGE 2: PING -L -F"] = [ResultInformationData[]]@()
+            $StageSuccessList["STAGE 2: PING -L -F"] = [Boolean[]]@()
 
             $TestNetwork | ForEach-Object {
 
@@ -916,6 +912,7 @@ Describe "Test Network Stack`r`n" {
                                     if ([Math]::Abs($ReportedMTU - $ActualMTU) -gt 500) { 
                                         $Success = $False   
                                     }
+
                                     $Results["STAGE 2: PING -L -F"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetMachine)`t`t| ($TargetIP)`t| $ReportedMTU Bytes`t| $ActualMTU Bytes | $Success`t|"
                                     if (-not $Success) {
                                         $Failures["STAGE 1: PING"] += "| ($hostName)`t`t| ($SourceIP)`t| ($TargetMachine)`t`t| ($TargetIP)`t| $ReportedMTU Bytes`t| $ActualMTU Bytes | $Success`t|"
@@ -930,6 +927,7 @@ Describe "Test Network Stack`r`n" {
                                     $NewResultInformation.ActualMTU = $ActualMTU
                                     $NewResultInformation.ReproCommand = "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1"
                                     $ResultInformationList["STAGE 2: PING -L -F"] += $NewResultInformation
+                                    $StageSuccessList["STAGE 2: PING -L -F"] += $Success
 
                                     $Success | Should Be $True
                                 } 
@@ -959,8 +957,12 @@ Describe "Test Network Stack`r`n" {
             $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
         }
+        if ($StageSuccessList["STAGE 2: PING -L -F"] -contains $false) {
+            Write-Host "`r`nSTAGE 2: MTU TEST FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
+            "`r`nSTAGE 2: MTU TEST FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+            $StageNumber = 0
+        }
     }
-
     # ####################################
     # # Test Machines for TCP CTS Traffic Capability
     # ####################################
@@ -978,6 +980,7 @@ Describe "Test Network Stack`r`n" {
             $Results["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
             $Failures["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
             $ResultInformationList["STAGE 3: TCP CTS Traffic"] = [ResultInformationData[]]@()
+            $StageSuccessList["STAGE 3: TCP CTS Traffic"] = [Boolean[]]@()
 
             $TestNetwork | ForEach-Object {
 
@@ -1084,6 +1087,7 @@ Describe "Test Network Stack`r`n" {
                                         $NewResultInformation.ActualReceiveBps = $ServerRecvBps
                                         $NewResultInformation.ReproCommand = "`r`n`t`tServer: $ServerCommand`r`n`t`tClient: $ClientCommand"
                                         $ResultInformationList["STAGE 3: TCP CTS Traffic"] += $NewResultInformation
+                                        $StageSuccessList["STAGE 3: TCP CTS Traffic"] += $Success
 
                                         $Success | Should Be $True
                                     }
@@ -1108,6 +1112,11 @@ Describe "Test Network Stack`r`n" {
             $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
         }
+        if ($StageSuccessList["STAGE 3: TCP CTS Traffic"] -contains $false) {
+            Write-Host "`r`nSTAGE 3: CTS TRAFFIC FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
+            "`r`nSTAGE 3: CTS TRAFFIC FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+            $StageNumber = 0
+        }
     }
 
     # ####################################
@@ -1127,6 +1136,7 @@ Describe "Test Network Stack`r`n" {
             $Results["STAGE 4: NDK Ping"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CONNECTIVITY`t|")
             $Failures["STAGE 4: NDK Ping"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CONNECTIVITY`t|")
             $ResultInformationList["STAGE 4: NDK Ping"] = [ResultInformationData[]]@()
+            $StageSuccessList["STAGE 4: NDK Ping"] = [Boolean[]]@()
 
             $TestNetwork | ForEach-Object {
         
@@ -1175,8 +1185,8 @@ Describe "Test Network Stack`r`n" {
                                         
                                         $ServerSuccess = $False
                                         $ClientSuccess = $False
-                                        $ServerCommand = "Server $ServerName CMD: NdkPing -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rping -W 5"
-                                        $ClientCommand = "Client $ClientName CMD: NdkPing -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping"
+                                        $ServerCommand = "Server $ServerName CMD: C:\Test-NetStack\tools\NDK-Ping\NdkPing.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rping -W 5"
+                                        $ClientCommand = "Client $ClientName CMD: C:\Test-NetStack\tools\NDK-Ping\NdkPing.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping"
                                         Write-Host $ServerCommand
                                         $ServerCommand | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         Write-Host $ClientCommand
@@ -1186,10 +1196,10 @@ Describe "Test Network Stack`r`n" {
                                         $ServerOutput = Start-Job -ScriptBlock {
                                             $ServerIP = $Using:ServerIP
                                             $ServerIF = $Using:ServerIF
-                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "NdkPing -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
+                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Ping\NdkPing.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
                                         }
                                         Start-Sleep -Seconds 1
-                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "NdkPing -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rping 2>&1" }
+                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Ping\NdkPing.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rping 2>&1" }
                                         Start-Sleep -Seconds 5
                 
                                         $ServerOutput = Receive-Job $ServerOutput
@@ -1223,6 +1233,7 @@ Describe "Test Network Stack`r`n" {
                                         $NewResultInformation.Success = $Success
                                         $NewResultInformation.ReproCommand = "`r`n`t`tServer: $ServerCommand`r`n`t`tClient: $ClientCommand"
                                         $ResultInformationList["STAGE 4: NDK Ping"] += $NewResultInformation
+                                        $StageSuccessList["STAGE 4: NDK Ping"] += $Success
 
                                         $Success | Should Be $True
                                     }
@@ -1245,6 +1256,11 @@ Describe "Test Network Stack`r`n" {
             $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
         }
+        if ($StageSuccessList["STAGE 4: NDK Ping"] -contains $false) {
+            Write-Host "`r`nSTAGE 4: NDK PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
+            "`r`nSTAGE 4: NDK PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+            $StageNumber = 0
+        }
     }
 
     # ###################################
@@ -1264,6 +1280,8 @@ Describe "Test Network Stack`r`n" {
             $Results["STAGE 5: NDK Perf"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
             $Failures["STAGE 5: NDK Perf"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
             $ResultInformationList["STAGE 5: NDK Perf"] = [ResultInformationData[]]@()
+            $StageSuccessList["STAGE 5: NDK Perf"] = [Boolean[]]@()
+
             $TestNetwork | ForEach-Object {
 
                 Write-Host "VERBOSE: Testing NDK Perf Connectivity on Machine: $($_.Name)"
@@ -1360,9 +1378,6 @@ Describe "Test Network Stack`r`n" {
                                         $ServerBytesPerSecond = ($FlatServerOutput | Measure-Object -Maximum).Maximum
                                         $ClientBytesPerSecond = ($FlatClientOutput | Measure-Object -Maximum).Maximum
 
-                                        Write-Host $ServerBytesPerSecond
-                                        Write-Host $ClientBytesPerSecond
-
                                         Start-Sleep -Seconds 5
                                         
                                         $ServerOutput = Receive-Job $ServerOutput
@@ -1383,9 +1398,9 @@ Describe "Test Network Stack`r`n" {
                                         
                                         $Success = ($ServerBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8) -and ($ClientBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8)
 
-                                        $Results["STAGE 5: NDK Perf"] += "|($ServerName)`t| ($ServerIP)`t| $ServerBytesPerSecond bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientBytesPerSecond bps`t| $SUCCESS |"
+                                        $Results["STAGE 5: NDK Perf"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerBytesPerSecond bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientBytesPerSecond bps`t| $SUCCESS |"
                                         if (-not $Success) {
-                                            $Failures["STAGE 5: NDK Perf"] += "|($ServerName)`t| ($ServerIP)`t| $ServerBytesPerSecond bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientBytesPerSecond bps`t| $SUCCESS |"
+                                            $Failures["STAGE 5: NDK Perf"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerBytesPerSecond bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientBytesPerSecond bps`t| $SUCCESS |"
                                         }
 
                                         $NewResultInformation.SourceMachine = $ClientName
@@ -1395,6 +1410,7 @@ Describe "Test Network Stack`r`n" {
                                         $NewResultInformation.Success = $Success
                                         $NewResultInformation.ReproCommand = "`r`n`t`tServer: $ServerCommand`r`n`t`tClient: $ClientCommand"
                                         $ResultInformationList["STAGE 5: NDK Perf"] += $NewResultInformation
+                                        $StageSuccessList["STAGE 5: NDK Perf"] += $Success
 
                                         $Success | Should Be $True
                                     }
@@ -1417,6 +1433,11 @@ Describe "Test Network Stack`r`n" {
             $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
         }
+        if ($StageSuccessList["STAGE 5: NDK Perf"] -contains $false) {
+            Write-Host "`r`nSTAGE 5: NDK PERF (1:1) FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
+            "`r`nSTAGE 5: NDK PERF (1:1) FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+            $StageNumber = 0
+        }
     }
 
     # # ##################################
@@ -1437,6 +1458,7 @@ Describe "Test Network Stack`r`n" {
             $ResultString = ""
             $Failures["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
             $ResultInformationList["STAGE 6: NDK Perf (N : 1)"] = [ResultInformationData[]]@()
+            $StageSuccessList["STAGE 6: NDK Perf (N : 1)"] = [Boolean[]]@()
 
             $TestNetwork | ForEach-Object {
 
@@ -1485,7 +1507,6 @@ Describe "Test Network Stack`r`n" {
                             $NewResultInformation.ReproCommand = "`r`n`t`t$ServerCommand"
 
                             $RandomClientNodes | ForEach-Object {
-                                Write-Host $_.Status
                                 Start-Sleep -Seconds 1
                             
                                 $ClientName = $_.Name
@@ -1580,7 +1601,9 @@ Describe "Test Network Stack`r`n" {
                                 $NewResultInformation.SourceMachineActualBpsList += $ClientBytesPerSecond
                                 $NewResultInformation.SourceMachineSuccessList += $IndividualClientSuccess
                                 $NewResultInformation.ReproCommand += "`r`n`t`tClient $($_.ClientName) CMD:  C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):900$j -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping`r`n"
-
+                                
+                                $StageSuccessList["STAGE 6: NDK Perf (N : 1)"] = [Boolean[]]@()
+                                
                                 $ResultString +=  "`r|`t`t`t`t`t`t`t`t`t| $($ClientName)`t`t| $($ClientIP)`t|"
                                 $ResultString += " $ClientBytesPerSecond bps`t| $IndividualClientSuccess`t|"
                                 $k++
@@ -1608,6 +1631,7 @@ Describe "Test Network Stack`r`n" {
                             $NewResultInformation.NumSources = $MachineCluster.Count - 1
                             $NewResultInformation.Success = $Success
                             $ResultInformationList["STAGE 6: NDK Perf (N : 1)"] += $NewResultInformation
+                            $StageSuccessList["STAGE 6: NDK Perf (N : 1)"] += $Success
 
                             $Success | Should Be $True    
                         }
@@ -1617,10 +1641,8 @@ Describe "Test Network Stack`r`n" {
                 }
 
             }
-
         }
 
-        Write-Host (ConvertTo-Json $ResultInformationList)
         Assert-ServerMultiClientInterfaceSuccess -ResultInformationList $ResultInformationList -StageString "STAGE 6: NDK Perf (N : 1)"
 
         Write-Host "RESULTS Stage 6: NDK Perf (N : 1)`r`n"
@@ -1632,6 +1654,11 @@ Describe "Test Network Stack`r`n" {
             Write-Host $_ 
             $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
+        }
+        if ($StageSuccessList["STAGE 6: NDK Perf (N : 1)"] -contains $false) {
+            Write-Host "`r`nSTAGE 6: NDK PERF (N:1) FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
+            "`r`nSTAGE 6: NDK PERF (N:1) FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+            $StageNumber = 0
         }
     }
 
@@ -1655,5 +1682,6 @@ Describe "Test Network Stack`r`n" {
 
     Write-Host "Ending Test-NetStack: $endTime`r`n"
     "Ending Test-NetStack: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-
+    
+    Write-Host "End"
 }
