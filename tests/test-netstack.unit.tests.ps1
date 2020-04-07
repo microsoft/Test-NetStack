@@ -302,21 +302,21 @@ function Assert-ServerClientInterfaceSuccess {
         }
         
     }
-    Write-Verbose "`r`nINDIVIDUAL AND INTERFACE Server RECOMMENDATIONS`r`n"
+    Write-Host "`r`nINDIVIDUAL AND INTERFACE Server RECOMMENDATIONS`r`n"
     "`r`nINDIVIDUAL AND INTERFACE Server RECOMMENDATIONS`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-    Write-Verbose $InterfaceServerRecommendations
+    Write-Host $InterfaceServerRecommendations
     $InterfaceServerRecommendations | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-    Write-Verbose "`r`nINDIVIDUAL AND INTERFACE Client RECOMMENDATIONS`r`n"
+    Write-Host "`r`nINDIVIDUAL AND INTERFACE Client RECOMMENDATIONS`r`n"
     "`r`nINDIVIDUAL AND INTERFACE Client RECOMMENDATIONS`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-    Write-Verbose $InterfaceClientRecommendations
+    Write-Host $InterfaceClientRecommendations
     $InterfaceClientRecommendations | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-    Write-Verbose "`r`nMACHINE AND INTERFACE Server RECOMMENDATIONS`r`n"
+    Write-Host "`r`nMACHINE AND INTERFACE Server RECOMMENDATIONS`r`n"
     "`r`nMACHINE AND INTERFACE Server RECOMMENDATIONS`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-    Write-Verbose $MachineServerRecommendations
+    Write-Host $MachineServerRecommendations
     $MachineServerRecommendations | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-    Write-Verbose "`r`nMACHINE AND INTERFACE Client RECOMMENDATIONS`r`n"
+    Write-Host "`r`nMACHINE AND INTERFACE Client RECOMMENDATIONS`r`n"
     "`r`nMACHINE AND INTERFACE Client RECOMMENDATIONS`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-    Write-Verbose $MachineClientRecommendations
+    Write-Host $MachineClientRecommendations
     $MachineClientRecommendations | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
 }
@@ -406,13 +406,13 @@ function Assert-ServerMultiClientInterfaceSuccess {
         }
         
     }
-    Write-Verbose "`r`nINDIVIDUAL AND INTERFACE Server RECOMMENDATIONS`r`n"
+    Write-Host "`r`nINDIVIDUAL AND INTERFACE Server RECOMMENDATIONS`r`n"
     "`r`nINDIVIDUAL AND INTERFACE Server RECOMMENDATIONS`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-    Write-Verbose $InterfaceServerRecommendations
+    Write-Host $InterfaceServerRecommendations
     $InterfaceServerRecommendations | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-    Write-Verbose "`r`nMACHINE AND INTERFACE Server RECOMMENDATIONS`r`n"
+    Write-Host "`r`nMACHINE AND INTERFACE Server RECOMMENDATIONS`r`n"
     "`r`nMACHINE AND INTERFACE Server RECOMMENDATIONS`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-    Write-Verbose $MachineServerRecommendations
+    Write-Host $MachineServerRecommendations
     $MachineServerRecommendations | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
 }
@@ -432,7 +432,7 @@ Describe "Test Network Stack`r`n" {
     [HashTable]$ResultInformationList = @{}
     [HashTable]$StageSuccessList = @{}
 
-    Write-Verbose "Generating Test-NetStack-Output.txt"
+    Write-Host "Generating Test-NetStack-Output.txt"
     New-Item C:\Test-NetStack\Test-NetStack-Output.txt -ErrorAction SilentlyContinue
     $OutputFile = "Test-NetStack Output File"
     $OutputFile | Set-Content 'C:\Test-NetStack\Test-NetStack-Output.txt'
@@ -449,7 +449,7 @@ Describe "Test Network Stack`r`n" {
     if (-not ($MachineList)) {
         try {
             
-            Write-Verbose "VERBOSE: No list of machines passed to Test-NetStack. Assuming machine running in cluster.`r`n"
+            Write-Host "VERBOSE: No list of machines passed to Test-NetStack. Assuming machine running in cluster.`r`n"
             "VERBOSE: No list of machines passed to Test-NetStack. Assuming machine running in cluster.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
             $MachineCluster = Get-ClusterNode
@@ -457,7 +457,7 @@ Describe "Test Network Stack`r`n" {
         } catch {
             
             #TODO: Exit will actually close the window if running in the shell. We should Write-Error to the screen.
-            Write-Verbose "VERBOSE: An error has occurred. Machine $($machineName) is not running the cluster service. Exiting Test-NetStack.`r`n"
+            Write-Host "VERBOSE: An error has occurred. Machine $($machineName) is not running the cluster service. Exiting Test-NetStack.`r`n"
             "VERBOSE: An error has occurred. Machine $($machineName) is not running the cluster service. Exiting Test-NetStack.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
         }
@@ -476,7 +476,7 @@ Describe "Test Network Stack`r`n" {
     # Compute Network Construction and RDMA Capability
     ########################################################################
 
-    Write-Verbose "Beginning Network Construction.`r`n"
+    Write-Host "Beginning Network Construction.`r`n"
     "Beginning Network Construction.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
     $MachineCluster | ForEach-Object {
@@ -489,7 +489,7 @@ Describe "Test Network Stack`r`n" {
 
         # $vmTeamMapping = Get-VMNetworkAdapterTeamMapping -ManagementOS
 
-        Write-Verbose "Machine Name: $($newNode.Name)`r`n"
+        Write-Host "Machine Name: $($newNode.Name)`r`n"
         "Machine Name: $($newNode.Name)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
         (Get-NetAdapter -CimSession $_) | ForEach-Object {
@@ -513,7 +513,7 @@ Describe "Test Network Stack`r`n" {
                 ("bps") {$newInterface.LinkSpeed = [Int]::Parse($LinkSpeed[0]) * [Math]::Pow(10, 3)}
 
             }
-            Write-Verbose ".`r`n"
+            Write-Host ".`r`n"
 
             if ($newInterface.IpAddress -ne "") {
                 
@@ -573,17 +573,17 @@ Describe "Test Network Stack`r`n" {
 
         } else {
 
-            Write-Verbose "VERBOSE: Machine $($newNode.Name) is not RDMA capable.`r`n"
+            Write-Host "VERBOSE: Machine $($newNode.Name) is not RDMA capable.`r`n"
             "VERBOSE: Machine $($newNode.Name) is not RDMA capable.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
         }
         
         $rdmaEnabledNics = (Get-NetAdapterRdma -CimSession $newNode.Name | Where-Object Enabled -eq $true).Name
-        Write-Verbose "VERBOSE: RDMA Adapters"
+        Write-Host "VERBOSE: RDMA Adapters"
         "VERBOSE: RDMA Adapters" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
-        Write-Verbose ($rdmaEnabledNics )
+        # Write-Host ($rdmaEnabledNics )
         $rdmaEnabledNics | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
-        Write-Verbose "`r`n"
+        Write-Host "`r`n"
         "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
 
         # If it's QLogic, iWARP, if it's Mellanox, Roce
@@ -595,7 +595,7 @@ Describe "Test Network Stack`r`n" {
     
         if ($sddcFlag) {    
 
-            Write-Verbose "VERBOSE: SDDC Machine, checking IpAssignment.json for RDMA Protocol.`r`n"
+            Write-Host "VERBOSE: SDDC Machine, checking IpAssignment.json for RDMA Protocol.`r`n"
             "VERBOSE: SDDC Machine, checking IpAssignment.json for RDMA Protocol.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             
             $sdnNetworkResourceFileRelative = "\IpAssignment.json"
@@ -608,7 +608,7 @@ Describe "Test Network Stack`r`n" {
 
             } else {
                 
-                Write-Verbose "VERBOSE: SDDC Machine does not have access to IpAssignment.json. Exiting.`r`n"
+                Write-Host "VERBOSE: SDDC Machine does not have access to IpAssignment.json. Exiting.`r`n"
                 "VERBOSE: SDDC Machine does not have access to IpAssignment.json. Exiting.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
                 Exit
 
@@ -638,9 +638,9 @@ Describe "Test Network Stack`r`n" {
 
     Connect-Network -NetworkData $TestNetwork -TestSubNetworks $TestSubNetworks
 
-    Write-Verbose "####################################`r`n"
-    Write-Verbose "VERBOSE: BEGINNING Test-NetStack CORE STAGES`r`n"
-    Write-Verbose "####################################`r`n"
+    Write-Host "####################################`r`n"
+    Write-Host "VERBOSE: BEGINNING Test-NetStack CORE STAGES`r`n"
+    Write-Host "####################################`r`n"
     "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
     "VERBOSE: BEGINNING Test-NetStack CORE STAGES`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
     "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
@@ -667,9 +667,9 @@ Describe "Test Network Stack`r`n" {
 
         Context "VERBOSE: Testing Connectivity Stage 1: PING`r`n" {
 
-            Write-Verbose "####################################`r`n"
-            Write-Verbose "VERBOSE: Testing Connectivity Stage 1: PING`r`n"
-            Write-Verbose "####################################`r`n"
+            Write-Host "####################################`r`n"
+            Write-Host "VERBOSE: Testing Connectivity Stage 1: PING`r`n"
+            Write-Host "####################################`r`n"
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "VERBOSE: Testing Connectivity Stage 1: PING`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
@@ -681,7 +681,7 @@ Describe "Test Network Stack`r`n" {
 
             $TestNetwork | ForEach-Object {
                 
-                Write-Verbose "VERBOSE: Testing Ping Connectivity on Machine: $($_.Name)`r`n"
+                Write-Host "VERBOSE: Testing Ping Connectivity on Machine: $($_.Name)`r`n"
                 "VERBOSE: Testing Ping Connectivity on Machine: $($_.Name)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                 
                 $hostName = $_.Name
@@ -693,7 +693,7 @@ Describe "Test Network Stack`r`n" {
 
                     if ($SourceStatus) {
                         
-                        Write-Verbose "VERBOSE: Testing Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
+                        Write-Host "VERBOSE: Testing Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
                         "VERBOSE: Testing Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
                         $SubNetTable = $_.SubNetMembers
@@ -711,7 +711,7 @@ Describe "Test Network Stack`r`n" {
                                 
                                 It "Basic Connectivity (ping) -- Verify Basic Connectivity: Between $($TargetIP) and $($SourceIP))" {
                                     
-                                    Write-Verbose "ping $($TargetIP) -S $($SourceIP)`r`n"
+                                    Write-Host "ping $($TargetIP) -S $($SourceIP)`r`n"
                                     "ping $($TargetIP) -S $($SourceIP)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                     $ReproCommand = "ping $($TargetIP) -S $($SourceIP)"
                                         
@@ -741,7 +741,7 @@ Describe "Test Network Stack`r`n" {
 
                                 # $StageSuccess = $StageSuccess -and $Success
 
-                                Write-Verbose "`r`n####################################`r`n"
+                                Write-Host "`r`n####################################`r`n"
                                 "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                             } 
                         }
@@ -752,17 +752,17 @@ Describe "Test Network Stack`r`n" {
         
         Assert-ServerClientInterfaceSuccess -ResultInformationList $ResultInformationList -StageString "STAGE 1: PING"
 
-        Write-Verbose "RESULTS Stage 1: PING`r`n"
+        Write-Host "RESULTS Stage 1: PING`r`n"
         "RESULTS Stage 1: PING`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
         ($Results["STAGE 1: PING"]) | ForEach-Object {
 
-            Write-Verbose $_ 
+            Write-Host $_ 
             $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
         }
         if ($StageSuccessList["STAGE 1: PING"] -contains $false) {
-            Write-Verbose "`r`nSTAGE 1: PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
+            Write-Host "`r`nSTAGE 1: PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
             "`r`nSTAGE 1: PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
             $StageNumber = 0
         }
@@ -776,9 +776,9 @@ Describe "Test Network Stack`r`n" {
 
         Context "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n" {
             
-            Write-Verbose "####################################`r`n"
-            Write-Verbose "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n"
-            Write-Verbose "####################################`r`n"
+            Write-Host "####################################`r`n"
+            Write-Host "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n"
+            Write-Host "####################################`r`n"
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
@@ -802,7 +802,7 @@ Describe "Test Network Stack`r`n" {
 
                     if ($SourceStatus) {
 
-                        Write-Verbose "VERBOSE: Testing Ping -L -F Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
+                        Write-Host "VERBOSE: Testing Ping -L -F Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
                         "VERBOSE: Testing Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                         
                         $TestInterface = $_
@@ -853,25 +853,25 @@ Describe "Test Network Stack`r`n" {
 
                                         while($Success) {
                                         
-                                            Write-Verbose "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n"
+                                            Write-Host "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n"
                                             "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
                                             $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP -l $Using:PacketSize -f -n 1" } | Out-String
                                             $Success = ("$Output" -match "Reply from $TargetIP") -and ("$Output" -match "(0% loss)") # -and (("$Output" -notmatch "General Failure") -or ("$Output" -notmatch "Destination host unreachable"))
                                             $Failure = ("$Output" -match "General Failure") -or ("$Output" -match "Destination host unreachable")
                                             $Success = $Success -and -not $Failure
-                                            Write-Verbose "PING STATUS: $(If ($Success) {"SUCCESS"} Else {"FAILURE"}) FOR MTU: $PacketSize`r`n"
+                                            Write-Host "PING STATUS: $(If ($Success) {"SUCCESS"} Else {"FAILURE"}) FOR MTU: $PacketSize`r`n"
                                             "PING STATUS: $(If ($Success) {"SUCCESS"} Else {"FAILURE"}) FOR MTU: $PacketSize`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                             
                                             if ($Success) {
                                                 $PacketSize *= 2
                                             } 
                                             if ($Failure) {
-                                                Write-Verbose "PING STATUS: General FAILURE - Host May Be Unreachable`r`n"
+                                                Write-Host "PING STATUS: General FAILURE - Host May Be Unreachable`r`n"
                                                 "PING STATUS: General FAILURE - Host May Be Unreachable`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                                 $PacketSize = 0
                                             } else {
-                                                Write-Verbose "Upper Bound of $PacketSize found. Working to find specific value.`r`n"
+                                                Write-Host "Upper Bound of $PacketSize found. Working to find specific value.`r`n"
                                                 "Upper Bound of $PacketSize found. Working to find specific value.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                             }
                                         }
@@ -879,7 +879,7 @@ Describe "Test Network Stack`r`n" {
 
                                     while((-not $Success) -and (-not $Failure)) {
 
-                                        Write-Verbose "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n"
+                                        Write-Host "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n"
                                         "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
                                         $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP -l $Using:PacketSize -f -n 1" }
@@ -888,16 +888,16 @@ Describe "Test Network Stack`r`n" {
                                         $Success = $Success -and -not $Failure
 
                                         if (-not $Success) {
-                                            Write-Verbose "Attempting to find MTU Estimate. Iterating on 05% MTU decreases.`r`n"
+                                            Write-Host "Attempting to find MTU Estimate. Iterating on 05% MTU decreases.`r`n"
                                             "Attempting to find MTU Estimate. Iterating on 05% MTU decreases.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                             $PacketSize = [math]::Round($PacketSize - ($PacketSize * .05))
                                         } 
                                         if ($Failure) {
-                                            Write-Verbose "PING STATUS: General FAILURE - Host May Be Unreachable`r`n"
+                                            Write-Host "PING STATUS: General FAILURE - Host May Be Unreachable`r`n"
                                             "PING STATUS: General FAILURE - Host May Be Unreachable`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                             $PacketSize = 0
                                         } else {
-                                            Write-Verbose "PING STATUS: $(If ($Success) {"SUCCESS"} Else {"FAILURE"}). Estimated MTU Found: ~$PacketSize`r`n"
+                                            Write-Host "PING STATUS: $(If ($Success) {"SUCCESS"} Else {"FAILURE"}). Estimated MTU Found: ~$PacketSize`r`n"
                                             "PING STATUS: $(If ($Success) {"SUCCESS"} Else {"FAILURE"}). Estimated MTU Found: ~$PacketSize`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                             $TestInterface.ConnectionMTU["$TargetIP"] = $PacketSize
                                         }
@@ -929,7 +929,7 @@ Describe "Test Network Stack`r`n" {
                                     $Success | Should Be $True
                                 } 
 
-                                Write-Verbose "`r`n####################################`r`n"
+                                Write-Host "`r`n####################################`r`n"
                                 "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                             } 
 
@@ -945,17 +945,17 @@ Describe "Test Network Stack`r`n" {
         
         Assert-ServerClientInterfaceSuccess -ResultInformationList $ResultInformationList -StageString "STAGE 2: PING -L -F"
 
-        Write-Verbose "RESULTS Stage 2: PING -L -F`r`n"
+        Write-Host "RESULTS Stage 2: PING -L -F`r`n"
         "RESULTS Stage 2: PING -L -F`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
         ($Results["STAGE 2: PING -L -F"]) | ForEach-Object {
 
-            Write-Verbose $_ 
+            Write-Host $_ 
             $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
         }
         if ($StageSuccessList["STAGE 2: PING -L -F"] -contains $false) {
-            Write-Verbose "`r`nSTAGE 2: MTU TEST FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
+            Write-Host "`r`nSTAGE 2: MTU TEST FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
             "`r`nSTAGE 2: MTU TEST FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
             $StageNumber = 0
         }
@@ -968,9 +968,9 @@ Describe "Test Network Stack`r`n" {
 
         Context "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" {
 
-            Write-Verbose "####################################`r`n"
-            Write-Verbose "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n"
-            Write-Verbose "####################################`r`n"
+            Write-Host "####################################`r`n"
+            Write-Host "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n"
+            Write-Host "####################################`r`n"
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
@@ -991,7 +991,7 @@ Describe "Test Network Stack`r`n" {
                     $ServerStatus = $_.Status
 
                     if ($ServerStatus) {
-                        Write-Verbose "VERBOSE: Testing CTS Traffic (TCP) Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
+                        Write-Host "VERBOSE: Testing CTS Traffic (TCP) Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
                         "VERBOSE: Testing CTS Traffic (TCP) Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
                         $ServerIP = $_.IpAddress
@@ -1021,9 +1021,9 @@ Describe "Test Network Stack`r`n" {
                                         $ClientCommand = "Client $ClientName CMD: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$($ServerIP) -bind:$ClientIP -consoleverbosity:1 -iterations:2 -RateLimit:$ClientLinkSpeed"
                                         $NewResultInformation = [ResultInformationData]::new()
 
-                                        Write-Verbose $ServerCommand
+                                        Write-Host $ServerCommand
                                         $ServerCommand | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                                        Write-Verbose $ClientCommand
+                                        Write-Host $ClientCommand
                                         $ClientCommand | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         
                                         $ServerOutput = Start-Job -ScriptBlock {
@@ -1048,22 +1048,22 @@ Describe "Test Network Stack`r`n" {
                                         $ServerRecvBps = ($FlatServerOutput | Measure-Object -Maximum).Maximum * 8
                                         $ClientRecvBps = ($FlatClientOutput | Measure-Object -Maximum).Maximum * 8
                                         $Success = ($ServerRecvBps -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .65) -and ($ClientRecvBps -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .65)
-                                        Write-Verbose "Server Bps $ServerRecvBps and Client Bps $ClientRecvBps`r`n"
+                                        Write-Host "Server Bps $ServerRecvBps and Client Bps $ClientRecvBps`r`n"
                                         "Server Bps $ServerRecvBps and Client Bps $ClientRecvBps`r`n"| Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
-                                        Write-Verbose "TCP CTS Traffic Server Output: "
-                                        Write-Verbose ($ServerOutput -match "SuccessfulConnections")
-                                        $ServerOutput[($ServerOutput.Count-3)..$ServerOutput.Count] | ForEach-Object {Write-Verbose $_}
-                                        Write-Verbose "`r`n"
+                                        Write-Host "TCP CTS Traffic Server Output: "
+                                        # Write-Host ($ServerOutput -match "SuccessfulConnections")
+                                        $ServerOutput[($ServerOutput.Count-3)..$ServerOutput.Count] | ForEach-Object {Write-Host $_}
+                                        Write-Host "`r`n"
                                         "TCP CTS Traffic Server Output: "| Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         ($ServerOutput -match "SuccessfulConnections") | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         $ServerOutput[($ServerOutput.Count-3)..$ServerOutput.Count] | ForEach-Object {$_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
                                         "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
-                                        Write-Verbose "TCP CTS Traffic Client Output: "
-                                        Write-Verbose ($ClientOutput -match "SuccessfulConnections")
-                                        $ClientOutput[($ClientOutput.Count-3)..$ClientOutput.Count] | ForEach-Object {Write-Verbose $_}
-                                        Write-Verbose "`r`n"
+                                        Write-Host "TCP CTS Traffic Client Output: "
+                                        Write-Host ($ClientOutput -match "SuccessfulConnections")
+                                        $ClientOutput[($ClientOutput.Count-3)..$ClientOutput.Count] | ForEach-Object {Write-Host $_}
+                                        Write-Host "`r`n"
                                         "TCP CTS Traffic Client Output: "| Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         ($ClientOutput -match "SuccessfulConnections") | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         $ClientOutput[($ClientOutput.Count-3)..$ClientOutput.Count] | ForEach-Object {$_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
@@ -1089,7 +1089,7 @@ Describe "Test Network Stack`r`n" {
 
                                         $Success | Should Be $True
                                     }
-                                    Write-Verbose "`r`n####################################`r`n"
+                                    Write-Host "`r`n####################################`r`n"
                                     "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                 } 
                             }
@@ -1101,17 +1101,17 @@ Describe "Test Network Stack`r`n" {
         
         Assert-ServerClientInterfaceSuccess -ResultInformationList $ResultInformationList -StageString "STAGE 3: TCP CTS Traffic"
 
-        Write-Verbose "RESULTS Stage 3: TCP CTS Traffic`r`n"
+        Write-Host "RESULTS Stage 3: TCP CTS Traffic`r`n"
         "RESULTS Stage 3: TCP CTS Traffic`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
         ($Results["STAGE 3: TCP CTS Traffic"]) | ForEach-Object {
 
-            Write-Verbose $_ 
+            Write-Host $_ 
             $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
         }
         if ($StageSuccessList["STAGE 3: TCP CTS Traffic"] -contains $false) {
-            Write-Verbose "`r`nSTAGE 3: CTS TRAFFIC FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
+            Write-Host "`r`nSTAGE 3: CTS TRAFFIC FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
             "`r`nSTAGE 3: CTS TRAFFIC FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
             $StageNumber = 0
         }
@@ -1124,9 +1124,9 @@ Describe "Test Network Stack`r`n" {
 
         Context "VERBOSE: Testing Connectivity Stage 4: NDK Ping`r`n" {
 
-            Write-Verbose "####################################`r`n"
-            Write-Verbose "VERBOSE: Testing Connectivity Stage 4: NDK Ping`r`n"
-            Write-Verbose "####################################`r`n"
+            Write-Host "####################################`r`n"
+            Write-Host "VERBOSE: Testing Connectivity Stage 4: NDK Ping`r`n"
+            Write-Host "####################################`r`n"
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "VERBOSE: Testing Connectivity Stage 4: NDK Ping`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
@@ -1138,7 +1138,7 @@ Describe "Test Network Stack`r`n" {
 
             $TestNetwork | ForEach-Object {
         
-                Write-Verbose "VERBOSE: Testing NDK Ping Connectivity on Machine: $($_.Name)"
+                Write-Host "VERBOSE: Testing NDK Ping Connectivity on Machine: $($_.Name)"
                 "VERBOSE: Testing NDK Ping Connectivity on Machine: $($_.Name)" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                 $ServerNetworkNode = $_
                 $ServerName = $_.Name
@@ -1151,7 +1151,7 @@ Describe "Test Network Stack`r`n" {
 
                     if ($ServerStatus) {
                         
-                        Write-Verbose "VERBOSE: Testing NDK Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
+                        Write-Host "VERBOSE: Testing NDK Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
                         "VERBOSE: Testing NDK Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                         
                         $ServerIP = $_.IpAddress
@@ -1176,7 +1176,7 @@ Describe "Test Network Stack`r`n" {
             
                                 if (($ServerIP -NotLike $ClientIP) -And ($ServerSubnet -Like $ClientSubnet) -And ($ServerVLAN -Like $ClientVLAN) -And $ClientStatus) {
                                     
-                                    Write-Verbose "`r`n##################################################`r`n"
+                                    Write-Host "`r`n##################################################`r`n"
                                     "`r`n##################################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                     
                                     It "Basic RDMA Connectivity Test -- Verify Basic Rdma Connectivity: Client $ClientIP to Server $ServerIP" {
@@ -1202,19 +1202,19 @@ Describe "Test Network Stack`r`n" {
                 
                                         $ServerOutput = Receive-Job $ServerOutput
                                     
-                                        Write-Verbose "NDK Ping Server Output: "
-                                        $ServerOutput | ForEach-Object {$ServerSuccess = $_ -match 'completes'; Write-Verbose $_}
-                                        Write-Verbose "`r`n"
+                                        Write-Host "NDK Ping Server Output: "
+                                        $ServerOutput | ForEach-Object {$ServerSuccess = $_ -match 'completes'; Write-Host $_}
+                                        Write-Host "`r`n"
 
                                         "NDK Ping Server Output: "| Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         $ServerOutput | ForEach-Object {$_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
                                         "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                 
-                                        Write-Verbose "NDK Ping Client Output: "
-                                        $ClientOutput[0..($ClientOutput.Count-4)] | ForEach-Object {$ClientSuccess = $_ -match 'completes';Write-Verbose $_}
+                                        Write-Host "NDK Ping Client Output: "
+                                        $ClientOutput[0..($ClientOutput.Count-4)] | ForEach-Object {$ClientSuccess = $_ -match 'completes';Write-Host $_}
                                         "NDK Ping Client Output: "| Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         $ClientOutput | ForEach-Object {$_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
-                                        Write-Verbose "`r`n##################################################`r`n"
+                                        Write-Host "`r`n##################################################`r`n"
                                         "`r`n##################################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
                                         $Success = $ServerSuccess -and $ClientSuccess
@@ -1245,17 +1245,17 @@ Describe "Test Network Stack`r`n" {
 
         Assert-ServerClientInterfaceSuccess -ResultInformationList $ResultInformationList -StageString "STAGE 4: NDK Ping"
 
-        Write-Verbose "RESULTS Stage 4: NDK Ping`r`n"
+        Write-Host "RESULTS Stage 4: NDK Ping`r`n"
         "RESULTS Stage 4: NDK Ping`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
         ($Results["STAGE 4: NDK Ping"]) | ForEach-Object {
 
-            Write-Verbose $_ 
+            Write-Host $_ 
             $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
         }
         if ($StageSuccessList["STAGE 4: NDK Ping"] -contains $false) {
-            Write-Verbose "`r`nSTAGE 4: NDK PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
+            Write-Host "`r`nSTAGE 4: NDK PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
             "`r`nSTAGE 4: NDK PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
             $StageNumber = 0
         }
@@ -1268,9 +1268,9 @@ Describe "Test Network Stack`r`n" {
 
         Context "VERBOSE: Testing Connectivity Stage 5: NDK Perf`r`n" {
     
-            Write-Verbose "####################################`r`n"
-            Write-Verbose "VERBOSE: Testing Connectivity Stage 5: NDK Perf`r`n"
-            Write-Verbose "####################################`r`n"
+            Write-Host "####################################`r`n"
+            Write-Host "VERBOSE: Testing Connectivity Stage 5: NDK Perf`r`n"
+            Write-Host "####################################`r`n"
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "VERBOSE: Testing Connectivity Stage 5: NDK Perf`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
@@ -1282,7 +1282,7 @@ Describe "Test Network Stack`r`n" {
 
             $TestNetwork | ForEach-Object {
 
-                Write-Verbose "VERBOSE: Testing NDK Perf Connectivity on Machine: $($_.Name)"
+                Write-Host "VERBOSE: Testing NDK Perf Connectivity on Machine: $($_.Name)"
                 "VERBOSE: Testing NDK Perf Connectivity on Machine: $($_.Name)" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
                 $ServerNetworkNode = $_
@@ -1296,7 +1296,7 @@ Describe "Test Network Stack`r`n" {
 
                     if($ServerStatus) {
                         
-                        Write-Verbose "VERBOSE: Testing NDK Perf Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
+                        Write-Host "VERBOSE: Testing NDK Perf Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
                         "VERBOSE: Testing NDK Perf Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
                         $ServerIP = $_.IpAddress
@@ -1325,7 +1325,7 @@ Describe "Test Network Stack`r`n" {
         
                                 if (($ServerIP -NotLike $ClientIP) -And ($ServerSubnet -Like $ClientSubnet) -And ($ServerVLAN -Like $ClientVLAN) -And $ClientStatus) {
         
-                                    Write-Verbose "`r`n##################################################`r`n"
+                                    Write-Host "`r`n##################################################`r`n"
                                     "`r`n##################################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
                                     It "1:1 RDMA Congestion Test -- Stress RDMA Transaction Between Two Singular NICs: Client $ClientIP to Server $ServerIP" {
@@ -1336,9 +1336,9 @@ Describe "Test Network Stack`r`n" {
                                         
                                         $ServerCommand = "Server $ServerName CMD: C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rperf -W 5"
                                         $ClientCommand = "Client $ClientName CMD: C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rperf"
-                                        Write-Verbose $ServerCommand
+                                        Write-Host $ServerCommand
                                         $ServerCommand | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                                        Write-Verbose $ClientCommand
+                                        Write-Host $ClientCommand
                                         $ClientCommand | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         $NewResultInformation = [ResultInformationData]::new()
 
@@ -1380,18 +1380,18 @@ Describe "Test Network Stack`r`n" {
                                         
                                         $ServerOutput = Receive-Job $ServerOutput
                                         
-                                        Write-Verbose "NDK Perf Server Output: "
-                                        $ServerOutput | ForEach-Object {$ServerSuccess = $_ -match 'completes';Write-Verbose $_}
-                                        Write-Verbose "`r`n"
+                                        Write-Host "NDK Perf Server Output: "
+                                        $ServerOutput | ForEach-Object {$ServerSuccess = $_ -match 'completes';Write-Host $_}
+                                        Write-Host "`r`n"
                                         "NDK Perf Server Output: "| Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         $ServerOutput | ForEach-Object {$_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
                                         "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
-                                        Write-Verbose "NDK Perf Client Output: "
-                                        $ClientOutput[0..($ClientOutput.Count-4)] | ForEach-Object {$ClientSuccess = $_ -match 'completes';Write-Verbose $_}
+                                        Write-Host "NDK Perf Client Output: "
+                                        $ClientOutput[0..($ClientOutput.Count-4)] | ForEach-Object {$ClientSuccess = $_ -match 'completes';Write-Host $_}
                                         "NDK Perf Client Output: "| Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         $ClientOutput | ForEach-Object {$_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
-                                        Write-Verbose "`r`n##################################################`r`n"
+                                        Write-Host "`r`n##################################################`r`n"
                                         "`r`n##################################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         
                                         $Success = ($ServerBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8) -and ($ClientBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8)
@@ -1422,17 +1422,17 @@ Describe "Test Network Stack`r`n" {
         
         Assert-ServerClientInterfaceSuccess -ResultInformationList $ResultInformationList -StageString "STAGE 5: NDK Perf"
 
-        Write-Verbose "RESULTS Stage 5: NDK Perf`r`n"
+        Write-Host "RESULTS Stage 5: NDK Perf`r`n"
         "RESULTS Stage 5: NDK Perf`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
         ($Results["STAGE 5: NDK Perf"]) | ForEach-Object {
 
-            Write-Verbose $_ 
+            Write-Host $_ 
             $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
         }
         if ($StageSuccessList["STAGE 5: NDK Perf"] -contains $false) {
-            Write-Verbose "`r`nSTAGE 5: NDK PERF (1:1) FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
+            Write-Host "`r`nSTAGE 5: NDK PERF (1:1) FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
             "`r`nSTAGE 5: NDK PERF (1:1) FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
             $StageNumber = 0
         }
@@ -1443,20 +1443,20 @@ Describe "Test Network Stack`r`n" {
     # # ##################################
     # if ($StageNumber -ge 6) {
 
-        Context "VERBOSE: Testing Connectivity Stage 6: NDK Perf (N : 1)`r`n" {
+        # Context "VERBOSE: Testing Connectivity Stage 6: NDK Perf (N : 1)`r`n" {
 
-            Write-Verbose "####################################`r`n"
-            Write-Verbose "VERBOSE: Testing Connectivity Stage 6: NDK Perf (N : 1)`r`n"
-            Write-Verbose "####################################"
-            "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
-            "VERBOSE: Testing Connectivity Stage 6: NDK Perf (N : 1)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
-            "####################################" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
+        #     Write-Host "####################################`r`n"
+        #     Write-Host "VERBOSE: Testing Connectivity Stage 6: NDK Perf (N : 1)`r`n"
+        #     Write-Host "####################################"
+        #     "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
+        #     "VERBOSE: Testing Connectivity Stage 6: NDK Perf (N : 1)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
+        #     "####################################" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
 
-            $Results["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
-            $ResultString = ""
-            $Failures["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
-            $ResultInformationList["STAGE 6: NDK Perf (N : 1)"] = [ResultInformationData[]]@()
-            $StageSuccessList["STAGE 6: NDK Perf (N : 1)"] = [Boolean[]]@()
+        #     $Results["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
+        #     $ResultString = ""
+        #     $Failures["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
+        #     $ResultInformationList["STAGE 6: NDK Perf (N : 1)"] = [ResultInformationData[]]@()
+        #     $StageSuccessList["STAGE 6: NDK Perf (N : 1)"] = [Boolean[]]@()
 
     #         $Results["STAGE 6: NDK Perf (N : 1)"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
     #         $ResultString = ""
@@ -1684,8 +1684,8 @@ Describe "Test Network Stack`r`n" {
 
     $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
 
-    Write-Verbose "Ending Test-NetStack: $endTime`r`n"
+    Write-Host "Ending Test-NetStack: $endTime`r`n"
     "Ending Test-NetStack: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
     
-    Write-Verbose "End"
+    Write-Host "End"
 }
