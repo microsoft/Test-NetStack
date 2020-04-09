@@ -433,9 +433,9 @@ Describe "Test Network Stack`r`n" {
     [HashTable]$StageSuccessList = @{}
 
     Write-Host "Generating Test-NetStack-Output.txt"
-    New-Item C:\Test-NetStack\Test-NetStack-Output.txt -ErrorAction SilentlyContinue
+    New-Item C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt -ErrorAction SilentlyContinue
     $OutputFile = "Test-NetStack Output File"
-    $OutputFile | Set-Content 'C:\Test-NetStack\Test-NetStack-Output.txt'
+    $OutputFile | Set-Content 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt'
 
     $startTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
 
@@ -654,7 +654,7 @@ Describe "Test Network Stack`r`n" {
     
     $TestNetworkJson = ConvertTo-Json $TestNetwork -Depth 99
 
-    $TestNetworkJson | Set-Content "C:\Test-NetStack\Test-NetStack-Network-Info.txt"
+    $TestNetworkJson | Set-Content "C:\E2EWorkload\Test-NetStack\Test-NetStack-Network-Info.txt"
     
     ####################################
     # BEGIN Test-NetStack CONGESTION
@@ -1017,8 +1017,8 @@ Describe "Test Network Stack`r`n" {
                                     It "Synthetic Connection Test (TCP) -- Verify Throughput is >75% reported: Client $($ClientIP) to Server $($ServerIP)`r`n" {
                                         
                                         $Success = $False
-                                        $ServerCommand = "Server $ServerName CMD: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$($ServerIP) -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000"
-                                        $ClientCommand = "Client $ClientName CMD: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$($ServerIP) -bind:$ClientIP -consoleverbosity:1 -iterations:2 -RateLimit:$ClientLinkSpeed"
+                                        $ServerCommand = "Server $ServerName CMD: C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$($ServerIP) -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000"
+                                        $ClientCommand = "Client $ClientName CMD: C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$($ServerIP) -bind:$ClientIP -consoleverbosity:1 -iterations:2 -RateLimit:$ClientLinkSpeed"
                                         $NewResultInformation = [ResultInformationData]::new()
 
                                         Write-Host $ServerCommand
@@ -1029,10 +1029,10 @@ Describe "Test Network Stack`r`n" {
                                         $ServerOutput = Start-Job -ScriptBlock {
                                             $ServerIP = $Using:ServerIP
                                             $ServerLinkSpeed = $Using:ServerLinkSpeed
-                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$Using:ServerIP -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000 2>&1" }
+                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$Using:ServerIP -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000 2>&1" }
                                         }
 
-                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$Using:ServerIP -bind:$Using:ClientIP -connections:32 -consoleverbosity:1 -iterations:2 2>&1" }
+                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$Using:ServerIP -bind:$Using:ClientIP -connections:32 -consoleverbosity:1 -iterations:2 2>&1" }
                                     
                                         Start-Sleep 1
 
@@ -1183,8 +1183,8 @@ Describe "Test Network Stack`r`n" {
                                         
                                         $ServerSuccess = $False
                                         $ClientSuccess = $False
-                                        $ServerCommand = "Server $ServerName CMD: C:\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rping -W 5"
-                                        $ClientCommand = "Client $ClientName CMD: C:\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping"
+                                        $ServerCommand = "Server $ServerName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Ping\NdkPing.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rping -W 5"
+                                        $ClientCommand = "Client $ClientName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Ping\NdkPing.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping"
                                         Write-Host $ServerCommand
                                         $ServerCommand | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         Write-Host $ClientCommand
@@ -1194,10 +1194,10 @@ Describe "Test Network Stack`r`n" {
                                         $ServerOutput = Start-Job -ScriptBlock {
                                             $ServerIP = $Using:ServerIP
                                             $ServerIF = $Using:ServerIF
-                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
+                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Ping\NdkPing.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
                                         }
                                         Start-Sleep -Seconds 1
-                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rping 2>&1" }
+                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Ping\NdkPing.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rping 2>&1" }
                                         Start-Sleep -Seconds 5
                 
                                         $ServerOutput = Receive-Job $ServerOutput
@@ -1334,8 +1334,8 @@ Describe "Test Network Stack`r`n" {
                                         $ClientSuccess = $False
                                         Start-Sleep -Seconds 1
                                         
-                                        $ServerCommand = "Server $ServerName CMD: C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rperf -W 5"
-                                        $ClientCommand = "Client $ClientName CMD: C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rperf"
+                                        $ServerCommand = "Server $ServerName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rperf -W 5"
+                                        $ClientCommand = "Client $ClientName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rperf"
                                         Write-Host $ServerCommand
                                         $ServerCommand | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         Write-Host $ClientCommand
@@ -1351,7 +1351,7 @@ Describe "Test Network Stack`r`n" {
                                         $ServerOutput = Start-Job -ScriptBlock {
                                             $ServerIP = $Using:ServerIP
                                             $ServerIF = $Using:ServerIF
-                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rperf -W 5 2>&1" }
+                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rperf -W 5 2>&1" }
                                         }
 
                                         Start-Sleep -Seconds 1
@@ -1362,7 +1362,7 @@ Describe "Test Network Stack`r`n" {
                                             Get-Counter -ComputerName $ClientName -Counter "\RDMA Activity($ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 5
                                         }
                                         
-                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rperf 2>&1" }
+                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rperf 2>&1" }
                                         
                                         $read = Receive-Job $ServerCounter
                                         $written = Receive-Job $ClientCounter
@@ -1506,7 +1506,7 @@ Describe "Test Network Stack`r`n" {
     #                         $ClientCounter = @()
     #                         $ServerSuccess = $True
     #                         $MultiClientSuccess = $True
-    #                         $ServerCommand = "Server $ServerName CMD: C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($ServerIP):900$j  -ServerIf $ServerIF -TestType rping -W 5`r`n"
+    #                         $ServerCommand = "Server $ServerName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($ServerIP):900$j  -ServerIf $ServerIF -TestType rping -W 5`r`n"
     #                         $NewResultInformation = [ResultInformationData]::new()
     #                         $NewResultInformation.ReproCommand = "`r`n`t`t$ServerCommand"
 
@@ -1520,7 +1520,7 @@ Describe "Test Network Stack`r`n" {
     #                             $ClientInterfaceDescription = $ClientInterface.Description  
 
                                 
-    #                             $ClientCommand = "Client $($_.Name) CMD: C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):900$j -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping`r`n"
+    #                             $ClientCommand = "Client $($_.Name) CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):900$j -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping`r`n"
     #                             Write-Host $ServerCommand
     #                             $ServerCommand | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
     #                             Write-Host $ClientCommand
@@ -1536,7 +1536,7 @@ Describe "Test Network Stack`r`n" {
     #                                 $ServerIP = $Using:ServerIP
     #                                 $ServerIF = $Using:ServerIF
     #                                 $j = $Using:j
-    #                                 Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($Using:ServerIP):900$Using:j  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
+    #                                 Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($Using:ServerIP):900$Using:j  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
     #                             }
 
     #                             $ClientCounter += Start-Job -ScriptBlock {
@@ -1550,7 +1550,7 @@ Describe "Test Network Stack`r`n" {
     #                                 $ClientIP = $Using:ClientIP
     #                                 $ClientIF = $Using:ClientIF
     #                                 $j = $Using:j
-    #                                 Invoke-Command -Computername $Using:ClientName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):900$Using:j -ClientAddr $($Using:ClientIP) -ClientIf $($Using:ClientIF) -TestType rping 2>&1" }
+    #                                 Invoke-Command -Computername $Using:ClientName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):900$Using:j -ClientAddr $($Using:ClientIP) -ClientIf $($Using:ClientIF) -TestType rping 2>&1" }
     #                             }
     #                             Start-Sleep -Seconds 1
     #                             $j++
@@ -1604,7 +1604,7 @@ Describe "Test Network Stack`r`n" {
     #                             $NewResultInformation.SourceMachineIPList += $ClientIP
     #                             $NewResultInformation.SourceMachineActualBpsList += $ClientBytesPerSecond
     #                             $NewResultInformation.SourceMachineSuccessList += $IndividualClientSuccess
-    #                             $NewResultInformation.ReproCommand += "`r`n`t`tClient $($_.ClientName) CMD:  C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):900$j -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping`r`n"
+    #                             $NewResultInformation.ReproCommand += "`r`n`t`tClient $($_.ClientName) CMD:  C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):900$j -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping`r`n"
                                 
     #                             $StageSuccessList["STAGE 6: NDK Perf (N : 1)"] = [Boolean[]]@()
                                 
@@ -1680,7 +1680,7 @@ Describe "Test Network Stack`r`n" {
 
     $TestNetworkJson = ConvertTo-Json $TestNetwork -Depth 99
 
-    $TestNetworkJson | Set-Content "C:\Test-NetStack\Test-NetStack-Network-Info.txt"
+    $TestNetworkJson | Set-Content "C:\E2EWorkload\Test-NetStack\Test-NetStack-Network-Info.txt"
 
     $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
 
