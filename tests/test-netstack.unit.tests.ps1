@@ -1183,8 +1183,8 @@ Describe "Test Network Stack`r`n" {
                                         
                                         $ServerSuccess = $False
                                         $ClientSuccess = $False
-                                        $ServerCommand = "Server $ServerName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Ping\NdkPing.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rping -W 5"
-                                        $ClientCommand = "Client $ClientName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Ping\NdkPing.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping"
+                                        $ServerCommand = "Server $ServerName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rping -W 5"
+                                        $ClientCommand = "Client $ClientName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping"
                                         Write-Host $ServerCommand
                                         $ServerCommand | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         Write-Host $ClientCommand
@@ -1194,10 +1194,10 @@ Describe "Test Network Stack`r`n" {
                                         $ServerOutput = Start-Job -ScriptBlock {
                                             $ServerIP = $Using:ServerIP
                                             $ServerIF = $Using:ServerIF
-                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Ping\NdkPing.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
+                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
                                         }
                                         Start-Sleep -Seconds 1
-                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Ping\NdkPing.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rping 2>&1" }
+                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rping 2>&1" }
                                         Start-Sleep -Seconds 5
                 
                                         $ServerOutput = Receive-Job $ServerOutput
