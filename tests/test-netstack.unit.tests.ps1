@@ -962,9 +962,9 @@ Describe "Test Network Stack`r`n" {
         }
     }
     
-    ###################################
-    Test Machines for TCP CTS Traffic Capability
-    ###################################
+    # ###################################
+    # Test Machines for TCP CTS Traffic Capability
+    # ###################################
     if ($StageNumber -ge 3) {
 
         Context "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" {
@@ -1136,9 +1136,9 @@ Describe "Test Network Stack`r`n" {
         }
     }
 
-    ###################################
-    Test Machines for NDK Ping Capability
-    ###################################
+    # ###################################
+    # Test Machines for NDK Ping Capability
+    # ###################################
     if ($StageNumber -ge 4) {
 
         Context "VERBOSE: Testing Connectivity Stage 4: NDK Ping`r`n" {
