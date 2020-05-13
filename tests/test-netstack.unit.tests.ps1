@@ -431,6 +431,7 @@ Describe "Test Network Stack`r`n" {
 
     [HashTable]$ResultInformationList = @{}
     [HashTable]$StageSuccessList = @{}
+    [HashTable]$RetryStageSuccessList = @{}
 
     Write-Host "Generating Test-NetStack-Output.txt"
     New-Item C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt -ErrorAction SilentlyContinue
@@ -961,9 +962,9 @@ Describe "Test Network Stack`r`n" {
         }
     }
     
-    ####################################
-    # Test Machines for TCP CTS Traffic Capability
-    ####################################
+    ###################################
+    Test Machines for TCP CTS Traffic Capability
+    ###################################
     if ($StageNumber -ge 3) {
 
         Context "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" {
@@ -979,6 +980,7 @@ Describe "Test Network Stack`r`n" {
             $Failures["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
             $ResultInformationList["STAGE 3: TCP CTS Traffic"] = [ResultInformationData[]]@()
             $StageSuccessList["STAGE 3: TCP CTS Traffic"] = [Boolean[]]@()
+            $RetryStageSuccessList["STAGE 3: TCP CTS Traffic"] = [Boolean[]]@()
 
             $TestNetwork | ForEach-Object {
 
@@ -1014,80 +1016,97 @@ Describe "Test Network Stack`r`n" {
 
                                 if (($ServerIP -NotLike $ClientIP) -And ($ServerSubnet -Like $ClientSubnet) -And ($ServerVLAN -Like $ClientVLAN) -And ($ClientStatus)) {
 
-                                    It "Synthetic Connection Test (TCP) -- Verify Throughput is >75% reported: Client $($ClientIP) to Server $($ServerIP)`r`n" {
-                                        
-                                        $Success = $False
-                                        $ServerCommand = "Server $ServerName CMD: C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$($ServerIP) -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000"
-                                        $ClientCommand = "Client $ClientName CMD: C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$($ServerIP) -bind:$ClientIP -consoleverbosity:1 -iterations:2 -RateLimit:$ClientLinkSpeed"
-                                        $NewResultInformation = [ResultInformationData]::new()
+                                    $Success = $False
+                                    $Retries = 3
 
-                                        Write-Host $ServerCommand
-                                        $ServerCommand | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                                        Write-Host $ClientCommand
-                                        $ClientCommand | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                    while((-not $Success) -and ($Retries -gt 0)) {
                                         
-                                        $ServerOutput = Start-Job -ScriptBlock {
-                                            $ServerIP = $Using:ServerIP
-                                            $ServerLinkSpeed = $Using:ServerLinkSpeed
-                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$Using:ServerIP -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000 2>&1" }
+                                        It "Synthetic Connection Test (TCP) -- Verify Throughput is >75% reported: Client $($ClientIP) to Server $($ServerIP)`r`n" {
+
+                                            $Success = $False
+
+                                            $ServerCommand = "Server $ServerName CMD: C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$($ServerIP) -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000"
+                                            $ClientCommand = "Client $ClientName CMD: C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$($ServerIP) -bind:$ClientIP -consoleverbosity:1 -iterations:2 -RateLimit:$ClientLinkSpeed"
+                                            $NewResultInformation = [ResultInformationData]::new()
+                                            
+                                            Write-Host $ServerCommand
+                                            $ServerCommand | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                            Write-Host $ClientCommand
+                                            $ClientCommand | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                            
+                                            $ServerOutput = Start-Job -ScriptBlock {
+                                                $ServerIP = $Using:ServerIP
+                                                $ServerLinkSpeed = $Using:ServerLinkSpeed
+                                                Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$Using:ServerIP -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000 2>&1" }
+                                            }
+
+                                            $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$Using:ServerIP -bind:$Using:ClientIP -connections:32 -consoleverbosity:1 -iterations:2 2>&1" }
+                                        
+                                            Start-Sleep 1
+
+                                            $ServerOutput = Receive-Job $ServerOutput
+
+                                            $FlatServerOutput = @()
+                                            $FlatClientOutput = @()
+                                            $ServerOutput[20..($ServerOutput.Count-5)] | ForEach-Object {If ($_ -ne "") {$FlatServerOutput += ($_ -split '\D+' | Sort-Object -Unique)}}
+                                            $ClientOutput[20..($ClientOutput.Count-5)] | ForEach-Object {If ($_ -ne "") {$FlatClientOutput += ($_ -split '\D+' | Sort-Object -Unique)}}
+                                            $FlatServerOutput = ForEach($num in $FlatServerOutput) {if ($num -ne "") {[Long]::Parse($num)}} 
+                                            $FlatClientOutput = ForEach($num in $FlatClientOutput) {if ($num -ne "") {[Long]::Parse($num)}}
+
+                                            $ServerRecvBps = ($FlatServerOutput | Measure-Object -Maximum).Maximum * 8
+                                            $ClientRecvBps = ($FlatClientOutput | Measure-Object -Maximum).Maximum * 8
+                                            $Success = ($ServerRecvBps -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .65) -and ($ClientRecvBps -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .65)
+                                            Write-Host "Server Bps $ServerRecvBps and Client Bps $ClientRecvBps`r`n"
+                                            "Server Bps $ServerRecvBps and Client Bps $ClientRecvBps`r`n"| Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+
+                                            Write-Host "TCP CTS Traffic Server Output: "
+                                            # Write-Host ($ServerOutput -match "SuccessfulConnections")
+                                            $ServerOutput[($ServerOutput.Count-3)..$ServerOutput.Count] | ForEach-Object {Write-Host $_}
+                                            Write-Host "`r`n"
+                                            "TCP CTS Traffic Server Output: "| Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                            ($ServerOutput -match "SuccessfulConnections") | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                            $ServerOutput[($ServerOutput.Count-3)..$ServerOutput.Count] | ForEach-Object {$_ | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
+                                            "`r`n" | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+
+                                            Write-Host "TCP CTS Traffic Client Output: "
+                                            Write-Host ($ClientOutput -match "SuccessfulConnections")
+                                            $ClientOutput[($ClientOutput.Count-3)..$ClientOutput.Count] | ForEach-Object {Write-Host $_}
+                                            Write-Host "`r`n"
+                                            "TCP CTS Traffic Client Output: "| Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                            ($ClientOutput -match "SuccessfulConnections") | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                            $ClientOutput[($ClientOutput.Count-3)..$ClientOutput.Count] | ForEach-Object {$_ | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
+                                            "`r`n" | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+
+                                            if (($Success) -or ($Retries -eq 1)) {
+                                                $Results["STAGE 3: TCP CTS Traffic"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerRecvBps bps `t| ($ClientName)`t`t| ($ClientIP)`t| $ClientRecvBps bps`t| $SUCCESS |"
+                                            }
+                                            if ((-not $Success) -and ($Retries -eq 1)) {
+                                                $Failures["STAGE 3: TCP CTS Traffic"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerRecvBps bps `t| ($ClientName)`t`t| ($ClientIP)`t| $ClientRecvBps bps`t| $SUCCESS |"
+                                            }
+
+                                            if (($Success) -or ($retries -eq 1)) {
+
+                                                $NewResultInformation.SourceMachine = $ClientName
+                                                $NewResultInformation.TargetMachine = $ServerName
+                                                $NewResultInformation.SourceIp = $ClientIP
+                                                $NewResultInformation.TargetIp = $ServerIP
+                                                $NewResultInformation.Success = $Success
+                                                $NewResultInformation.ReportedSendBps = $ClientLinkSpeed
+                                                $NewResultInformation.ReportedReceiveBps = $ServerLinkSpeed
+                                                $NewResultInformation.ActualSendBps = $ClientRecvBps
+                                                $NewResultInformation.ActualReceiveBps = $ServerRecvBps
+                                                $NewResultInformation.ReproCommand = "`r`n`t`tServer: $ServerCommand`r`n`t`tClient: $ClientCommand"
+                                                $ResultInformationList["STAGE 3: TCP CTS Traffic"] += $NewResultInformation
+                                                $StageSuccessList["STAGE 3: TCP CTS Traffic"] += $Success
+                                            }
+                                            $RetryStageSuccessList["STAGE 3: TCP CTS Traffic"] +=$Success
+                                            $Success | Should Be $True
                                         }
 
-                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$Using:ServerIP -bind:$Using:ClientIP -connections:32 -consoleverbosity:1 -iterations:2 2>&1" }
-                                    
-                                        Start-Sleep 1
-
-                                        $ServerOutput = Receive-Job $ServerOutput
-
-                                        $FlatServerOutput = @()
-                                        $FlatClientOutput = @()
-                                        $ServerOutput[20..($ServerOutput.Count-5)] | ForEach-Object {If ($_ -ne "") {$FlatServerOutput += ($_ -split '\D+' | Sort-Object -Unique)}}
-                                        $ClientOutput[20..($ClientOutput.Count-5)] | ForEach-Object {If ($_ -ne "") {$FlatClientOutput += ($_ -split '\D+' | Sort-Object -Unique)}}
-                                        $FlatServerOutput = ForEach($num in $FlatServerOutput) {if ($num -ne "") {[Long]::Parse($num)}} 
-                                        $FlatClientOutput = ForEach($num in $FlatClientOutput) {if ($num -ne "") {[Long]::Parse($num)}}
-
-                                        $ServerRecvBps = ($FlatServerOutput | Measure-Object -Maximum).Maximum * 8
-                                        $ClientRecvBps = ($FlatClientOutput | Measure-Object -Maximum).Maximum * 8
-                                        $Success = ($ServerRecvBps -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .65) -and ($ClientRecvBps -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .65)
-                                        Write-Host "Server Bps $ServerRecvBps and Client Bps $ClientRecvBps`r`n"
-                                        "Server Bps $ServerRecvBps and Client Bps $ClientRecvBps`r`n"| Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-
-                                        Write-Host "TCP CTS Traffic Server Output: "
-                                        # Write-Host ($ServerOutput -match "SuccessfulConnections")
-                                        $ServerOutput[($ServerOutput.Count-3)..$ServerOutput.Count] | ForEach-Object {Write-Host $_}
-                                        Write-Host "`r`n"
-                                        "TCP CTS Traffic Server Output: "| Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                                        ($ServerOutput -match "SuccessfulConnections") | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                                        $ServerOutput[($ServerOutput.Count-3)..$ServerOutput.Count] | ForEach-Object {$_ | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
-                                        "`r`n" | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-
-                                        Write-Host "TCP CTS Traffic Client Output: "
-                                        Write-Host ($ClientOutput -match "SuccessfulConnections")
-                                        $ClientOutput[($ClientOutput.Count-3)..$ClientOutput.Count] | ForEach-Object {Write-Host $_}
-                                        Write-Host "`r`n"
-                                        "TCP CTS Traffic Client Output: "| Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                                        ($ClientOutput -match "SuccessfulConnections") | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                                        $ClientOutput[($ClientOutput.Count-3)..$ClientOutput.Count] | ForEach-Object {$_ | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
-                                        "`r`n" | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-
-                                        $Results["STAGE 3: TCP CTS Traffic"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerRecvBps bps `t| ($ClientName)`t`t| ($ClientIP)`t| $ClientRecvBps bps`t| $SUCCESS |"
-                                        if (-not $Success) {
-                                            $Failures["STAGE 3: TCP CTS Traffic"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerRecvBps bps `t| ($ClientName)`t`t| ($ClientIP)`t| $ClientRecvBps bps`t| $SUCCESS |"
-                                        }
-
-                                        $NewResultInformation.SourceMachine = $ClientName
-                                        $NewResultInformation.TargetMachine = $ServerName
-                                        $NewResultInformation.SourceIp = $ClientIP
-                                        $NewResultInformation.TargetIp = $ServerIP
-                                        $NewResultInformation.Success = $Success
-                                        $NewResultInformation.ReportedSendBps = $ClientLinkSpeed
-                                        $NewResultInformation.ReportedReceiveBps = $ServerLinkSpeed
-                                        $NewResultInformation.ActualSendBps = $ClientRecvBps
-                                        $NewResultInformation.ActualReceiveBps = $ServerRecvBps
-                                        $NewResultInformation.ReproCommand = "`r`n`t`tServer: $ServerCommand`r`n`t`tClient: $ClientCommand"
-                                        $ResultInformationList["STAGE 3: TCP CTS Traffic"] += $NewResultInformation
-                                        $StageSuccessList["STAGE 3: TCP CTS Traffic"] += $Success
-
-                                        $Success | Should Be $True
+                                        $Retries--
+                                        $SuccessCount = $RetryStageSuccessList["STAGE 3: TCP CTS Traffic"].Count
+                                        $Success = $RetryStageSuccessList["STAGE 3: TCP CTS Traffic"][$SuccessCount - 1]
+                                        
                                     }
                                     Write-Host "`r`n####################################`r`n"
                                     "####################################`r`n" | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
@@ -1117,9 +1136,9 @@ Describe "Test Network Stack`r`n" {
         }
     }
 
-    ####################################
-    # Test Machines for NDK Ping Capability
-    ####################################
+    ###################################
+    Test Machines for NDK Ping Capability
+    ###################################
     if ($StageNumber -ge 4) {
 
         Context "VERBOSE: Testing Connectivity Stage 4: NDK Ping`r`n" {
@@ -1220,10 +1239,11 @@ Describe "Test Network Stack`r`n" {
                                         $Success = $ServerSuccess -and $ClientSuccess
 
                                         $Results["STAGE 4: NDK Ping"] += "| ($ServerName)`t`t| ($ServerIP)`t| ($ClientName)`t`t| ($ClientIP)`t| $Success`t`t|"
-                                        if (-not $Success) {
+
+                                        if ((-not $Success)) {
                                             $Failures["STAGE 4: NDK Ping"] += "| ($ServerName)`t`t| ($ServerIP)`t| ($ClientName)`t`t| ($ClientIP)`t| $Success`t`t|"
                                         }
-
+                                        
                                         $NewResultInformation.SourceMachine = $ClientName
                                         $NewResultInformation.TargetMachine = $ServerName
                                         $NewResultInformation.SourceIp = $ClientIP
@@ -1279,6 +1299,7 @@ Describe "Test Network Stack`r`n" {
             $Failures["STAGE 5: NDK Perf"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
             $ResultInformationList["STAGE 5: NDK Perf"] = [ResultInformationData[]]@()
             $StageSuccessList["STAGE 5: NDK Perf"] = [Boolean[]]@()
+            $RetryStageSuccessList["STAGE 5: NDK Perf"] = [Boolean[]]@()
 
             $TestNetwork | ForEach-Object {
 
@@ -1328,89 +1349,107 @@ Describe "Test Network Stack`r`n" {
                                     Write-Host "`r`n##################################################`r`n"
                                     "`r`n##################################################`r`n" | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
-                                    It "1:1 RDMA Congestion Test -- Stress RDMA Transaction Between Two Singular NICs: Client $ClientIP to Server $ServerIP" {
-                                        
-                                        $ServerSuccess = $False
-                                        $ClientSuccess = $False
-                                        Start-Sleep -Seconds 1
-                                        
-                                        $ServerCommand = "Server $ServerName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rperf -W 5"
-                                        $ClientCommand = "Client $ClientName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rperf"
-                                        Write-Host $ServerCommand
-                                        $ServerCommand | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                                        Write-Host $ClientCommand
-                                        $ClientCommand | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                                        $NewResultInformation = [ResultInformationData]::new()
+                                    $Success = $False
+                                    $Retries = 3
 
-                                        $ServerCounter = Start-Job -ScriptBlock {
-                                            $ServerName = $Using:ServerName
-                                            $ServerInterfaceDescription = $Using:ServerInterfaceDescription
-                                            Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 5 -ErrorAction Ignore
+                                    while ((-not $Success) -and ($Retries -gt 0)) {
+
+                                        It "1:1 RDMA Congestion Test -- Stress RDMA Transaction Between Two Singular NICs: Client $ClientIP to Server $ServerIP" {
+                                            
+                                            $Success = $False
+                                            $ServerSuccess = $False
+                                            $ClientSuccess = $False
+                                            Start-Sleep -Seconds 1
+                                            
+                                            $ServerCommand = "Server $ServerName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rperf -W 5"
+                                            $ClientCommand = "Client $ClientName CMD: C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rperf"
+                                            Write-Host $ServerCommand
+                                            $ServerCommand | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                            Write-Host $ClientCommand
+                                            $ClientCommand | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                            $NewResultInformation = [ResultInformationData]::new()
+
+                                            $ServerCounter = Start-Job -ScriptBlock {
+                                                $ServerName = $Using:ServerName
+                                                $ServerInterfaceDescription = $Using:ServerInterfaceDescription
+                                                Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 5 -ErrorAction Ignore
+                                            }
+
+                                            $ServerOutput = Start-Job -ScriptBlock {
+                                                $ServerIP = $Using:ServerIP
+                                                $ServerIF = $Using:ServerIF
+                                                Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rperf -W 5 2>&1" }
+                                            }
+
+                                            Start-Sleep -Seconds 1
+                                            
+                                            $ClientCounter = Start-Job -ScriptBlock {
+                                                $ClientName = $Using:ClientName
+                                                $ClientInterfaceDescription = $Using:ClientInterfaceDescription
+                                                Get-Counter -ComputerName $ClientName -Counter "\RDMA Activity($ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 5
+                                            }
+                                            
+                                            $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rperf 2>&1" }
+                                            
+                                            $read = Receive-Job $ServerCounter
+                                            $written = Receive-Job $ClientCounter
+
+                                            $FlatServerOutput = $read.Readings.split(":") | ForEach-Object {
+                                                try {[uint64]($_) * 8} catch{}
+                                            }
+                                            $FlatClientOutput = $written.Readings.split(":") | ForEach-Object {
+                                                try {[uint64]($_) * 8} catch{}
+                                            }
+                                            $ServerBytesPerSecond = ($FlatServerOutput | Measure-Object -Maximum).Maximum
+                                            $ClientBytesPerSecond = ($FlatClientOutput | Measure-Object -Maximum).Maximum
+
+                                            Start-Sleep -Seconds 5
+                                            
+                                            $ServerOutput = Receive-Job $ServerOutput
+                                            
+                                            Write-Host "NDK Perf Server Output: "
+                                            $ServerOutput | ForEach-Object {$ServerSuccess = $_ -match 'completes';Write-Host $_}
+                                            Write-Host "`r`n"
+                                            "NDK Perf Server Output: "| Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                            $ServerOutput | ForEach-Object {$_ | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
+                                            "`r`n" | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+            
+                                            Write-Host "NDK Perf Client Output: "
+                                            $ClientOutput[0..($ClientOutput.Count-4)] | ForEach-Object {$ClientSuccess = $_ -match 'completes';Write-Host $_}
+                                            "NDK Perf Client Output: "| Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                            $ClientOutput | ForEach-Object {$_ | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
+                                            Write-Host "`r`n##################################################`r`n"
+                                            "`r`n##################################################`r`n" | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                            
+                                            $Success = ($ServerBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8) -and ($ClientBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8)
+
+                                            if (($Success) -or ($Retries -eq 1)) {
+                                                $Results["STAGE 5: NDK Perf"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerBytesPerSecond bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientBytesPerSecond bps`t| $SUCCESS |"
+                                            }
+                                            if ((-not $Success) -and ($Retries -eq 1)) {
+                                                $Failures["STAGE 5: NDK Perf"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerBytesPerSecond bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientBytesPerSecond bps`t| $SUCCESS |"
+                                            }
+
+                                            if (($Success) -or ($retries -eq 1)) {
+
+                                                $NewResultInformation.SourceMachine = $ClientName
+                                                $NewResultInformation.TargetMachine = $ServerName
+                                                $NewResultInformation.SourceIp = $ClientIP
+                                                $NewResultInformation.TargetIp = $ServerIP
+                                                $NewResultInformation.Success = $Success
+                                                $NewResultInformation.ReproCommand = "`r`n`t`tServer: $ServerCommand`r`n`t`tClient: $ClientCommand"
+                                                $ResultInformationList["STAGE 5: NDK Perf"] += $NewResultInformation
+                                                $StageSuccessList["STAGE 5: NDK Perf"] += $Success
+
+                                            }
+                                            
+                                            $RetryStageSuccessList["STAGE 5: NDK Perf"] += $Success
+                                            $Success | Should Be $True
                                         }
 
-                                        $ServerOutput = Start-Job -ScriptBlock {
-                                            $ServerIP = $Using:ServerIP
-                                            $ServerIF = $Using:ServerIF
-                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rperf -W 5 2>&1" }
-                                        }
-
-                                        Start-Sleep -Seconds 1
-                                        
-                                        $ClientCounter = Start-Job -ScriptBlock {
-                                            $ClientName = $Using:ClientName
-                                            $ClientInterfaceDescription = $Using:ClientInterfaceDescription
-                                            Get-Counter -ComputerName $ClientName -Counter "\RDMA Activity($ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 5
-                                        }
-                                        
-                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rperf 2>&1" }
-                                        
-                                        $read = Receive-Job $ServerCounter
-                                        $written = Receive-Job $ClientCounter
-
-                                        $FlatServerOutput = $read.Readings.split(":") | ForEach-Object {
-                                            try {[uint64]($_) * 8} catch{}
-                                        }
-                                        $FlatClientOutput = $written.Readings.split(":") | ForEach-Object {
-                                            try {[uint64]($_) * 8} catch{}
-                                        }
-                                        $ServerBytesPerSecond = ($FlatServerOutput | Measure-Object -Maximum).Maximum
-                                        $ClientBytesPerSecond = ($FlatClientOutput | Measure-Object -Maximum).Maximum
-
-                                        Start-Sleep -Seconds 5
-                                        
-                                        $ServerOutput = Receive-Job $ServerOutput
-                                        
-                                        Write-Host "NDK Perf Server Output: "
-                                        $ServerOutput | ForEach-Object {$ServerSuccess = $_ -match 'completes';Write-Host $_}
-                                        Write-Host "`r`n"
-                                        "NDK Perf Server Output: "| Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                                        $ServerOutput | ForEach-Object {$_ | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
-                                        "`r`n" | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-        
-                                        Write-Host "NDK Perf Client Output: "
-                                        $ClientOutput[0..($ClientOutput.Count-4)] | ForEach-Object {$ClientSuccess = $_ -match 'completes';Write-Host $_}
-                                        "NDK Perf Client Output: "| Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                                        $ClientOutput | ForEach-Object {$_ | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
-                                        Write-Host "`r`n##################################################`r`n"
-                                        "`r`n##################################################`r`n" | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                                        
-                                        $Success = ($ServerBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8) -and ($ClientBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8)
-
-                                        $Results["STAGE 5: NDK Perf"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerBytesPerSecond bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientBytesPerSecond bps`t| $SUCCESS |"
-                                        if (-not $Success) {
-                                            $Failures["STAGE 5: NDK Perf"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerBytesPerSecond bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientBytesPerSecond bps`t| $SUCCESS |"
-                                        }
-
-                                        $NewResultInformation.SourceMachine = $ClientName
-                                        $NewResultInformation.TargetMachine = $ServerName
-                                        $NewResultInformation.SourceIp = $ClientIP
-                                        $NewResultInformation.TargetIp = $ServerIP
-                                        $NewResultInformation.Success = $Success
-                                        $NewResultInformation.ReproCommand = "`r`n`t`tServer: $ServerCommand`r`n`t`tClient: $ClientCommand"
-                                        $ResultInformationList["STAGE 5: NDK Perf"] += $NewResultInformation
-                                        $StageSuccessList["STAGE 5: NDK Perf"] += $Success
-
-                                        $Success | Should Be $True
+                                        $Retries--
+                                        $SuccessCount = $RetryStageSuccessList["STAGE 5: NDK Perf"].Count
+                                        $Success = $RetryStageSuccessList["STAGE 5: NDK Perf"][$SuccessCount - 1]
                                     }
                                 } 
                             }
