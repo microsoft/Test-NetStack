@@ -49,7 +49,7 @@ Description = 'Test-NetStack is a module that can be used to exercise enterprise
 
 # Modules that must be imported into the global environment prior to importing this module
 
-RequiredModules = @(@{ModuleName = 'Pester'; ModuleVersion = '4.9.0';})
+RequiredModules = @(@{ModuleName = 'Pester'; RequiredVersion = '4.9.0';})
 
 # Assemblies that must be loaded prior to importing this module
 # RequiredAssemblies = @()

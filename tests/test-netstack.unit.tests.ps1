@@ -1099,7 +1099,8 @@ Describe "Test Network Stack`r`n" {
                                                 $ResultInformationList["STAGE 3: TCP CTS Traffic"] += $NewResultInformation
                                                 $StageSuccessList["STAGE 3: TCP CTS Traffic"] += $Success
                                             }
-                                            $RetryStageSuccessList["STAGE 3: TCP CTS Traffic"] +=$Success
+                                            $RetryStageSuccessList["STAGE 3: TCP CTS Traffic"] += $Success
+
                                             $Success | Should Be $True
                                         }
 
@@ -1132,7 +1133,7 @@ Describe "Test Network Stack`r`n" {
         if ($StageSuccessList["STAGE 3: TCP CTS Traffic"] -contains $false) {
             Write-Host "`r`nSTAGE 3: CTS TRAFFIC FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
             "`r`nSTAGE 3: CTS TRAFFIC FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-            $StageNumber = 0
+            # $StageNumber = 0
         }
     }
 
@@ -1444,6 +1445,7 @@ Describe "Test Network Stack`r`n" {
                                             }
                                             
                                             $RetryStageSuccessList["STAGE 5: NDK Perf"] += $Success
+
                                             $Success | Should Be $True
                                         }
 
@@ -1473,7 +1475,7 @@ Describe "Test Network Stack`r`n" {
         if ($StageSuccessList["STAGE 5: NDK Perf"] -contains $false) {
             Write-Host "`r`nSTAGE 5: NDK PERF (1:1) FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
             "`r`nSTAGE 5: NDK PERF (1:1) FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\E2EWorkload\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-            $StageNumber = 0
+            # $StageNumber = 0
         }
     }
 
