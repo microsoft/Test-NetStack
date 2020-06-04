@@ -71,7 +71,15 @@ function Test-NetStack {
     $testFile = Join-Path -Path $here -ChildPath "tests\test-netstack.unit.tests.ps1"
     $testNetStack = Invoke-Pester -Script $testFile -Show Summary, Failed -PassThru
 
-    If ($testNetStack.FailedCount -ne 0) {
+    $failureCases = ($testNetStack.TestResult | Where-Object {$_.Context -Like "*Stage 1*" -or $_.Context -Like "*Stage 2*" -or $_.Context -Like "*Stage 4*"}) | Where-Object Passed -eq $false
+    $congestionFailureCases = ($testNetStack.TestResult | Where-Object {$_.Context -Like "*Stage 3*" -or $_.Context -Like "*Stage 5*"}) | Where-Object Passed -eq $false
+
+    If ($congestionFailureCases.Count -ne 0) {
+        # throw 'One or more congestion tests failed. The system may not be ready to support production workloads. Please review the output, resolve the issues, then restart the tests'
+        Write-Host 'One or more congestion tests failed. The system may not be ready to support production workloads. Please review the output. Congestion failures are often passive, however, they can still lead to failed production workloads. '
+    }
+
+    If ($failureCases.Count -ne 0) {
         # throw 'One or more tests failed. The system may not be ready to support production workloads. Please review the output, resolve the issues, then restart the tests'
         Write-Host 'One or more tests failed. The system may not be ready to support production workloads. Please review the output, resolve the issues, then restart the tests'
         return $false

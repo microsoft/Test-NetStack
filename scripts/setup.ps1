@@ -40,7 +40,7 @@ $MachineList | ForEach-Object {
     Invoke-Command -ComputerName $MachineName -scriptBlock {New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow}
 
     Invoke-Command -ComputerName $MachineName -scriptBlock {Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force}
-    Invoke-Command -ComputerName $MachineName -scriptBlock {Install-Module pester -SkipPublisherCheck -Force}
+    Invoke-Command -ComputerName $MachineName -scriptBlock {Install-Module Pester -RequiredVersion 4.9.0 -SkipPublisherCheck -Force}
     Invoke-Command -ComputerName $MachineName -scriptBlock {Import-Module C:\Test-NetStack\Test-NetStack.psd1}
 
 } 
