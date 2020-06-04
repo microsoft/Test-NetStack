@@ -18,29 +18,29 @@ $MachineList | ForEach-Object {
     $MachineName = $_
     $DestinationSession = New-PSSession -ComputerName $MachineName -Credential $creds
 
-    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\E2EWorkload\Test-NetStack\tools"} -ErrorAction SilentlyContinue
-    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\E2EWorkload\Test-NetStack\tools\NDK-Perf"} -ErrorAction SilentlyContinue
-    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\E2EWorkload\Test-NetStack\tools\NDK-Ping"} -ErrorAction SilentlyContinue
-    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic"} -ErrorAction SilentlyContinue
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\Test-NetStack\tools"} -ErrorAction SilentlyContinue
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\Test-NetStack\tools\NDK-Perf"} -ErrorAction SilentlyContinue
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\Test-NetStack\tools\NDK-Ping"} -ErrorAction SilentlyContinue
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "mkdir C:\Test-NetStack\tools\CTS-Traffic"} -ErrorAction SilentlyContinue
 
-    Copy-Item C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerf.sys -Destination C:\E2EWorkload\Test-NetStack\tools\NDK-Perf -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
-    Copy-Item C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -Destination C:\E2EWorkload\Test-NetStack\tools\NDK-Perf -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
-    Copy-Item C:\E2EWorkload\Test-NetStack\tools\NDK-Ping\NDKPing.sys -Destination C:\E2EWorkload\Test-NetStack\tools\NDK-Ping -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
-    Copy-Item C:\E2EWorkload\Test-NetStack\tools\NDK-Ping\NDKPing.exe -Destination C:\E2EWorkload\Test-NetStack\tools\NDK-Ping -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
+    Copy-Item C:\Test-NetStack\tools\NDK-Perf\NDKPerf.sys -Destination C:\Test-NetStack\tools\NDK-Perf -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
+    Copy-Item C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -Destination C:\Test-NetStack\tools\NDK-Perf -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
+    Copy-Item C:\Test-NetStack\tools\NDK-Ping\NDKPing.sys -Destination C:\Test-NetStack\tools\NDK-Ping -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
+    Copy-Item C:\Test-NetStack\tools\NDK-Ping\NDKPing.exe -Destination C:\Test-NetStack\tools\NDK-Ping -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
 
-    Copy-Item C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
+    Copy-Item C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\Test-NetStack\tools\CTS-Traffic -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
 
     Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "bcdedit -set TESTSIGNING OFF"}
     Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "bcdedit -set TESTSIGNING ON"}
-    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc delete NDKPerf type=kernel binpath=C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerf.sys"}
-    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc create NDKPerf type=kernel binpath=C:\E2EWorkload\Test-NetStack\tools\NDK-Perf\NDKPerf.sys"}
-    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc delete NDKPing type=kernel binpath=C:\E2EWorkload\Test-NetStack\tools\NDK-Ping\NDKPing.sys"}
-    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc create NDKPing type=kernel binpath=C:\E2EWorkload\Test-NetStack\tools\NDK-Ping\NDKPing.sys"}
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc delete NDKPerf type=kernel binpath=C:\Test-NetStack\tools\NDK-Perf\NDKPerf.sys"}
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc create NDKPerf type=kernel binpath=C:\Test-NetStack\tools\NDK-Perf\NDKPerf.sys"}
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc delete NDKPing type=kernel binpath=C:\Test-NetStack\tools\NDK-Ping\NDKPing.sys"}
+    Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc create NDKPing type=kernel binpath=C:\Test-NetStack\tools\NDK-Ping\NDKPing.sys"}
 
-    Invoke-Command -ComputerName $MachineName -scriptBlock {New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\E2EWorkload\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow}
+    Invoke-Command -ComputerName $MachineName -scriptBlock {New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow}
 
     Invoke-Command -ComputerName $MachineName -scriptBlock {Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force}
     Invoke-Command -ComputerName $MachineName -scriptBlock {Install-Module Pester -RequiredVersion 4.9.0 -SkipPublisherCheck -Force}
-    Invoke-Command -ComputerName $MachineName -scriptBlock {Import-Module C:\E2EWorkload\Test-NetStack\Test-NetStack.psd1}
+    Invoke-Command -ComputerName $MachineName -scriptBlock {Import-Module C:\Test-NetStack\Test-NetStack.psd1}
 
 } 
