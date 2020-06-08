@@ -486,23 +486,23 @@ Describe "Test Network Stack`r`n" {
         
         $newNode.Name = $_
         $CimSession = New-CimSession -ComputerName $NewNode.Name -Credential $Credentials 
-        $newNode.RdmaNetworkAdapters = Get-NetAdapterRdma -CimSession $CimSession | Select Name, InterfaceDescription, Enabled
+        $newNode.RdmaNetworkAdapters = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { Get-NetAdapterRdma | Select Name, InterfaceDescription, Enabled }
 
         # $vmTeamMapping = Get-VMNetworkAdapterTeamMapping -ManagementOS
 
         Write-Host "Machine Name: $($newNode.Name)`r`n"
         "Machine Name: $($newNode.Name)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
-        (Get-NetAdapter -CimSession $CimSession) | ForEach-Object {
+        (Get-NetAdapter -CimSession $CimSession | where Status -like "*Up*") | ForEach-Object {
 
             $newInterface = [InterfaceData]::new()
 
             $newInterface.Name = $_.Name
             $newInterface.Description = $_.InterfaceDescription
             $newInterface.IfIndex = $_.ifIndex
-            $newInterface.IpAddress = (Get-NetIpAddress -CimSession $CimSession | where InterfaceIndex -eq $_.ifIndex | where AddressFamily -eq "IPv4" | where SkipAsSource -Like "*False*").IpAddress
+            $newInterface.IpAddress = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $ifIndex = $interface.ifIndex; (Get-NetIpAddress | where InterfaceIndex -eq $ifIndex | where AddressFamily -eq "IPv4" | where SkipAsSource -Like "*False*").IpAddress }
             $newInterface.Status = If ($_.Status -match "Up" -and $newInterface.IpAddress -ne "") {$true} Else {$false}
-            $newInterface.SubnetMask = (Get-NetIpAddress -CimSession $CimSession | where InterfaceIndex -eq $_.ifIndex | where AddressFamily -eq "IPv4" | where SkipAsSource -Like "*False*").PrefixLength
+            $newInterface.SubnetMask = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $ifIndex = $interface.ifIndex; (Get-NetIpAddress | where InterfaceIndex -eq $ifIndex | where AddressFamily -eq "IPv4" | where SkipAsSource -Like "*False*").PrefixLength }
             
             $LinkSpeed = $_.LinkSpeed.split(" ")
             Switch($LinkSpeed[1]) {
@@ -521,26 +521,23 @@ Describe "Test Network Stack`r`n" {
                 $subnet = [IPAddress] (([IPAddress] $newInterface.IpAddress).Address -band ([IPAddress] (ConvertTo-IPv4MaskString $newInterface.SubnetMask)).Address)
                 
                 $newInterface.Subnet =  "$($subnet) / $($newInterface.SubnetMask)"
-            }
-            
-            $newInterface.VLAN = (Get-VMNetworkAdapterIsolation -ManagementOS -CimSession $CimSession | where ParentAdapter -like "*$($_.Name)*").DefaultIsolationID
-
-            if ($newInterface.VLAN -eq "") {
                 
-                $newInterface.VLAN = (Get-NetAdapterAdvancedProperty -CimSession $CimSession | where Name -like "$($_.Name)" | where DisplayName -like "VLAN ID").DisplayValue
-
+            $newInterface.VLAN = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $name = $interface.Name; (Get-VMNetworkAdapterIsolation -ManagementOS | where ParentAdapter -like "*$name*").DefaultIsolationID }
+            Write-Host $newInterface.VLAN
+            if ($newInterface.VLAN -eq "") {
+                $newInterface.VLAN = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $name = $interface.Name; (Get-NetAdapterAdvancedProperty | where Name -like "*$name*" | where DisplayName -like "VLAN ID").DisplayValue }
             }
 
             if ($newInterface.Description -like "*Mellanox*") {
 
                 $newInterface.RdmaImplementation = "RoCE"
                 
-            } else { 
+            } elseif ($newInterface.Name -in $newNodeRdmaAdapters.Name) { 
 
                 try {
 
-                    $newInterface.RdmaImplementation = (Get-NetAdapterAdvancedProperty -CimSession $CimSession -Name $_.Name -RegistryKeyword *NetworkDirectTechnology -ErrorAction Stop).RegistryValue
-                
+                    $newInterface.RdmaImplementation = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { (Get-NetAdapterAdvancedProperty -Name $Using:newInterface.Name -RegistryKeyword *NetworkDirectTechnology -ErrorAction Stop).RegistryValue }
+                    Write-Host $newInterface.RdmaImplementation
                     switch([Int]$rdmaProtocol) {
             
                         0 {$newInterface.RdmaImplementation = "N/A"}
@@ -567,19 +564,8 @@ Describe "Test Network Stack`r`n" {
         
             $newNode.InterfaceListStruct.add($newInterface.Name, $newInterface)
         }
-
-        if ((Get-NetAdapterRdma).count -ne 0) {
-
-            $newNode.IsRDMACapable = $true
-
-        } else {
-
-            Write-Host "VERBOSE: Machine $($newNode.Name) is not RDMA capable.`r`n"
-            "VERBOSE: Machine $($newNode.Name) is not RDMA capable.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-
-        }
         
-        $rdmaEnabledNics = (Get-NetAdapterRdma -CimSession $CimSession | Where-Object Enabled -eq $true).Name
+        $rdmaEnabledNics = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { (Get-NetAdapterRdma | Where-Object Enabled -eq $true).Name }
         Write-Host "VERBOSE: RDMA Adapters"
         "VERBOSE: RDMA Adapters" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
         # Write-Host ($rdmaEnabledNics )
@@ -863,9 +849,9 @@ Describe "Test Network Stack`r`n" {
                                     $PacketSize = 0
                                     $ReportedMTU
                                     try {
-                                        $PacketSize = [Int](Get-NetAdapterAdvancedProperty -CimSession $hostName | where Name -eq $InterfaceName | where DisplayName -eq "Jumbo Packet").RegistryValue[0]
+                                        $PacketSize = [Int](Get-NetAdapterAdvancedProperty -CimSession $HostCimSession | where Name -eq $InterfaceName | where DisplayName -eq "Jumbo Packet").RegistryValue[0]
                                     } catch {
-                                        $PacketSize = [Int](Get-NetIPInterface -CimSession $hostName | where ifIndex -eq $InterfaceIfIndex | where AddressFamily -eq "IPv4").nlMtu
+                                        $PacketSize = [Int](Get-NetIPInterface -CimSession $HostCimSession | where ifIndex -eq $InterfaceIfIndex | where AddressFamily -eq "IPv4").nlMtu
                                         $ReportedMTU = $PacketSize
                                     }
 
