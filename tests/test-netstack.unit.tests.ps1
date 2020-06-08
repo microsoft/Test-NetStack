@@ -521,11 +521,12 @@ Describe "Test Network Stack`r`n" {
                 $subnet = [IPAddress] (([IPAddress] $newInterface.IpAddress).Address -band ([IPAddress] (ConvertTo-IPv4MaskString $newInterface.SubnetMask)).Address)
                 
                 $newInterface.Subnet =  "$($subnet) / $($newInterface.SubnetMask)"
-                
+            }
             $newInterface.VLAN = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $name = $interface.Name; (Get-VMNetworkAdapterIsolation -ManagementOS | where ParentAdapter -like "*$name*").DefaultIsolationID }
             Write-Host $newInterface.VLAN
             if ($newInterface.VLAN -eq "") {
                 $newInterface.VLAN = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $name = $interface.Name; (Get-NetAdapterAdvancedProperty | where Name -like "*$name*" | where DisplayName -like "VLAN ID").DisplayValue }
+                Write-Host $newInterface.VLAN
             }
 
             if ($newInterface.Description -like "*Mellanox*") {
