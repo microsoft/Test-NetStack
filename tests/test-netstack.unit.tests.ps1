@@ -485,24 +485,24 @@ Describe "Test Network Stack`r`n" {
         [NodeNetworkData]$newNode = [NodeNetworkData]::new()
         
         $newNode.Name = $_
-
-        $newNode.RdmaNetworkAdapters = Get-NetAdapterRdma -CimSession $newNode.Name | Select Name, InterfaceDescription, Enabled
+        $CimSession = New-CimSession -ComputerName $NewNode.Name -Credential $Credentials 
+        $newNode.RdmaNetworkAdapters = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { Get-NetAdapterRdma | Select Name, InterfaceDescription, Enabled }
 
         # $vmTeamMapping = Get-VMNetworkAdapterTeamMapping -ManagementOS
 
         Write-Host "Machine Name: $($newNode.Name)`r`n"
         "Machine Name: $($newNode.Name)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
-        (Get-NetAdapter -CimSession $_) | ForEach-Object {
+        (Get-NetAdapter -CimSession $CimSession | where Status -like "*Up*") | ForEach-Object {
 
             $newInterface = [InterfaceData]::new()
 
             $newInterface.Name = $_.Name
             $newInterface.Description = $_.InterfaceDescription
             $newInterface.IfIndex = $_.ifIndex
-            $newInterface.IpAddress = (Get-NetIpAddress -CimSession $newNode.Name | where InterfaceIndex -eq $_.ifIndex | where AddressFamily -eq "IPv4" | where SkipAsSource -Like "*False*").IpAddress
+            $newInterface.IpAddress = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $ifIndex = $interface.ifIndex; (Get-NetIpAddress | where InterfaceIndex -eq $ifIndex | where AddressFamily -eq "IPv4" | where SkipAsSource -Like "*False*").IpAddress }
             $newInterface.Status = If ($_.Status -match "Up" -and $newInterface.IpAddress -ne "") {$true} Else {$false}
-            $newInterface.SubnetMask = (Get-NetIpAddress -CimSession $newNode.Name | where InterfaceIndex -eq $_.ifIndex | where AddressFamily -eq "IPv4" | where SkipAsSource -Like "*False*").PrefixLength
+            $newInterface.SubnetMask = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $ifIndex = $interface.ifIndex; (Get-NetIpAddress | where InterfaceIndex -eq $ifIndex | where AddressFamily -eq "IPv4" | where SkipAsSource -Like "*False*").PrefixLength }
             
             $LinkSpeed = $_.LinkSpeed.split(" ")
             Switch($LinkSpeed[1]) {
@@ -522,25 +522,22 @@ Describe "Test Network Stack`r`n" {
                 
                 $newInterface.Subnet =  "$($subnet) / $($newInterface.SubnetMask)"
             }
+            $newInterface.VLAN = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $name = $interface.Name; (Get-VMNetworkAdapterIsolation -ManagementOS | where ParentAdapter -like "*$name*").DefaultIsolationID }
             
-            $newInterface.VLAN = (Get-VMNetworkAdapterIsolation -ManagementOS -CimSession $newNode.Name | where ParentAdapter -like "*$($_.Name)*").DefaultIsolationID
-
             if ($newInterface.VLAN -eq "") {
-                
-                $newInterface.VLAN = (Get-NetAdapterAdvancedProperty -CimSession $newNode.Name | where Name -like "$($_.Name)" | where DisplayName -like "VLAN ID").DisplayValue
-
+                $newInterface.VLAN = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $name = $interface.Name; (Get-NetAdapterAdvancedProperty | where Name -like "*$name*" | where DisplayName -like "VLAN ID").DisplayValue }
             }
 
             if ($newInterface.Description -like "*Mellanox*") {
 
                 $newInterface.RdmaImplementation = "RoCE"
                 
-            } else { 
+            } elseif ($newInterface.Name -in $newNodeRdmaAdapters.Name) { 
 
                 try {
 
-                    $newInterface.RdmaImplementation = (Get-NetAdapterAdvancedProperty -CimSession $newNode.Name -Name $_.Name -RegistryKeyword *NetworkDirectTechnology -ErrorAction Stop).RegistryValue
-                
+                    $newInterface.RdmaImplementation = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { (Get-NetAdapterAdvancedProperty -Name $Using:newInterface.Name -RegistryKeyword *NetworkDirectTechnology -ErrorAction Stop).RegistryValue }
+                    Write-Host $newInterface.RdmaImplementation
                     switch([Int]$rdmaProtocol) {
             
                         0 {$newInterface.RdmaImplementation = "N/A"}
@@ -567,19 +564,8 @@ Describe "Test Network Stack`r`n" {
         
             $newNode.InterfaceListStruct.add($newInterface.Name, $newInterface)
         }
-
-        if ((Get-NetAdapterRdma).count -ne 0) {
-
-            $newNode.IsRDMACapable = $true
-
-        } else {
-
-            Write-Host "VERBOSE: Machine $($newNode.Name) is not RDMA capable.`r`n"
-            "VERBOSE: Machine $($newNode.Name) is not RDMA capable.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-
-        }
         
-        $rdmaEnabledNics = (Get-NetAdapterRdma -CimSession $newNode.Name | Where-Object Enabled -eq $true).Name
+        $rdmaEnabledNics = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { (Get-NetAdapterRdma | Where-Object Enabled -eq $true).Name }
         Write-Host "VERBOSE: RDMA Adapters"
         "VERBOSE: RDMA Adapters" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
         # Write-Host ($rdmaEnabledNics )
@@ -664,7 +650,7 @@ Describe "Test Network Stack`r`n" {
     ####################################
     # Test Machines for PING Capability
     ####################################
-    if ($StageNumber -ge 1) {
+    if (1 -in $StageNumber) {
 
         Context "VERBOSE: Testing Connectivity Stage 1: PING`r`n" {
 
@@ -675,6 +661,11 @@ Describe "Test Network Stack`r`n" {
             "VERBOSE: Testing Connectivity Stage 1: PING`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
 
+            $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+            Write-Host "Time: $endTime`r`n"
+            "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+            
             $Results["STAGE 1: PING"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| CONNECTIVITY`t|")
             $Failures["STAGE 1: PING"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET NIC`t`t| CONNECTIVITY`t|")
             $ResultInformationList["STAGE 1: PING"] = [ResultInformationData[]]@()
@@ -686,6 +677,7 @@ Describe "Test Network Stack`r`n" {
                 "VERBOSE: Testing Ping Connectivity on Machine: $($_.Name)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                 
                 $hostName = $_.Name
+                $HostCimSession = New-CimSession -ComputerName $hostname -Credential $Credentials
                 $ValidInterfaceList = $_.InterfaceListStruct.Values | where IPAddress -ne "" 
 
                 $ValidInterfaceList | ForEach-Object {
@@ -696,7 +688,7 @@ Describe "Test Network Stack`r`n" {
                         
                         Write-Host "VERBOSE: Testing Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n"
                         "VERBOSE: Testing Ping Connectivity for Subnet: $($_.Subnet) and VLAN: $($_.VLAN)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-        
+                        
                         $SubNetTable = $_.SubNetMembers
                         $SourceIp = $SubNetTable.Keys[0]
                         $PeerNetList = $SubNetTable[$SourceIp] | where $_.IpAddress -notlike $SourceIp
@@ -708,6 +700,12 @@ Describe "Test Network Stack`r`n" {
                             $TargetIP = $_.IpAddress
 
                             $Success = $true
+
+                            $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+                            Write-Host "Time: $endTime`r`n"
+                            "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                            
                             if ($SourceIp -NotLike $TargetIp -and $SourceStatus) {
                                 
                                 It "Basic Connectivity (ping) -- Verify Basic Connectivity: Between $($TargetIP) and $($SourceIP))" {
@@ -716,7 +714,7 @@ Describe "Test Network Stack`r`n" {
                                     "ping $($TargetIP) -S $($SourceIP)`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                     $ReproCommand = "ping $($TargetIP) -S $($SourceIP)"
                                         
-                                    $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP" } 
+                                    $Output = Invoke-Command -ComputerName $hostName -Credential $Credentials -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP" } 
                                     $Success = ("$Output" -match "Reply from $TargetIP") -and ($Output -match "(0% loss)") -and ("$Output" -notmatch "Destination host unreachable/") 
 
                                     "PING STATUS SUCCESS: $Success`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
@@ -741,7 +739,11 @@ Describe "Test Network Stack`r`n" {
                                 }
 
                                 # $StageSuccess = $StageSuccess -and $Success
+                                $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
 
+                                Write-Host "Time: $endTime`r`n"
+                                "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                
                                 Write-Host "`r`n####################################`r`n"
                                 "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                             } 
@@ -765,15 +767,21 @@ Describe "Test Network Stack`r`n" {
         if ($StageSuccessList["STAGE 1: PING"] -contains $false) {
             Write-Host "`r`nSTAGE 1: PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
             "`r`nSTAGE 1: PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-            $StageNumber = 0
+            $StageNumber = @(0)
         }
+
+        $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+        Write-Host "Time: $endTime`r`n"
+        "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+        
 
     }
 
     # ###################################
     # Test Machines for PING -L -F Capability
     # ###################################
-    if ($StageNumber -ge 2) {
+    if (2 -in $StageNumber) {
 
         Context "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n" {
             
@@ -784,6 +792,11 @@ Describe "Test Network Stack`r`n" {
             "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
 
+            $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+            Write-Host "Time: $endTime`r`n"
+            "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+        
             $Results["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET MACHINE`t|TARGET NIC`t`t| REPORTED MTU`t| ACTUAL MTU | SUCCESS`t|")
             $Failures["STAGE 2: PING -L -F"] = @("| SOURCE MACHINE`t| SOURCE NIC`t`t| TARGET MACHINE`t|TARGET NIC`t`t| REPORTED MTU`t| ACTUAL MTU | SUCCESS`t|")
             $ResultInformationList["STAGE 2: PING -L -F"] = [ResultInformationData[]]@()
@@ -794,7 +807,7 @@ Describe "Test Network Stack`r`n" {
                 "VERBOSE: Testing Ping -L -F Connectivity on Machine: $($_.Name)" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
                 $hostName = $_.Name
-
+                $HostCimSession = New-CimSession -ComputerName $hostName -Credential $Credentials
                 $ValidInterfaceList = $_.InterfaceListStruct.Values | where IPAddress -ne "" 
 
                 $ValidInterfaceList | ForEach-Object {
@@ -824,6 +837,11 @@ Describe "Test Network Stack`r`n" {
                             $TargetMachine = $_.MachineName
                             $TargetIP = $_.IpAddress
 
+                            $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+                            Write-Host "Time: $endTime`r`n"
+                            "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                            
                             if ($SourceIp -NotLike $TargetIp) {
                                 
                                 It "MTU Connectivity -- Verify Connectivity and Discover MTU: Between Target $($TargetIP) and Source $($SourceIP)" {
@@ -831,9 +849,9 @@ Describe "Test Network Stack`r`n" {
                                     $PacketSize = 0
                                     $ReportedMTU
                                     try {
-                                        $PacketSize = [Int](Get-NetAdapterAdvancedProperty -CimSession $hostName | where Name -eq $InterfaceName | where DisplayName -eq "Jumbo Packet").RegistryValue[0]
+                                        $PacketSize = [Int](Get-NetAdapterAdvancedProperty -CimSession $HostCimSession | where Name -eq $InterfaceName | where DisplayName -eq "Jumbo Packet").RegistryValue[0]
                                     } catch {
-                                        $PacketSize = [Int](Get-NetIPInterface -CimSession $hostName | where ifIndex -eq $InterfaceIfIndex | where AddressFamily -eq "IPv4").nlMtu
+                                        $PacketSize = [Int](Get-NetIPInterface -CimSession $HostCimSession | where ifIndex -eq $InterfaceIfIndex | where AddressFamily -eq "IPv4").nlMtu
                                         $ReportedMTU = $PacketSize
                                     }
 
@@ -857,7 +875,7 @@ Describe "Test Network Stack`r`n" {
                                             Write-Host "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n"
                                             "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
-                                            $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP -l $Using:PacketSize -f -n 1" } | Out-String
+                                            $Output = Invoke-Command -ComputerName $hostName -Credential $Credentials -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP -l $Using:PacketSize -f -n 1" } | Out-String
                                             $Success = ("$Output" -match "Reply from $TargetIP") -and ("$Output" -match "(0% loss)") # -and (("$Output" -notmatch "General Failure") -or ("$Output" -notmatch "Destination host unreachable"))
                                             $Failure = ("$Output" -match "General Failure") -or ("$Output" -match "Destination host unreachable")
                                             $Success = $Success -and -not $Failure
@@ -883,7 +901,7 @@ Describe "Test Network Stack`r`n" {
                                         Write-Host "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n"
                                         "ping $($TargetIP) -S $($SourceIP) -l $PacketSize -f -n 1`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
-                                        $Output = Invoke-Command -Computername $hostName -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP -l $Using:PacketSize -f -n 1" }
+                                        $Output = Invoke-Command -ComputerName $hostName -Credential $Credentials -ScriptBlock { cmd /c "ping $Using:TargetIP -S $Using:SourceIP -l $Using:PacketSize -f -n 1" }
                                         $Success = ("$Output" -match "Reply from $TargetIP") -and ("$Output" -match "(0% loss)")
                                         $Failure = ("$Output" -match "General Failure") -or ("$Output" -match "Destination host unreachable")
                                         $Success = $Success -and -not $Failure
@@ -930,6 +948,11 @@ Describe "Test Network Stack`r`n" {
                                     $Success | Should Be $True
                                 } 
 
+                                $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+                                Write-Host "Time: $endTime`r`n"
+                                "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                
                                 Write-Host "`r`n####################################`r`n"
                                 "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                             } 
@@ -958,14 +981,20 @@ Describe "Test Network Stack`r`n" {
         if ($StageSuccessList["STAGE 2: PING -L -F"] -contains $false) {
             Write-Host "`r`nSTAGE 2: MTU TEST FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
             "`r`nSTAGE 2: MTU TEST FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-            $StageNumber = 0
+            $StageNumber = @(0)
         }
+
+        $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+        Write-Host "Time: $endTime`r`n"
+        "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+        
     }
     
     # ###################################
     # Test Machines for TCP CTS Traffic Capability
     # ###################################
-    if ($StageNumber -ge 3) {
+    if (3 -in $StageNumber) {
 
         Context "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" {
 
@@ -975,7 +1004,12 @@ Describe "Test Network Stack`r`n" {
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
+            
+            $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
 
+            Write-Host "Stage 3 Start Time: $endTime`r`n"
+            "Stage 3 start Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+            
             $Results["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
             $Failures["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
             $ResultInformationList["STAGE 3: TCP CTS Traffic"] = [ResultInformationData[]]@()
@@ -987,7 +1021,7 @@ Describe "Test Network Stack`r`n" {
                 "VERBOSE: Testing CTS Traffic (TCP) Connectivity on Machine: $($_.Name)" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                 $ServerNetworkNode = $_
                 $ServerName = $_.Name
-
+                $ServerCimSession = New-CimSession -ComputerName $ServerName -Credential $Credentials
                 $ServerNetworkNode.InterfaceListStruct.Values | ForEach-Object {
                     
                     $ServerStatus = $_.Status
@@ -1005,7 +1039,7 @@ Describe "Test Network Stack`r`n" {
 
                             $ClientNetworkNode = $_
                             $ClientName = $_.Name
-
+                            $ClientCimSession = New-CimSession -ComputerName $ClientName -Credential $Credentials
                             $ClientNetworkNode.InterfaceListStruct.Values | ForEach-Object {
 
                                 $ClientIP = $_.IpAddress
@@ -1018,7 +1052,12 @@ Describe "Test Network Stack`r`n" {
 
                                     $Success = $False
                                     $Retries = 3
+                                    
+                                    $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
 
+                                    Write-Host "Time: $endTime`r`n"
+                                    "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                    
                                     while((-not $Success) -and ($Retries -gt 0)) {
                                         
                                         It "Synthetic Connection Test (TCP) -- Verify Throughput is >75% reported: Client $($ClientIP) to Server $($ServerIP)`r`n" {
@@ -1037,10 +1076,10 @@ Describe "Test Network Stack`r`n" {
                                             $ServerOutput = Start-Job -ScriptBlock {
                                                 $ServerIP = $Using:ServerIP
                                                 $ServerLinkSpeed = $Using:ServerLinkSpeed
-                                                Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$Using:ServerIP -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000 2>&1" }
+                                                Invoke-Command -ComputerName $Using:ServerName -Credential $Using:Credentials -ScriptBlock { cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$Using:ServerIP -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000 2>&1" }
                                             }
 
-                                            $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$Using:ServerIP -bind:$Using:ClientIP -connections:32 -consoleverbosity:1 -iterations:2 2>&1" }
+                                            $ClientOutput = Invoke-Command -ComputerName $ClientName -Credential $Credentials -ScriptBlock { cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$Using:ServerIP -bind:$Using:ClientIP -connections:32 -consoleverbosity:1 -iterations:2 2>&1" }
                                         
                                             Start-Sleep 1
 
@@ -1109,6 +1148,11 @@ Describe "Test Network Stack`r`n" {
                                         $Success = $RetryStageSuccessList["STAGE 3: TCP CTS Traffic"][$SuccessCount - 1]
                                         
                                     }
+                                    $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+                                    Write-Host "Time: $endTime`r`n"
+                                    "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                    
                                     Write-Host "`r`n####################################`r`n"
                                     "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                 } 
@@ -1135,12 +1179,19 @@ Describe "Test Network Stack`r`n" {
             "`r`nSTAGE 3: CTS TRAFFIC FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
             # $StageNumber = 0
         }
+
+        
+        $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+        Write-Host "Ending Stage 3: $endTime`r`n"
+        "Ending Stage 3: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+
     }
 
     # ###################################
     # Test Machines for NDK Ping Capability
     # ###################################
-    if ($StageNumber -ge 4) {
+    if (4 -in $StageNumber) {
 
         Context "VERBOSE: Testing Connectivity Stage 4: NDK Ping`r`n" {
 
@@ -1150,6 +1201,11 @@ Describe "Test Network Stack`r`n" {
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "VERBOSE: Testing Connectivity Stage 4: NDK Ping`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
+            
+            $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+            Write-Host "Time: $endTime`r`n"
+            "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
             
             $Results["STAGE 4: NDK Ping"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CONNECTIVITY`t|")
             $Failures["STAGE 4: NDK Ping"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CONNECTIVITY`t|")
@@ -1162,7 +1218,7 @@ Describe "Test Network Stack`r`n" {
                 "VERBOSE: Testing NDK Ping Connectivity on Machine: $($_.Name)" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                 $ServerNetworkNode = $_
                 $ServerName = $_.Name
-        
+                $ServerCimSession = New-CimSession -ComputerName $ServerName -Credential $Credentials
                 $ServerRdmaInterfaceList = $ServerNetworkNode.InterfaceListStruct.Values | where Name -In $ServerNetworkNode.RdmaNetworkAdapters.Name | where RdmaEnabled
         
                 $ServerRdmaInterfaceList | ForEach-Object {
@@ -1183,7 +1239,7 @@ Describe "Test Network Stack`r`n" {
             
                             $ClientNetworkNode = $_
                             $ClientName = $_.Name
-            
+                            $ClientCimSession = New-CimSession -ComputerName $ClientName -Credential $Credentials
                             $ClientRdmaInterfaceList = $ClientNetworkNode.InterfaceListStruct.Values | where Name -In $ClientNetworkNode.RdmaNetworkAdapters.Name | where RdmaEnabled
             
                             $ClientRdmaInterfaceList | ForEach-Object {
@@ -1198,6 +1254,11 @@ Describe "Test Network Stack`r`n" {
                                     
                                     Write-Host "`r`n##################################################`r`n"
                                     "`r`n##################################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                    
+                                    $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+                                    Write-Host "Time: $endTime`r`n"
+                                    "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                     
                                     It "Basic RDMA Connectivity Test -- Verify Basic Rdma Connectivity: Client $ClientIP to Server $ServerIP" {
                                         
@@ -1214,10 +1275,10 @@ Describe "Test Network Stack`r`n" {
                                         $ServerOutput = Start-Job -ScriptBlock {
                                             $ServerIP = $Using:ServerIP
                                             $ServerIF = $Using:ServerIF
-                                            Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
+                                            Invoke-Command -ComputerName $Using:ServerName -Credential $Using:Credentials -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
                                         }
                                         Start-Sleep -Seconds 1
-                                        $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rping 2>&1" }
+                                        $ClientOutput = Invoke-Command -ComputerName $ClientName -Credential $Credentials -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rping 2>&1" }
                                         Start-Sleep -Seconds 5
                 
                                         $ServerOutput = Receive-Job $ServerOutput
@@ -1234,6 +1295,13 @@ Describe "Test Network Stack`r`n" {
                                         $ClientOutput[0..($ClientOutput.Count-4)] | ForEach-Object {$ClientSuccess = $_ -match 'completes';Write-Host $_}
                                         "NDK Ping Client Output: "| Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                         $ClientOutput | ForEach-Object {$_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8}
+
+
+                                        $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+                                        Write-Host "Time: $endTime`r`n"
+                                        "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                        
                                         Write-Host "`r`n##################################################`r`n"
                                         "`r`n##################################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
@@ -1278,14 +1346,20 @@ Describe "Test Network Stack`r`n" {
         if ($StageSuccessList["STAGE 4: NDK Ping"] -contains $false) {
             Write-Host "`r`nSTAGE 4: NDK PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
             "`r`nSTAGE 4: NDK PING FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-            $StageNumber = 0
+            $StageNumber = @(0)
         }
+
+        $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+        Write-Host "Time: $endTime`r`n"
+        "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+        
     }
 
     ###################################
     # Test Machines for NDK Perf Capability
     ###################################
-    if ($StageNumber -ge 5) {
+    if (5 -in $StageNumber) {
 
         Context "VERBOSE: Testing Connectivity Stage 5: NDK Perf`r`n" {
     
@@ -1296,6 +1370,11 @@ Describe "Test Network Stack`r`n" {
             "VERBOSE: Testing Connectivity Stage 5: NDK Perf`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
             "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
 
+            $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+            Write-Host "Time: $endTime`r`n"
+            "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+            
             $Results["STAGE 5: NDK Perf"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
             $Failures["STAGE 5: NDK Perf"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>80%) |")
             $ResultInformationList["STAGE 5: NDK Perf"] = [ResultInformationData[]]@()
@@ -1309,7 +1388,7 @@ Describe "Test Network Stack`r`n" {
 
                 $ServerNetworkNode = $_
                 $ServerName = $_.Name
-
+                $ServerCimSession = New-CimSession -ComputerName $ServerName -Credential $Credentials
                 $ServerRdmaInterfaceList = $ServerNetworkNode.InterfaceListStruct.Values | where Name -In $ServerNetworkNode.RdmaNetworkAdapters.Name | where RdmaEnabled
 
                 $ServerRdmaInterfaceList | ForEach-Object {
@@ -1332,7 +1411,7 @@ Describe "Test Network Stack`r`n" {
         
                             $ClientNetworkNode = $_
                             $ClientName = $_.Name
-                            
+                            $ClientCimSession = New-CimSession -ComputerName $ClientName -Credential $Credentials
                             $ClientRdmaInterfaceList = $ClientNetworkNode.InterfaceListStruct.Values | where Name -In $ClientNetworkNode.RdmaNetworkAdapters.Name | where RdmaEnabled
         
                             $ClientRdmaInterfaceList | ForEach-Object {
@@ -1349,7 +1428,12 @@ Describe "Test Network Stack`r`n" {
         
                                     Write-Host "`r`n##################################################`r`n"
                                     "`r`n##################################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-        
+                                    
+                                    $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+                                    Write-Host "Time: $endTime`r`n"
+                                    "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                    
                                     $Success = $False
                                     $Retries = 3
 
@@ -1373,13 +1457,15 @@ Describe "Test Network Stack`r`n" {
                                             $ServerCounter = Start-Job -ScriptBlock {
                                                 $ServerName = $Using:ServerName
                                                 $ServerInterfaceDescription = $Using:ServerInterfaceDescription
-                                                Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 5 -ErrorAction Ignore
+                                                Invoke-Command -ComputerName $ServerName -Credential $Using:Credentials -ScriptBlock { Get-Counter -Counter "\RDMA Activity($Using:ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 5 -ErrorAction Ignore }
                                             }
+
+                                            Start-Sleep -Seconds 1 
 
                                             $ServerOutput = Start-Job -ScriptBlock {
                                                 $ServerIP = $Using:ServerIP
                                                 $ServerIF = $Using:ServerIF
-                                                Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rperf -W 5 2>&1" }
+                                                Invoke-Command -ComputerName $Using:ServerName -Credential $Using:Credentials -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -S -ServerAddr $($Using:ServerIP):9000  -ServerIf $Using:ServerIF -TestType rperf -W 5 2>&1" }
                                             }
 
                                             Start-Sleep -Seconds 1
@@ -1387,10 +1473,10 @@ Describe "Test Network Stack`r`n" {
                                             $ClientCounter = Start-Job -ScriptBlock {
                                                 $ClientName = $Using:ClientName
                                                 $ClientInterfaceDescription = $Using:ClientInterfaceDescription
-                                                Get-Counter -ComputerName $ClientName -Counter "\RDMA Activity($ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 5
+                                                Invoke-Command -ComputerName $ClientName -Credential $Using:Credentials -ScriptBlock { Get-Counter -Counter "\RDMA Activity($Using:ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 5 }
                                             }
                                             
-                                            $ClientOutput = Invoke-Command -Computername $ClientName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rperf 2>&1" }
+                                            $ClientOutput = Invoke-Command -ComputerName $ClientName -Credential $Credentials -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rperf 2>&1" }
                                             
                                             $read = Receive-Job $ServerCounter
                                             $written = Receive-Job $ClientCounter
@@ -1424,6 +1510,13 @@ Describe "Test Network Stack`r`n" {
                                             
                                             $Success = ($ServerBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8) -and ($ClientBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8)
 
+                                            
+                                            if ($ServerIP -eq '192.168.91.1' -and $retries -gt 0) {
+                                                Write-Host 'Inconclusive'
+                                                Set-ItResult -Inconclusive -Because "Retry"
+                                                $Success = $False
+                                            }
+
                                             if (($Success) -or ($Retries -eq 1)) {
                                                 $Results["STAGE 5: NDK Perf"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerBytesPerSecond bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientBytesPerSecond bps`t| $SUCCESS |"
                                             }
@@ -1452,6 +1545,12 @@ Describe "Test Network Stack`r`n" {
                                         $Retries--
                                         $SuccessCount = $RetryStageSuccessList["STAGE 5: NDK Perf"].Count
                                         $Success = $RetryStageSuccessList["STAGE 5: NDK Perf"][$SuccessCount - 1]
+
+                                        $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+                                        Write-Host "Time: $endTime`r`n"
+                                        "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                                        
                                     }
                                 } 
                             }
@@ -1477,12 +1576,18 @@ Describe "Test Network Stack`r`n" {
             "`r`nSTAGE 5: NDK PERF (1:1) FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
             # $StageNumber = 0
         }
+
+        $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+
+        Write-Host "Time: $endTime`r`n"
+        "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+        
     }
 
     # # ##################################
     # # Test Machines for NDK Perf (N to 1) Capability
     # # ##################################
-    # if ($StageNumber -ge 6) {
+    # if (6 -in $StageNumber) {
 
         # Context "VERBOSE: Testing Connectivity Stage 6: NDK Perf (N : 1)`r`n" {
 
@@ -1577,7 +1682,7 @@ Describe "Test Network Stack`r`n" {
     #                                 $ServerIP = $Using:ServerIP
     #                                 $ServerIF = $Using:ServerIF
     #                                 $j = $Using:j
-    #                                 Invoke-Command -Computername $Using:ServerName -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($Using:ServerIP):900$Using:j  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
+    #                                 Invoke-Command -ComputerName $Using:ServerName -Credential $Using:Credentials -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NdkPerfCmd.exe -S -ServerAddr $($Using:ServerIP):900$Using:j  -ServerIf $Using:ServerIF -TestType rping -W 5 2>&1" }
     #                             }
 
     #                             $ClientCounter += Start-Job -ScriptBlock {

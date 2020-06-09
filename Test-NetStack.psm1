@@ -16,9 +16,9 @@ function Test-NetStack {
         Note: For congestion tests, more nodes are beneficial however each additional node adds considerable testing time.
 
     .PARAMETER StageNumber [Optional]
-        Specifies the tests to be run by Test-NetStack. By default, all stages will be tested.
+        List [1-6] that specifies the tests to be run by Test-NetStack. By default, all stages will be tested.
 
-        If you specify a stage, all previous stages will be run. For example, Stage 3 will run Stage 1, 2, and 3
+        Stages included in comma-separated list will be run. For ex., specifying -StageNumber 1, 3, 4, will run Stages 1, 3, and 4. 
 
         THE FOLLOWING STAGES ARE AVAILABLE FOR Test-NetStack:
             Stage 1: Testing Connectivity
@@ -51,7 +51,10 @@ function Test-NetStack {
 
         [Parameter(Mandatory=$false)]
         [ValidateSet('1', '2', '3', '4', '5', '6')]
-        [Int32] $StageNumber = '6'
+        [Int32[]] $StageNumber = @('1', '2', '3', '4', '5', '6'),
+
+        [Parameter(Mandatory=$false)]
+        [pscredential] $Credentials
     )
 
     Clear-Host
