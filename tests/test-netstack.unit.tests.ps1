@@ -523,10 +523,9 @@ Describe "Test Network Stack`r`n" {
                 $newInterface.Subnet =  "$($subnet) / $($newInterface.SubnetMask)"
             }
             $newInterface.VLAN = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $name = $interface.Name; (Get-VMNetworkAdapterIsolation -ManagementOS | where ParentAdapter -like "*$name*").DefaultIsolationID }
-            Write-Host $newInterface.VLAN
+            
             if ($newInterface.VLAN -eq "") {
                 $newInterface.VLAN = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $name = $interface.Name; (Get-NetAdapterAdvancedProperty | where Name -like "*$name*" | where DisplayName -like "VLAN ID").DisplayValue }
-                Write-Host $newInterface.VLAN
             }
 
             if ($newInterface.Description -like "*Mellanox*") {
@@ -1459,8 +1458,10 @@ Describe "Test Network Stack`r`n" {
                                             $ServerCounter = Start-Job -ScriptBlock {
                                                 $ServerName = $Using:ServerName
                                                 $ServerInterfaceDescription = $Using:ServerInterfaceDescription
-                                                Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 5 -ErrorAction Ignore
+                                                Invoke-Command -ComputerName $ServerName -Credential $Using:Credentials -ScriptBlock { Get-Counter -Counter "\RDMA Activity($Using:ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 5 -ErrorAction Ignore }
                                             }
+
+                                            Start-Sleep -Seconds 1 
 
                                             $ServerOutput = Start-Job -ScriptBlock {
                                                 $ServerIP = $Using:ServerIP
@@ -1473,7 +1474,7 @@ Describe "Test Network Stack`r`n" {
                                             $ClientCounter = Start-Job -ScriptBlock {
                                                 $ClientName = $Using:ClientName
                                                 $ClientInterfaceDescription = $Using:ClientInterfaceDescription
-                                                Get-Counter -ComputerName $ClientName -Counter "\RDMA Activity($ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 5
+                                                Invoke-Command -ComputerName $ClientName -Credential $Using:Credentials -ScriptBlock { Get-Counter -Counter "\RDMA Activity($Using:ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 5 }
                                             }
                                             
                                             $ClientOutput = Invoke-Command -ComputerName $ClientName -Credential $Credentials -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):9000 -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rperf 2>&1" }
