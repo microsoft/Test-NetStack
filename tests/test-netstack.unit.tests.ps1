@@ -1052,7 +1052,6 @@ Describe "Test Network Stack`r`n" {
 
                                     $Success = $False
                                     $Retries = 3
-
                                     
                                     $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
 
@@ -1510,6 +1509,13 @@ Describe "Test Network Stack`r`n" {
                                             "`r`n##################################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                                             
                                             $Success = ($ServerBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8) -and ($ClientBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8)
+
+                                            
+                                            if ($ServerIP -eq '192.168.91.1' -and $retries -gt 0) {
+                                                Write-Host 'Inconclusive'
+                                                Set-ItResult -Inconclusive -Because "Retry"
+                                                $Success = $False
+                                            }
 
                                             if (($Success) -or ($Retries -eq 1)) {
                                                 $Results["STAGE 5: NDK Perf"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerBytesPerSecond bps `t| ($ClientName)`t| ($ClientIP)`t| $ClientBytesPerSecond bps`t| $SUCCESS |"
