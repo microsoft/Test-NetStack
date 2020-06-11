@@ -6,8 +6,8 @@ while($true) {
     # $OutputFile | Set-Content 'C:\Test-NetStack\Test-NetStack-Cluster-Health.txt'
 
     $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
-    $ClusterHealth = (Invoke-Command -ComputerName $MachineList[3] -Credential $Credential -ScriptBlock { (Get-ClusterNode).State })
-    $VolumeHealth = (Invoke-Command -ComputerName $MachineList[3] -Credential $Credential -ScriptBlock { (Get-VirtualDisk).HealthStatus })
+    $ClusterHealth = (Invoke-Command -ComputerName $MachineList[3] -Credential $Credentials -ScriptBlock { (Get-ClusterNode).State })
+    $VolumeHealth = (Invoke-Command -ComputerName $MachineList[3] -Credential $Credentials -ScriptBlock { (Get-VirtualDisk).HealthStatus })
     
     Write-Host $ClusterHealth
     $ClusterHealth | Out-File 'C:\Test-NetStack\Test-NetStack-Cluster-Health.txt' -Append -Encoding utf8 
