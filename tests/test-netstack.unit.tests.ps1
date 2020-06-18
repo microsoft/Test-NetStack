@@ -1048,7 +1048,7 @@ Describe "Test Network Stack`r`n" {
                                 $ClientLinkSpeed = $_.LinkSpeed
                                 $ClientStatus = $_.Status
 
-                                if (($ServerIP -NotLike $ClientIP) -And ($ServerSubnet -Like $ClientSubnet) -And ($ServerVLAN -Like $ClientVLAN) -And ($ClientStatus)) {
+                                if (($ServerName -NotLike $ClientName) -And ($ServerIP -NotLike $ClientIP) -And ($ServerSubnet -Like $ClientSubnet) -And ($ServerVLAN -Like $ClientVLAN) -And ($ClientStatus)) {
 
                                     $Success = $False
                                     $Retries = 3
