@@ -9,9 +9,12 @@ $domain = "cfdev"
 $userpwd = "wolfpack"
 $username = "wolfpack"
 $domainUsername = "$domain\$username"
-$creds = New-Object System.Management.Automation.PSCredential($domainUsername,($userpwd | ConvertTo-SecureString -asPlainText -Force))
+$creds = Get-Credential
 
 $HostSession = New-PSSession -ComputerName $MachineList[0] -Credential $creds
+Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+Install-Module Pester -RequiredVersion 4.9.0 -SkipPublisherCheck -Force
+Import-Module C:\Test-NetStack\Test-NetStack.psd1
 
 $MachineList | ForEach-Object {
 
@@ -37,10 +40,7 @@ $MachineList | ForEach-Object {
     Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc delete NDKPing type=kernel binpath=C:\Test-NetStack\tools\NDK-Ping\NDKPing.sys"}
     Invoke-Command -ComputerName $MachineName -Credential $creds -ScriptBlock {cmd /c "sc create NDKPing type=kernel binpath=C:\Test-NetStack\tools\NDK-Ping\NDKPing.sys"}
 
-    Invoke-Command -ComputerName $MachineName -scriptBlock {New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow}
+    Invoke-Command -ComputerName $MachineName -Credential $creds -scriptBlock {New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow}
 
-    Invoke-Command -ComputerName $MachineName -scriptBlock {Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force}
-    Invoke-Command -ComputerName $MachineName -scriptBlock {Install-Module Pester -RequiredVersion 4.9.0 -SkipPublisherCheck -Force}
-    Invoke-Command -ComputerName $MachineName -scriptBlock {Import-Module C:\Test-NetStack\Test-NetStack.psd1}
 
 } 
