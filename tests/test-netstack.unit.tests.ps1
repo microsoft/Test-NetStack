@@ -522,10 +522,10 @@ Describe "Test Network Stack`r`n" {
                 
                 $newInterface.Subnet =  "$($subnet) / $($newInterface.SubnetMask)"
             }
-            $newInterface.VLAN = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $name = $interface.Name; (Get-VMNetworkAdapterIsolation -ManagementOS | where ParentAdapter -eq "$name").DefaultIsolationID }
+            $newInterface.VLAN = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $name = $interface.Name; (Get-VMNetworkAdapterIsolation -ManagementOS | where ParentAdapter -like "*$name*").DefaultIsolationID }
             
             if ($newInterface.VLAN -eq "") {
-                $newInterface.VLAN = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $name = $interface.Name; (Get-NetAdapterAdvancedProperty | where Name -eq "$name" | where DisplayName -like "VLAN ID").DisplayValue }
+                $newInterface.VLAN = Invoke-Command -ComputerName $newNode.Name -Credential $Credentials -ScriptBlock { $interface = $Using:newInterface; $name = $interface.Name; (Get-NetAdapterAdvancedProperty | where Name -like "*$name*" | where DisplayName -like "VLAN ID").DisplayValue }
             }
 
             if ($newInterface.Description -like "*Mellanox*") {
@@ -650,7 +650,7 @@ Describe "Test Network Stack`r`n" {
     ####################################
     # Test Machines for PING Capability
     ####################################
-    if (1 -in $StageNumber) {
+    if ((1 -in $StageNumber) -and (-not $NetworkImage)) {
 
         Context "VERBOSE: Testing Connectivity Stage 1: PING`r`n" {
 
@@ -781,7 +781,7 @@ Describe "Test Network Stack`r`n" {
     # ###################################
     # Test Machines for PING -L -F Capability
     # ###################################
-    if (2 -in $StageNumber) {
+    if ((2 -in $StageNumber) -and (-not $NetworkImage)) {
 
         Context "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n" {
             
@@ -994,7 +994,7 @@ Describe "Test Network Stack`r`n" {
     # ###################################
     # Test Machines for TCP CTS Traffic Capability
     # ###################################
-    if (3 -in $StageNumber) {
+    if ((3 -in $StageNumber) -and (-not $NetworkImage)) {
 
         Context "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" {
 
@@ -1048,7 +1048,7 @@ Describe "Test Network Stack`r`n" {
                                 $ClientLinkSpeed = $_.LinkSpeed
                                 $ClientStatus = $_.Status
 
-                                if (($ServerName -NotLike $ClientName) -And ($ServerIP -NotLike $ClientIP) -And ($ServerSubnet -Like $ClientSubnet) -And ($ServerVLAN -Like $ClientVLAN) -And ($ClientStatus)) {
+                                if (($ServerIP -NotLike $ClientIP) -And ($ServerSubnet -Like $ClientSubnet) -And ($ServerVLAN -Like $ClientVLAN) -And ($ClientStatus)) {
 
                                     $Success = $False
                                     $Retries = 3
@@ -1191,7 +1191,7 @@ Describe "Test Network Stack`r`n" {
     # ###################################
     # Test Machines for NDK Ping Capability
     # ###################################
-    if (4 -in $StageNumber) {
+    if ((4 -in $StageNumber) -and (-not $NetworkImage)) {
 
         Context "VERBOSE: Testing Connectivity Stage 4: NDK Ping`r`n" {
 
@@ -1359,7 +1359,7 @@ Describe "Test Network Stack`r`n" {
     ###################################
     # Test Machines for NDK Perf Capability
     ###################################
-    if (5 -in $StageNumber) {
+    if ((5 -in $StageNumber) -and (-not $NetworkImage)) {
 
         Context "VERBOSE: Testing Connectivity Stage 5: NDK Perf`r`n" {
     
@@ -1424,7 +1424,7 @@ Describe "Test Network Stack`r`n" {
                                 $ClientLinkSpeed = $_.LinkSpeed
                                 $ClientInterfaceDescription = $_.Description
         
-                                if (($ServerName -NotLike $ClientName) -And ($ServerIP -NotLike $ClientIP) -And ($ServerSubnet -Like $ClientSubnet) -And ($ServerVLAN -Like $ClientVLAN) -And $ClientStatus) {
+                                if (($ServerIP -NotLike $ClientIP) -And ($ServerSubnet -Like $ClientSubnet) -And ($ServerVLAN -Like $ClientVLAN) -And $ClientStatus) {
         
                                     Write-Host "`r`n##################################################`r`n"
                                     "`r`n##################################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
@@ -1587,7 +1587,7 @@ Describe "Test Network Stack`r`n" {
     # # ##################################
     # # Test Machines for NDK Perf (N to 1) Capability
     # # ##################################
-    # if (6 -in $StageNumber) {
+    # if ((6 -in $StageNumber) -and (-not $NetworkImage)) {
 
         # Context "VERBOSE: Testing Connectivity Stage 6: NDK Perf (N : 1)`r`n" {
 
