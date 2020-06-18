@@ -54,6 +54,9 @@ function Test-NetStack {
         [Int32[]] $StageNumber = @('1', '2', '3', '4', '5', '6'),
 
         [Parameter(Mandatory=$false)]
+        [Boolean] $NetworkImage = $false,
+
+        [Parameter(Mandatory=$false)]
         [pscredential] $Credentials
     )
 
