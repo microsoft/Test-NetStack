@@ -1,4 +1,13 @@
-function stage-02-MTU {
+function Init-StageMTU {
+
+    param(
+        [NodeNetworkData[]] $TestNetwork,
+        [HashTable] $Results,
+        [HashTable] $Failures,
+        [HashTable] $ResultInformationList,
+        [HashTable] $StageSuccessList,
+        [PSCredential] $Credentials = $null
+    )
 
     Context "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n" {
             
@@ -10,6 +19,7 @@ function stage-02-MTU {
         "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
 
         $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+        Import-Module ($env:SystemDrive + '\Test-NetStack\tests\test-helper-functions.psm1') -ErrorAction SilentlyContinue
 
         Write-Host "Time: $endTime`r`n"
         "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8

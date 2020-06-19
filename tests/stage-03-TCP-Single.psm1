@@ -1,5 +1,15 @@
-function stage-03-TCP-Single {
+function Init-StageTCPSingle {
 
+    param(
+        [NodeNetworkData[]] $TestNetwork,
+        [HashTable] $Results,
+        [HashTable] $Failures,
+        [HashTable] $ResultInformationList,
+        [HashTable] $StageSuccessList,
+        [HashTable] $RetryStageSuccessList,
+        [PSCredential] $Credentials = $null
+    )
+    
     Context "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" {
 
         Write-Host "####################################`r`n"
@@ -10,6 +20,7 @@ function stage-03-TCP-Single {
         "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
         
         $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+        Import-Module ($env:SystemDrive + '\Test-NetStack\tests\test-helper-functions.psm1') -ErrorAction SilentlyContinue
 
         Write-Host "Stage 3 Start Time: $endTime`r`n"
         "Stage 3 start Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8

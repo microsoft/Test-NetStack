@@ -19,6 +19,7 @@ function Init-StagePing {
         "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
 
         $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
+        Import-Module ($env:SystemDrive + '\Test-NetStack\tests\test-helper-functions.psm1') -ErrorAction SilentlyContinue
 
         Write-Host "Time: $endTime`r`n"
         "Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
