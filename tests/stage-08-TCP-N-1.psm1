@@ -9,6 +9,7 @@ function Init-StageTCPMulti {
         [HashTable] $RetryStageSuccessList,
         [PSCredential] $Credentials = $null
     )
+    
     Context "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" {
 
         Write-Host "####################################`r`n"
