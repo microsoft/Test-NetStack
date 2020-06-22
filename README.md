@@ -62,26 +62,15 @@ The following parameters are required:
 - Credentials -- Specify the domain credentials for the test machines. Passing in `Get-Credential` is sufficient. 
 
 The following parameters are optional:
-- StageNumber -- Specify which stages of the test you'd like to run. Ex. Specifying -StageNumber 1, 4, 5 will run stages 1, 4, and 5. 
+- StageNumber -- Specify which stages of the test you'd like to run. Ex. Specifying -StageNumber 1, 4, 5 will run stages 1, 4, and 5. By default, all 5 stages are run. 
 - NetworkImage -- Setting this parameter to `$true` will force the test to only run the inital detail collection set up stage. 
 
+Example calls to Test-NetStack:
+- `Test-NetStack -MachineList "AzureHost01", "AzureHost02" -Credentials (Get-Credential)`
+- `Test-NetStack -MachineList "AzureHost01", "AzureHost02" -Credentials (Get-Credential) -StageNumber 2, 3`
+- `Test-NetStack -MachineList "AzureHost01", "AzureHost02" -Credentials (Get-Credential) -NetworkImage`
 
-(below are notes, disregard)
 
-- Machine Set - Preferably within Cluster
-    - If no cluster present, user must go into Test-NetStack.ps1 script and edit 'machine list.' This will be an editable in command in the future
-- CTS Traffic must be allowed through the firewall on all machhines
-    - Including script file to copy over from repo to each machine in set (given user enters in machines)
-    - must create c:\cmd\tools\CTS-Traffic on each machine - Script and Test-NetStack looks for c:\cmd\tools\CTS-Traffic on each machine for exe
-    - .exe and .sys files currently packaged in with repo in \tools\CTS-Traffic
-    - Must allow CTS-Traffic through machine firewalls 
-- NDK Perf must be installed on all machines and the machines configured properly
-    - Including script file to copy over from repo to each machine in set (given user enters in machines)
-    - Must create c:\perf\ and c:\perf\driver on each machine - Script and Test-NetStack looks for the ndkperf .exe and .sys in the following directory on each machine C:\perf\
-    - Run sc create NDKPerf type=kernel binpath=C:\perf\NDKPerf.sys to allow driver **assumes folder c:\perf**
-    - This will not be hard-coded in the long run 
-    - .exe and .sys files currently packaged in with repo in \tools\NDKPerf
-- Once the above is complete, user can run ./Test-NetStack
 
 ## Test-NetStack Stage 0: Network Discovery
 Before testing the network infrastructure, Test-NetStack attempts to 'construct' a local image of the network by querying information about each machine's NICs. This process entails collecting information on each NICs subnet, VLAN, Ip Address, RDMA Capability, etc. A copy of this local image is output in the Test-NetStack-Network-Info text file during a run of Test-NetStack. This construct is used for the remainder of the script to construct networking tool queries and track success/failure information. 
