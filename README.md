@@ -58,12 +58,12 @@ After running setup.ps1, import the Test-NetStack module using `Import-Module C:
 
 Finally, you may run the Test-NetStack module. 
 The following parameters are required:
--MachineList -- Specifies the list of machines to run the test amongst. 
--Credentials -- Specify the domain credentials for the test machines. Passing in `Get-Credential` is sufficient. 
+- MachineList -- Specifies the list of machines to run the test amongst. 
+- Credentials -- Specify the domain credentials for the test machines. Passing in `Get-Credential` is sufficient. 
 
 The following parameters are optional:
--StageNumber -- Specify which stages of the test you'd like to run. Ex. Specifying -StageNumber 1, 4, 5 will run stages 1, 4, and 5. 
--NetworkImage -- Setting this parameter to `$true` will force the test to only run the inital detail collection set up stage. 
+- StageNumber -- Specify which stages of the test you'd like to run. Ex. Specifying -StageNumber 1, 4, 5 will run stages 1, 4, and 5. 
+- NetworkImage -- Setting this parameter to `$true` will force the test to only run the inital detail collection set up stage. 
 
 
 (below are notes, disregard)
