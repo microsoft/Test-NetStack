@@ -33,6 +33,7 @@ Given a set or cluster of machines, Test-NetStack will identify the NICs that ar
 - CTS Traffic (stressing 1:N and many:1)
 
 If the above tests pass, we will attempt to perform the same validation for RDMA. To do this, Test-NetStack runs the following network tools across every permutation of NIC pairs within each subnet and vlan: 
+
 - NDK Ping (testing RDMA connectivity)
 - NDK Perf (stressing 1:1 and congesting with many:1)
 
@@ -42,15 +43,27 @@ In order to run Test-NetStack, a few short steps are necessary to setup and enab
 
 First and foremost, it is necessary to clone this repository to a domain-joined host's C:\ drive. Specifically, clone the repo to a new directory called "Test-NetStack." The setup script depends on the repository's location being in C:\Test-NetStack. 
 
-Once the repository is cloned, navigate to .\Test-NetStack\scripts and run setup.ps1. At the top of setup.ps1, it is necessary to enter the machine names that you plan to run Test-NetStack amongst. Specifically, edit the $MachineList variable to be a series of machine names in quotations ("") separated by commas.
+Once the repository is cloned, navigate to .\Test-NetStack\scripts and run setup.ps1. Specify which machines to run the setup script on using the -MachineList param. Specifically, edit specify a series of machine names in quotations ("") separated by commas. 
 `Ex. "Machine One", "Machine Two", "Machine Three" etc.` 
+
+You will need to specify domain credentials once the script starts. 
+
 The setup script does the following:
 - Creates a new parent directory on each machine called C:\Test-NetStack. It then creates subdirectories for NDK Perf and CTS-Traffic. These subdirectories are C:\Test-NetStack\tools\NDK-Perf and C:\Test-NetStack\tools\CTS-Traffic. 
 - Next, the script copies over the relevant .sys and .exe files for NDK Perf and CTS-Traffic to their respective directories. 
-- After copying over the files, setup.ps1 runs `sc create NDKPerf type=kernel binpath=C:\Test-NetStack\tools\NDKPerf.sys` to allow the new driver to be run on each remote system. 
+- After copying over the files, setup.ps1 runs `sc create NDKPerf type=kernel binpath=C:\Test-NetStack\tools\NDKPerf.sys` to enable test signing and allow the new driver to be run on each remote system. 
 - Finally, a new Firewall rule is created to allow inbound CTS-Traffic communcication on each remote system. 
 
-After running setup.ps1, run the Test-NetStack.unit.test.ps1 or Assert-RDMA.ps1 to run the full suite of Test-NetStack pester tests. 
+After running setup.ps1, import the Test-NetStack module using `Import-Module C:\Test-NetStack\Test-NetStack.psd1`
+
+Finally, you may run the Test-NetStack module. 
+The following parameters are required:
+-MachineList -- Specifies the list of machines to run the test amongst. 
+-Credentials -- Specify the domain credentials for the test machines. Passing in `Get-Credential` is sufficient. 
+
+The following parameters are optional:
+-StageNumber -- Specify which stages of the test you'd like to run. Ex. Specifying -StageNumber 1, 4, 5 will run stages 1, 4, and 5. 
+-NetworkImage -- Setting this parameter to `$true` will force the test to only run the inital detail collection set up stage. 
 
 
 (below are notes, disregard)
