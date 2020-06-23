@@ -320,7 +320,6 @@ Describe "Test Network Stack`r`n" {
     # Test Machines for NDK Ping Capability
     # ###################################
     if ((4 -in $StageNumber) -and (-not $NetworkImage)) {
-
         Init-StageNDKPing -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -Credentials $Credentials
 
     }

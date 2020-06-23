@@ -64,7 +64,7 @@ function Init-StageTCPHostToHost {
                     $ClientLinkSpeed = $ClientInterface.LinkSpeed
                     Write-Host ($ClientIP -NotIn $ClientIPList)
                     $ServerCommand = "Server $ServerName CMD: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$($ServerIP) -Port:900$i -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000`r`n"
-                    $ClientCommand = "Client $ClientName CMD: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$($ServerIP) -Port:900$i -bind:$ClientIP -consoleverbosity:1 -iterations:2 -RateLimit:$ClientLinkSpeed`r`n"
+                    $ClientCommand = "Client $ClientName CMD: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$($ServerIP) -bind:$ClientIP -Port:900$i -connections:32 -consoleverbosity:1 -iterations:2 -RateLimit:$ClientLinkSpeed`r`n"
                     
                     $NewResultInformation = [ResultInformationData]::new()
                     
