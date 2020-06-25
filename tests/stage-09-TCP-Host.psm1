@@ -1,4 +1,4 @@
-function Init-StageTCPHostToHost {
+function Test-StageTCPHostToHost {
 
     param(
         [NodeNetworkData[]] $TestNetwork,
@@ -38,7 +38,7 @@ function Init-StageTCPHostToHost {
             $ServerInterfaceList = $ServerNode.InterfaceListStruct.Values | Where Status -eq $True
             
             $ClientNetwork = $TestNetwork | Where Name -ne $ServerName
-            Write-Host $ClientNetwork
+            
             $ClientNetwork | ForEach-Object {
 
                 $ClientNode = $_

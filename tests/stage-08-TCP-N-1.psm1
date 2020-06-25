@@ -1,4 +1,4 @@
-function Init-StageTCPMulti {
+function Test-StageTCPMulti {
 
     param(
         [NodeNetworkData[]] $TestNetwork,

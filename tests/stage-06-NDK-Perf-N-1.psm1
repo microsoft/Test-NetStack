@@ -1,4 +1,4 @@
-function Init-StageNDKPerfMulti {
+function Test-StageNDKPerfMulti {
     
     param(
         [NodeNetworkData[]] $TestNetwork,

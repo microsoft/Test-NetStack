@@ -1,4 +1,4 @@
-function Init-StageNDKPerfSingle {
+function Test-StageNDKPerfSingle {
 
     param(
         [NodeNetworkData[]] $TestNetwork,

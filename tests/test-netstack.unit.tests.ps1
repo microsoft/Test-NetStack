@@ -282,19 +282,19 @@ Describe "Test Network Stack`r`n" {
 
     $TestNetworkJson | Set-Content "C:\Test-NetStack\Test-NetStack-Network-Info.txt"
     
-    Import-Module ($env:SystemDrive + '\Test-NetStack\tests\stage-01-ping.psm1') -ErrorAction Ignore
-    Import-Module ($env:SystemDrive + '\Test-NetStack\tests\stage-02-MTU.psm1') -ErrorAction Ignore
-    Import-Module ($env:SystemDrive + '\Test-NetStack\tests\stage-03-TCP-Single.psm1') -ErrorAction Ignore
-    Import-Module ($env:SystemDrive + '\Test-NetStack\tests\stage-04-NDK-Ping.psm1') -ErrorAction Ignore
-    Import-Module ($env:SystemDrive + '\Test-NetStack\tests\stage-05-NDK-Perf-Single.psm1') -ErrorAction Ignore
-    Import-Module ($env:SystemDrive + '\Test-NetStack\tests\stage-06-NDK-Perf-N-1.psm1') -ErrorAction Ignore
+    Import-Module ($env:SystemDrive + '\Test-NetStack\tests\stage-01-ping.psm1')
+    Import-Module ($env:SystemDrive + '\Test-NetStack\tests\stage-02-MTU.psm1')
+    Import-Module ($env:SystemDrive + '\Test-NetStack\tests\stage-03-TCP-Single.psm1')
+    Import-Module ($env:SystemDrive + '\Test-NetStack\tests\stage-04-NDK-Ping.psm1')
+    Import-Module ($env:SystemDrive + '\Test-NetStack\tests\stage-05-NDK-Perf-Single.psm1')
+    Import-Module ($env:SystemDrive + '\Test-NetStack\tests\stage-06-NDK-Perf-N-1.psm1')
 
     ####################################
     # Test Machines for PING Capability
     ####################################
     if ((1 -in $StageNumber) -and (-not $NetworkImage)) {
 
-        Init-StagePing -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -Credentials $Credentials
+        Test-StagePing -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -Credentials $Credentials
 
     }
 
@@ -303,7 +303,7 @@ Describe "Test Network Stack`r`n" {
     # ###################################
     if ((2 -in $StageNumber) -and (-not $NetworkImage)) {
 
-        Init-StageMTU -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -Credentials $Credentials
+        Test-StageMTU -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -Credentials $Credentials
 
     }
     
@@ -312,7 +312,7 @@ Describe "Test Network Stack`r`n" {
     # ###################################
     if ((3 -in $StageNumber) -and (-not $NetworkImage)) {
 
-        Init-StageTCPSingle -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -RetryStageSuccessList $RetryStageSuccessList -Credentials $Credentials
+        Test-StageTCPSingle -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -RetryStageSuccessList $RetryStageSuccessList -Credentials $Credentials
 
     }
 
@@ -320,7 +320,7 @@ Describe "Test Network Stack`r`n" {
     # Test Machines for NDK Ping Capability
     # ###################################
     if ((4 -in $StageNumber) -and (-not $NetworkImage)) {
-        Init-StageNDKPing -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -Credentials $Credentials
+        Test-StageNDKPing -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -Credentials $Credentials
 
     }
 
@@ -329,7 +329,7 @@ Describe "Test Network Stack`r`n" {
     ###################################
     if ((5 -in $StageNumber) -and (-not $NetworkImage)) {
 
-        Init-StageNDKPerfSingle -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -RetryStageSuccessList $RetryStageSuccessList -Credentials $Credentials
+        Test-StageNDKPerfSingle -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -RetryStageSuccessList $RetryStageSuccessList -Credentials $Credentials
 
     }
 
@@ -338,11 +338,11 @@ Describe "Test Network Stack`r`n" {
     # ##################################
     if ((6 -in $StageNumber) -and (-not $NetworkImage)) {
     
-        # InitStageNDKPerfMulti -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -Credentials $Credentials
+        # TestStageNDKPerfMulti -TestNetwork $TestNetwork -Results $Results -Failures $Failures -ResultInformationList $ResultInformationList -StageSuccessList $StageSuccessList -Credentials $Credentials
     
     }
 
-        
+       
 
     Write-Host "`r`nFAILURES STAGES 1-6`r`n"
     "`r`nFAILURES STAGES 1-6`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
@@ -365,5 +365,12 @@ Describe "Test Network Stack`r`n" {
     Write-Host "Ending Test-NetStack: $endTime`r`n"
     "Ending Test-NetStack: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
     
+    Remove-Module 'stage-01-ping'
+    Remove-Module 'stage-02-MTU'
+    Remove-Module 'stage-03-TCP-Single'
+    Remove-Module 'stage-04-NDK-Ping'
+    Remove-Module 'stage-05-NDK-Perf-Single'
+    Remove-Module 'stage-06-NDK-Perf-N-1'
+
     Write-Host "End"
 }
