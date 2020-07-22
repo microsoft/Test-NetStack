@@ -10,20 +10,20 @@ function Test-StageTCPIterConnect {
         [PSCredential] $Credentials = $null
     )
 
-    Context "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" {
+    Context "VERBOSE: Testing Connectivity Stage 7: TCP Iterative Connection`r`n" {
 
         Write-Host "####################################`r`n"
-        Write-Host "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n"
+        Write-Host "VERBOSE: Testing Connectivity Stage 7: TCP Iterative Connection`r`n"
         Write-Host "####################################`r`n"
         "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
-        "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
+        "VERBOSE: Testing Connectivity Stage 7: TCP Iterative Connection`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
         "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
 
-        $Results["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
-        $Failures["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
-        $ResultInformationList["STAGE 3: TCP CTS Traffic"] = [ResultInformationData[]]@()
-        $StageSuccessList["STAGE 3: TCP CTS Traffic"] = [Boolean[]]@()
-        $RetryStageSuccessList["STAGE 3: TCP CTS Traffic"] = [Boolean[]]@()
+        $Results["Stage 7: TCP Iterative Connection"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
+        $Failures["Stage 7: TCP Iterative Connection"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
+        $ResultInformationList["Stage 7: TCP Iterative Connection"] = [ResultInformationData[]]@()
+        $StageSuccessList["Stage 7: TCP Iterative Connection"] = [Boolean[]]@()
+        $RetryStageSuccessList["Stage 7: TCP Iterative Connection"] = [Boolean[]]@()
 
         $TestNetwork | ForEach-Object {
 
@@ -121,10 +121,10 @@ function Test-StageTCPIterConnect {
                                         "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
                                         if (($Success) -or ($Retries -eq 1)) {
-                                            $Results["STAGE 3: TCP CTS Traffic"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerRecvBps bps `t| ($ClientName)`t`t| ($ClientIP)`t| $ClientRecvBps bps`t| $SUCCESS |"
+                                            $Results["Stage 7: TCP Iterative Connection"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerRecvBps bps `t| ($ClientName)`t`t| ($ClientIP)`t| $ClientRecvBps bps`t| $SUCCESS |"
                                         }
                                         if ((-not $Success) -and ($Retries -eq 1)) {
-                                            $Failures["STAGE 3: TCP CTS Traffic"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerRecvBps bps `t| ($ClientName)`t`t| ($ClientIP)`t| $ClientRecvBps bps`t| $SUCCESS |"
+                                            $Failures["Stage 7: TCP Iterative Connection"] += "|($ServerName)`t`t| ($ServerIP)`t| $ServerRecvBps bps `t| ($ClientName)`t`t| ($ClientIP)`t| $ClientRecvBps bps`t| $SUCCESS |"
                                         }
 
                                         if (($Success) -or ($retries -eq 1)) {
@@ -139,17 +139,17 @@ function Test-StageTCPIterConnect {
                                             $NewResultInformation.ActualSendBps = $ClientRecvBps
                                             $NewResultInformation.ActualReceiveBps = $ServerRecvBps
                                             $NewResultInformation.ReproCommand = "`r`n`t`tServer: $ServerCommand`r`n`t`tClient: $ClientCommand"
-                                            $ResultInformationList["STAGE 3: TCP CTS Traffic"] += $NewResultInformation
-                                            $StageSuccessList["STAGE 3: TCP CTS Traffic"] += $Success
+                                            $ResultInformationList["Stage 7: TCP Iterative Connection"] += $NewResultInformation
+                                            $StageSuccessList["Stage 7: TCP Iterative Connection"] += $Success
                                         }
-                                        $RetryStageSuccessList["STAGE 3: TCP CTS Traffic"] += $Success
+                                        $RetryStageSuccessList["Stage 7: TCP Iterative Connection"] += $Success
 
                                         $Success | Should Be $True
                                     }
 
                                     $Retries--
-                                    $SuccessCount = $RetryStageSuccessList["STAGE 3: TCP CTS Traffic"].Count
-                                    $Success = $RetryStageSuccessList["STAGE 3: TCP CTS Traffic"][$SuccessCount - 1]
+                                    $SuccessCount = $RetryStageSuccessList["Stage 7: TCP Iterative Connection"].Count
+                                    $Success = $RetryStageSuccessList["Stage 7: TCP Iterative Connection"][$SuccessCount - 1]
                                     
                                 }
                                 Write-Host "`r`n####################################`r`n"
@@ -162,18 +162,18 @@ function Test-StageTCPIterConnect {
         }
     }
     
-    Assert-ServerClientInterfaceSuccess -ResultInformationList $ResultInformationList -StageString "STAGE 3: TCP CTS Traffic"
+    Assert-ServerClientInterfaceSuccess -ResultInformationList $ResultInformationList -StageString "Stage 7: TCP Iterative Connection"
 
-    Write-Host "RESULTS Stage 3: TCP CTS Traffic`r`n"
-    "RESULTS Stage 3: TCP CTS Traffic`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+    Write-Host "RESULTS Stage 7: TCP Iterative Connection`r`n"
+    "RESULTS Stage 7: TCP Iterative Connection`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
     
-    ($Results["STAGE 3: TCP CTS Traffic"]) | ForEach-Object {
+    ($Results["Stage 7: TCP Iterative Connection"]) | ForEach-Object {
 
         Write-Host $_ 
         $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
     }
-    if ($StageSuccessList["STAGE 3: TCP CTS Traffic"] -contains $false) {
+    if ($StageSuccessList["Stage 7: TCP Iterative Connection"] -contains $false) {
         Write-Host "`r`nSTAGE 3: CTS TRAFFIC FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
         "`r`nSTAGE 3: CTS TRAFFIC FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         # $StageNumber = 0

@@ -10,13 +10,13 @@ function Test-StageTCPMulti {
         [PSCredential] $Credentials = $null
     )
     
-    Context "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" {
+    Context "VERBOSE: Testing Connectivity Stage 8: TCP N:1 Congestion`r`n" {
 
         Write-Host "####################################`r`n"
-        Write-Host "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n"
+        Write-Host "VERBOSE: Testing Connectivity Stage 8: TCP N:1 Congestion`r`n"
         Write-Host "####################################`r`n"
         "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
-        "VERBOSE: Testing Connectivity Stage 3: TCP CTS Traffic`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
+        "VERBOSE: Testing Connectivity Stage 8: TCP N:1 Congestion`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
         "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
         
         $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
@@ -24,11 +24,11 @@ function Test-StageTCPMulti {
         Write-Host "Stage 3 Start Time: $endTime`r`n"
         "Stage 3 start Time: $endTime`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         
-        $Results["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
-        $Failures["STAGE 3: TCP CTS Traffic"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
-        $ResultInformationList["STAGE 3: TCP CTS Traffic"] = [ResultInformationData[]]@()
-        $StageSuccessList["STAGE 3: TCP CTS Traffic"] = [Boolean[]]@()
-        $RetryStageSuccessList["STAGE 3: TCP CTS Traffic"] = [Boolean[]]@()
+        $Results["Stage 8: TCP N:1 Congestion"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
+        $Failures["Stage 8: TCP N:1 Congestion"] = @("| SERVER MACHINE`t| SERVER NIC`t`t| SERVER BPS`t`t| CLIENT MACHINE`t| CLIENT NIC`t`t| CLIENT BPS`t`t| THRESHOLD (>65%) |")
+        $ResultInformationList["Stage 8: TCP N:1 Congestion"] = [ResultInformationData[]]@()
+        $StageSuccessList["Stage 8: TCP N:1 Congestion"] = [Boolean[]]@()
+        $RetryStageSuccessList["Stage 8: TCP N:1 Congestion"] = [Boolean[]]@()
 
         $TestNetwork | ForEach-Object {
 
@@ -127,18 +127,18 @@ function Test-StageTCPMulti {
         }
     }
     
-    Assert-ServerClientInterfaceSuccess -ResultInformationList $ResultInformationList -StageString "STAGE 3: TCP CTS Traffic"
+    Assert-ServerClientInterfaceSuccess -ResultInformationList $ResultInformationList -StageString "Stage 8: TCP N:1 Congestion"
 
-    Write-Host "RESULTS Stage 3: TCP CTS Traffic`r`n"
-    "RESULTS Stage 3: TCP CTS Traffic`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+    Write-Host "RESULTS Stage 8: TCP N:1 Congestion`r`n"
+    "RESULTS Stage 8: TCP N:1 Congestion`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
     
-    ($Results["STAGE 3: TCP CTS Traffic"]) | ForEach-Object {
+    ($Results["Stage 8: TCP N:1 Congestion"]) | ForEach-Object {
 
         Write-Host $_ 
         $_ | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
 
     }
-    if ($StageSuccessList["STAGE 3: TCP CTS Traffic"] -contains $false) {
+    if ($StageSuccessList["Stage 8: TCP N:1 Congestion"] -contains $false) {
         Write-Host "`r`nSTAGE 3: CTS TRAFFIC FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n"
         "`r`nSTAGE 3: CTS TRAFFIC FAILED. ONE OR MORE TEST INSTANCES FAILED.`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         # $StageNumber = 0
