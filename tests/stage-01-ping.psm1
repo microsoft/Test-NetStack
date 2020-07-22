@@ -1,4 +1,4 @@
-function Init-StagePing {
+function Test-StagePing {
 
     param(
         [NodeNetworkData[]] $TestNetwork,

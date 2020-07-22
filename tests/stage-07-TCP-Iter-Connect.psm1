@@ -1,4 +1,4 @@
-function Init-StageTCPIterConnect {
+function Test-StageTCPIterConnect {
 
     param(
         [NodeNetworkData[]] $TestNetwork,

@@ -1,4 +1,4 @@
-function Init-StageMTU {
+function Test-StageMTU {
 
     param(
         [NodeNetworkData[]] $TestNetwork,
