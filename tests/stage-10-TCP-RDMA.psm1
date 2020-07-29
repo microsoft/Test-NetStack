@@ -1,4 +1,4 @@
-function Test-StageTCPHostToHost {
+function Test-StageTcpRdmaCongest {
 
     param(
         [NodeNetworkData[]] $TestNetwork,
@@ -28,7 +28,7 @@ function Test-StageTCPHostToHost {
         $ResultInformationList["Stage 10: TCP + RDMA Congestion"] = [ResultInformationData[]]@()
         $StageSuccessList["Stage 10: TCP + RDMA Congestion"] = [Boolean[]]@()
         $RetryStageSuccessList["Stage 10: TCP + RDMA Congestion"] = [Boolean[]]@()
-        Write-Host (ConvertTo-Json $TestNetwork)
+
         $TestNetwork | ForEach-Object {
 
             "VERBOSE: Testing TCP + RDMA Traffic Combination on Machine: $($_.Name)" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
@@ -47,6 +47,8 @@ function Test-StageTCPHostToHost {
 
                 $ServerTCPOutput = @()
                 $ClientTCPOutput = @()
+                $ServerRdmaOutput = @()
+                $ClientRdmaOutput = @()
                 $i = 0
                 $ServerInterfaceList | ForEach-Object {
 
@@ -54,14 +56,18 @@ function Test-StageTCPHostToHost {
                     $ClientInterface = ($ClientNode.InterfaceListStruct.Values | Where Subnet -eq $ServerInterface.Subnet | Where VLAN -eq $ServerInterface.VLAN | Where IPAddress -NotIn $ClientIPList)[0]
                     
                     $ServerIP = $ServerInterface.IpAddress
+                    $ServerIF = $ServerInterface.IfIndex
                     $ServerSubnet = $ServerInterface.Subnet
                     $ServerVLAN = $ServerInterface.VLAN
                     $ServerLinkSpeed = $ServerInterface.LinkSpeed
+                    $ServerInterfaceDescription = $ServerInterface.Description
                     
                     $ClientIP = $ClientInterface.IpAddress
+                    $ClientIF = $ClientInterface.IfIndex
                     $ClientSubnet = $ClientInterface.Subnet
                     $ClientVLAN = $ClientInterface.VLAN
                     $ClientLinkSpeed = $ClientInterface.LinkSpeed
+                    $ClientInterfaceDescription = $ClientInterface.Description
 
                     $ServerTCPCommand = "Server $ServerName CMD: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$($ServerIP) -Port:800$i -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000`r`n"
                     $ClientTCPCommand = "Client $ClientName CMD: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$($ServerIP) -bind:$ClientIP -Port:800$i -connections:32 -consoleverbosity:1 -iterations:2 -RateLimit:$ClientLinkSpeed`r`n"
@@ -94,14 +100,12 @@ function Test-StageTCPHostToHost {
                     
                     ## RDMA Congestion Server Counter
                     $ServerRdmaCounter = Start-Job -ScriptBlock {
-                        $ServerName = $Using:ServerName
                         $ServerInterfaceDescription = $Using:ServerInterfaceDescription
-                        Invoke-Command -ComputerName $ServerName -Credential $Using:Credentials -ScriptBlock { Get-Counter -Counter "\RDMA Activity($Using:ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 5 -ErrorAction Ignore }
+                        Invoke-Command -ComputerName $Using:ServerName -Credential $Using:Credentials -ScriptBlock { Get-Counter -Counter "\RDMA Activity($Using:ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 5 -ErrorAction Ignore }
                     }
 
                     ## TCP Congestion Server Start
                     $ServerTCPOutput += Start-Job -ScriptBlock {
-                        
                         $ServerIP = $Using:ServerIP
                         $i = $Using:i
                         Invoke-Command -ComputerName $Using:ServerName -Credential $Using:Credentials -ScriptBlock { cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$Using:ServerIP -port:800$Using:i -consoleverbosity:1 -ServerExitLimit:32 -TimeLimit:20000" }
@@ -116,7 +120,7 @@ function Test-StageTCPHostToHost {
                     }
                     
                     ## TCP Congestion Server Counter
-                    $ClientSendCounter = Start-Job -ScriptBlock {
+                    $ClientTCPCounter = Start-Job -ScriptBlock {
                         $ClientName = $Using:ClientName
                         $ClientInterfaceDescription = (((($Using:ClientInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']' ) -replace '/', '_' 
                         Invoke-Command -ComputerName $ClientName -Credential $Using:Credentials -ScriptBlock { Get-Counter -Counter "\Network Adapter($Using:ClientInterfaceDescription)\Bytes Sent/sec" -MaxSamples 20 }
@@ -143,17 +147,36 @@ function Test-StageTCPHostToHost {
                         $ServerIP = $Using:ServerIP
                         $ServerIF = $Using:ServerIF
                         $ClientIP = $Using:ClientIP
-                        $ClientIF = $Using:ServerIF
+                        $ClientIF = $Using:ClientIF
                         $i = $Using:i
                         Invoke-Command -ComputerName $Using:ClientName -Credential $Using:Credentials -ScriptBlock { cmd /c "C:\Test-NetStack\tools\NDK-Perf\NDKPerfCmd.exe -C -ServerAddr  $($Using:ServerIP):900$Using:i -ClientAddr $Using:ClientIP -ClientIf $Using:ClientIF -TestType rperf 2>&1" }            
                     }
-                    Start-Sleep -Seconds 1
-                                        
+                    
+                    Start-Sleep 30
+
                     $readTCP = Receive-Job $ServerTCPCounter
                     $writtenTCP = Receive-Job $ClientTCPCounter
+                    $serverOutputTcp = Receive-Job $ServerTCPOutput
+                    $clientOutputTcp = Receive-Job $ClientTCPOutput
 
+                    Write-Host $readTCP
+                    Write-Host $writtenTCP
+                    Write-Host "TCP Server Output"
+                    Write-Host $serverOutputTcp
+                    Write-Host "TCP Client Output"
+                    Write-Host $clientOutputTcp
+                    
                     $readRdma = Receive-Job $ServerRdmaCounter
                     $writtenRdma = Receive-Job $ClientRdmaCounter
+                    $serverOutputRdma = Receive-Job $ServerRdmaOutput
+                    $clientOutputRdma = Receive-Job $ClientRdmaOutput
+
+                    Write-Host $readRdma
+                    Write-Host $writtenRdma
+                    Write-Host "RDMA Server Output"
+                    Write-Host $serverOutputRdma
+                    Write-Host "RDMA Client Output"
+                    Write-Host $clientOutputRdma
 
                     $FlatServerTCPOutput = $readTCP.Readings.split(":") | ForEach-Object {
                         try {[uint64]($_) * 8} catch{}
