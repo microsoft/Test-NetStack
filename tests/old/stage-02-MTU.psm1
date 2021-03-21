@@ -11,12 +11,9 @@ function Test-StageMTU {
 
     Context "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n" {
             
-        Write-Host "####################################`r`n"
-        Write-Host "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n"
-        Write-Host "####################################`r`n"
-        "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
-        "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
-        "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
+        Write-Host "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
+        Write-Host "VERBOSE: Testing Connectivity Stage 2: PING -L -F`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
+        Write-Host "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 
 
         $endTime = Get-Date -format:'MM-dd-yyyy HH:mm:ss'
         Import-Module ($env:SystemDrive + '\Test-NetStack\tests\test-helper-functions.psm1') -ErrorAction SilentlyContinue
