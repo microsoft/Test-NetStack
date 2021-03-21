@@ -236,15 +236,15 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource
                         $Result | Add-Member -MemberType NoteProperty -Name Destination -Value $thisTarget
 
-                            # Calls the Reliability parameter set in icmp.psm1
-                            if ($thisSource -in $global:localIPs) {
-                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget -StartBytes $thisSourceMSS -Reliability
-                            }
-                            else {
-                                $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
-                                                                   -ArgumentList $thisSource, $thisTarget, $thisSourceMSS, $null, $true `
-                                                                   -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
-                            }
+                        # Calls the Reliability parameter set in icmp.psm1
+                        if ($thisSource -in $global:localIPs) {
+                            $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget -StartBytes $thisSourceMSS -Reliability
+                        }
+                        else {
+                            $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
+                                                                -ArgumentList $thisSource, $thisTarget, $thisSourceMSS, $null, $true `
+                                                                -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
+                        }
 
                         $Result | Add-Member -MemberType NoteProperty -Name ICMPSent -Value $thisSourceResult.Total
                         $Result | Add-Member -MemberType NoteProperty -Name ICMPFailed -Value $thisSourceResult.Failed
@@ -260,6 +260,51 @@ Function Test-NetStack {
 
                         $StageResults += $Result
                         Remove-Variable Result -ErrorAction SilentlyContinue
+                    }
+                }
+            }
+            elseif ($Nodes) {
+                $TestableNets | ForEach-Object {
+                    $thisTestableNet = $_
+
+                    $thisTestableNet.Group | ForEach-Object {
+                        $thisSource = $_
+                        $thisSourceResult = @()
+
+                        $thisTestableNet.Group | Where NodeName -ne $thisSource.NodeName | ForEach-Object {
+                            $thisTarget = $_
+                            $thisSourceMSS = ($NetStackResults.Stage1 | Where {$_.Source -eq $thisSource.IPAddress -and $_.Destination -eq $thisTarget.IPAddress}).MSS
+
+                            $Result = New-Object -TypeName psobject
+                            $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisSource.NodeName
+                            $Result | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource.IPAddress
+                            $Result | Add-Member -MemberType NoteProperty -Name Destination -Value $thisTarget.IPaddress
+
+                            # Calls the Reliability parameter set in icmp.psm1
+                            if ($thisSource.IPAddress -in $global:localIPs) {
+                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress -StartBytes $thisSourceMSS -Reliability
+                            }
+                            else {
+                                $thisSourceResult = Invoke-Command -ComputerName $thisSource.NodeName `
+                                                                    -ArgumentList $thisSource.IPAddress, $thisTarget.IPAddress, $thisSourceMSS, $null, $true `
+                                                                    -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
+                            }
+
+                            $Result | Add-Member -MemberType NoteProperty -Name ICMPSent -Value $thisSourceResult.Total
+                            $Result | Add-Member -MemberType NoteProperty -Name ICMPFailed -Value $thisSourceResult.Failed
+
+                            $SuccessPercentage = ([Math]::Round((100 - (($thisSourceResult.Failed / $thisSourceResult.Total) * 100)), 2))
+                            $Result | Add-Member -MemberType NoteProperty -Name ICMPReliability -Value $SuccessPercentage
+
+                            if ($SuccessPercentage      -ge $Definitions.Reliability.ICMPReliability -and
+                                $thisSourceResult.Total -ge $Definitions.Reliability.sent) {
+                                $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Pass'
+                            }
+                            else { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Fail' }
+
+                            $StageResults += $Result
+                            Remove-Variable Result -ErrorAction SilentlyContinue
+                        }
                     }
                 }
             }
