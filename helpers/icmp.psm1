@@ -1,4 +1,6 @@
 Function Invoke-ICMPPMTUD {
+
+    #If you change order of params, you must change the order of invoke-command params to match
     [CmdletBinding(DefaultParameterSetName = 'PMTUD')]
     param (
         [Parameter(Mandatory=$true, Position=0)]
@@ -19,7 +21,18 @@ Function Invoke-ICMPPMTUD {
         [Switch] $Reliability = $false,
 
         [Parameter(Mandatory=$false, Position=5)]
-        [int] $Count = 1000
+        [int] $Count = 1000, 
+
+        [Parameter(Mandatory=$false, Position=6)]
+        [int] $testTime = 15, 
+
+        # Used for Write-Progress must also specify ParentID
+        [Parameter(Mandatory=$false, Position=7)]
+        [int] $ID, 
+
+        # Used for Write-Progress must also specify ID
+        [Parameter(Mandatory=$false, Position=8)]
+        [int] $ParentID
     )
 
     #region Start-Ping: This function needs to be nested for sending remotely via Invoke-Command (e.g. Function:\Invoke-ICMPPMTU)
@@ -216,13 +229,25 @@ Add-Type @"
 
         $testCompleted = 0
         $startTime = [System.DateTime]::Now
-        $testTime = 15
 
         do {
             $now = [System.DateTime]::Now
             $percentComplete = (($now - $startTime).TotalSeconds / $testTime) * 100
 
-            Write-Progress -Id 2 -ParentId 1 -Activity 'Sending ICMP' -Status 'Reliability Test' -PercentComplete $percentComplete -SecondsRemaining ($testTime - ($now - $startTime).TotalSeconds)
+            $progressParams = @{
+                Activity = 'Sending ICMP'
+                Status   = 'Reliability Test'
+                PercentComplete = $percentComplete
+                SecondsRemaining = ($testTime - ($now - $startTime).TotalSeconds)
+            }
+
+            if ($ID -and $ParentID) {
+                $progressParams.Add('Id', $ID)
+                $progressParams.Add('ParentId', $ParentID)
+            }
+
+            Write-Progress @progressParams
+
             $ICMPResponse += Start-Ping -Source $Source -Destination $Destination -Size $StartBytes
         } until([System.DateTime]::Now -ge $startTime.AddSeconds($testTime))
 
