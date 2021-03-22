@@ -214,11 +214,17 @@ Add-Type @"
     else { # If we already know the MTU, we can send a bunch at that size to see how reliable the link is
         $ICMPResponse = @()
 
-        $timer = [System.DateTime]::Now
+        $testCompleted = 0
+        $startTime = [System.DateTime]::Now
+        $testTime = 15
 
         do {
+            $now = [System.DateTime]::Now
+            $percentComplete = (($now - $startTime).TotalSeconds / $testTime) * 100
+
+            Write-Progress -Id 2 -ParentId 1 -Activity 'Sending ICMP' -Status 'Reliability Test' -PercentComplete $percentComplete -SecondsRemaining ($testTime - ($now - $startTime).TotalSeconds)
             $ICMPResponse += Start-Ping -Source $Source -Destination $Destination -Size $StartBytes
-        } until([System.DateTime]::Now -ge $timer.AddSeconds(15))
+        } until([System.DateTime]::Now -ge $startTime.AddSeconds($testTime))
 
         $ICMPReliability = @{
             Total  = $ICMPResponse.Count

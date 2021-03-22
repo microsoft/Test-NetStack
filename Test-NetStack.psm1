@@ -219,15 +219,18 @@ Function Test-NetStack {
             Write-Host 'Beginning Stage 2 - ICMP Reliability'
 
             $StageResults = @()
-
             if ($IPTarget) {
-                $Mapping | ForEach-Object {
-                    $thisSource = $_
+                foreach ($thisSource in $Mapping) {
+                    Write-Progress -Id 0 -Activity 'Source Progression' -Status "Testing ICMP from Source $thisSource" -PercentComplete (($sourcesCompleted / $Mapping.Count) * 100)
                     $targets = $Mapping -ne $thisSource
 
-                    $thisSourceResult = @()                
+                    $thisSourceResult = @()
+                    $targetsCompleted = 0              
                     $targets | ForEach-Object {
                         $thisTarget = $_
+
+                        Write-Progress -Id 1 -ParentId 0 -Activity 'Target Progression' -Status "Testing ICMP to target $thisTarget" -PercentComplete (($targetsCompleted / $targets.Count) * 100)
+                        
                         $thisComputerName = (Resolve-DnsName -Name $thisSource -DnsOnly).NameHost.Split('.')[0]
                         $thisSourceMSS = ($NetStackResults.Stage1 | Where{$_.SourceHostName -eq $thisComputerName -and $_.Destination -eq $thisTarget}).MSS
 
@@ -260,21 +263,35 @@ Function Test-NetStack {
 
                         $StageResults += $Result
                         Remove-Variable Result -ErrorAction SilentlyContinue
+
+                        $targetsCompleted ++
                     }
+
+                    Remove-Variable targetsCompleted -ErrorAction SilentlyContinue
+
+                    $sourcesCompleted ++
                 }
+
+                Remove-Variable sourcesCompleted -ErrorAction SilentlyContinue
             }
             elseif ($Nodes) {
                 $TestableNets | ForEach-Object {
                     $thisTestableNet = $_
+                    #Write-Progress -Id 0 -Activity 'Network Progression' -Status "Testing ICMP from Network $($thisTestableNet.Name)" -PercentComplete (($NetworksCompleted / $thisTestableNet.Count) * 100)
 
-                    $thisTestableNet.Group | ForEach-Object {
-                        $thisSource = $_
+                    foreach ($thisSource in $thisTestableNet.Group) {
                         $thisSourceResult = @()
+                        
+                        Write-Progress -Id 0 -Activity 'Source Progression' -Status "Testing ICMP from Source $($thisSource.NodeName) and IP $($thisSource.IPAddress)" -PercentComplete (($sourcesCompleted / $thisTestableNet.Group.Count) * 100)
 
                         $thisTestableNet.Group | Where NodeName -ne $thisSource.NodeName | ForEach-Object {
                             $thisTarget = $_
                             $thisSourceMSS = ($NetStackResults.Stage1 | Where {$_.Source -eq $thisSource.IPAddress -and $_.Destination -eq $thisTarget.IPAddress}).MSS
-
+                            
+                            # Need to use the NodeName Property in case there is only 1 target. Count method would not be available.
+                            $numTargets = ($thisTestableNet.Group | Where NodeName -ne $thisSource.NodeName).NodeName.Count
+                            Write-Progress -Id 1 -ParentId 0 -Activity 'Target Progression' -Status "Testing ICMP to target $($thisTarget.NodeName) and IP $($thisTarget.IPAddress)" -PercentComplete (($targetsCompleted / $numTargets) * 100)
+                        
                             $Result = New-Object -TypeName psobject
                             $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisSource.NodeName
                             $Result | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource.IPAddress
@@ -304,8 +321,18 @@ Function Test-NetStack {
 
                             $StageResults += $Result
                             Remove-Variable Result -ErrorAction SilentlyContinue
+
+                            $targetsCompleted ++
                         }
+
+                        Remove-Variable targetsCompleted -ErrorAction SilentlyContinue
+                    
+                        $sourcesCompleted ++
                     }
+                    
+                    Remove-Variable sourcesCompleted -ErrorAction SilentlyContinue
+
+                    # $NetworksCompleted ++
                 }
             }
 
