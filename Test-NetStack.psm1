@@ -70,13 +70,15 @@ Function Test-NetStack {
     )
 
     Clear-Host
-
+    <#
     $here = Split-Path -Parent (Get-Module -Name Test-NetStack | Select-Object -First 1).Path
     $global:Log = New-Item -Name 'Results.log' -Path "$here\Results" -ItemType File -Force
     $startTime = Get-Date -format:'yyyyMMdd-HHmmss' | Out-File $log    
 
     $global:fail = 'FAIL'
     $global:testsFailed = 0
+
+    #>
     $Definitions = [Analyzer]::new()
 
     # Add prerequisite tester here
@@ -89,11 +91,11 @@ Function Test-NetStack {
     if ($Nodes) {
         $Mapping = Get-Connectivity -Nodes $Nodes
 
-        $VLANSupportedNets = $Mapping | Where VLAN -ne 'Unsupported' | Group-Object Subnet, VLAN
-        $TestableNets  = $VLANSupportedNets | Where Count -ne 1
+        $VLANSupportedNets = $Mapping | Where-Object VLAN -ne 'Unsupported' | Group-Object Subnet, VLAN
+        $TestableNets  = $VLANSupportedNets | Where-Object Count -ne 1
 
-        $DisqualifiedByVLANSupport    = $Mapping | Where VLAN -eq 'Unsupported' | Group-Object Subnet, VLAN
-        $DisqualifiedByInterfaceCount = $VLANSupportedNets | Where Count -eq 1
+        $DisqualifiedByVLANSupport    = $Mapping | Where-Object VLAN -eq 'Unsupported' | Group-Object Subnet, VLAN
+        $DisqualifiedByInterfaceCount = $VLANSupportedNets | Where-Object Count -eq 1
 
         $Disqualified = New-Object -TypeName psobject
         if ($DisqualifiedByVLANSupport) {
@@ -178,7 +180,7 @@ Function Test-NetStack {
                         $thisSource = $_
                         $thisSourceResult = @()
 
-                        $thisTestableNet.Group | Where NodeName -ne $thisSource.NodeName | ForEach-Object {
+                        $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
                             $thisTarget = $_
 
                             $Result = New-Object -TypeName psobject
@@ -232,7 +234,7 @@ Function Test-NetStack {
                         Write-Progress -Id 1 -ParentId 0 -Activity 'Target Progression' -Status "Testing ICMP to target $thisTarget" -PercentComplete (($targetsCompleted / $targets.Count) * 100)
                         
                         $thisComputerName = (Resolve-DnsName -Name $thisSource -DnsOnly).NameHost.Split('.')[0]
-                        $thisSourceMSS = ($NetStackResults.Stage1 | Where{$_.SourceHostName -eq $thisComputerName -and $_.Destination -eq $thisTarget}).MSS
+                        $thisSourceMSS = ($NetStackResults.Stage1 | Where-Object{$_.SourceHostName -eq $thisComputerName -and $_.Destination -eq $thisTarget}).MSS
 
                         $Result = New-Object -TypeName psobject
                         $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisComputerName
@@ -284,12 +286,12 @@ Function Test-NetStack {
                         
                         Write-Progress -Id 0 -Activity 'Source Progression' -Status "Testing ICMP from Source $($thisSource.NodeName) and IP $($thisSource.IPAddress)" -PercentComplete (($sourcesCompleted / $thisTestableNet.Group.Count) * 100)
 
-                        $thisTestableNet.Group | Where NodeName -ne $thisSource.NodeName | ForEach-Object {
+                        $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
                             $thisTarget = $_
-                            $thisSourceMSS = ($NetStackResults.Stage1 | Where {$_.Source -eq $thisSource.IPAddress -and $_.Destination -eq $thisTarget.IPAddress}).MSS
+                            $thisSourceMSS = ($NetStackResults.Stage1 | Where-Object {$_.Source -eq $thisSource.IPAddress -and $_.Destination -eq $thisTarget.IPAddress}).MSS
                             
                             # Need to use the NodeName Property in case there is only 1 target. Count method would not be available.
-                            $numTargets = ($thisTestableNet.Group | Where NodeName -ne $thisSource.NodeName).NodeName.Count
+                            $numTargets = ($thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName).NodeName.Count
                             Write-Progress -Id 1 -ParentId 0 -Activity 'Target Progression' -Status "Testing ICMP to target $($thisTarget.NodeName) and IP $($thisTarget.IPAddress)" -PercentComplete (($targetsCompleted / $numTargets) * 100)
                         
                             $Result = New-Object -TypeName psobject
