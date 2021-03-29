@@ -25,7 +25,7 @@ Function Test-NetStack {
 
     .PARAMETER Stage
         List of stages that specifies the tests to be run by Test-NetStack. By default, all stages will be run.
-        
+
         Tests will always occur in order of lowest stage first and it is highly recommended
         that you run all preceeding tests as they are built upon one another.
 
@@ -73,7 +73,7 @@ Function Test-NetStack {
     <#
     $here = Split-Path -Parent (Get-Module -Name Test-NetStack | Select-Object -First 1).Path
     $global:Log = New-Item -Name 'Results.log' -Path "$here\Results" -ItemType File -Force
-    $startTime = Get-Date -format:'yyyyMMdd-HHmmss' | Out-File $log    
+    $startTime = Get-Date -format:'yyyyMMdd-HHmmss' | Out-File $log
 
     $global:fail = 'FAIL'
     $global:testsFailed = 0
@@ -109,7 +109,7 @@ Function Test-NetStack {
         # These are the disqualified networks and adapters. Will keep this for reporting.
         if ($Disqualified) {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Disqualified -Value $Disqualified
-        }       
+        }
 
         if ($TestableNets) {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Testable -Value $TestableNets
@@ -126,7 +126,7 @@ Function Test-NetStack {
     else { $Mapping = $IPTarget.IPAddressToString }
     #endregion Connectivity Maps
 
-    # Get the IPs on the local system so you can avoid invoke-command 
+    # Get the IPs on the local system so you can avoid invoke-command
     $global:localIPs = (Get-NetIPAddress -AddressFamily IPv4 -Type Unicast).IPAddress
 
     Switch ( $Stage | Sort-Object ) {
@@ -136,13 +136,17 @@ Function Test-NetStack {
             $StageResults = @()
 
             if ($IPTarget) {
-                $Mapping | ForEach-Object {
-                    $thisSource = $_
+                foreach ($thisSource in $Mapping) {
+                    Write-Progress -Id 0 -Activity 'Source Progression' -Status "Testing ICMP from Source $thisSource" -PercentComplete (($sourcesCompleted / $Mapping.Count) * 100)
                     $targets = $Mapping -ne $thisSource
 
-                    $thisSourceResult = @()                
+                    $thisSourceResult = @()
+                    $targetsCompleted = 0
+
                     $targets | ForEach-Object {
                         $thisTarget = $_
+                        Write-Progress -Id 1 -ParentId 0 -Activity 'Target Progression' -Status "Testing ICMP to target $thisTarget" -PercentComplete (($targetsCompleted / $targets.Count) * 100)
+
                         $thisComputerName = (Resolve-DnsName -Name $thisSource -DnsOnly).NameHost.Split('.')[0]
 
                         $Result = New-Object -TypeName psobject
@@ -167,79 +171,7 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name MTU -Value $thisSourceResult.MTU
                         $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
 
-                        $StageResults += $Result
-                        Remove-Variable Result -ErrorAction SilentlyContinue
-                    }
-                }
-            }
-            elseif ($Nodes) {
-                $TestableNets | ForEach-Object {
-                    $thisTestableNet = $_
-
-                    $thisTestableNet.Group | ForEach-Object {
-                        $thisSource = $_
-                        $thisSourceResult = @()
-
-                        $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
-                            $thisTarget = $_
-
-                            $Result = New-Object -TypeName psobject
-                            $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisSource.NodeName
-                            $Result | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource.IPAddress
-                            $Result | Add-Member -MemberType NoteProperty -Name Destination -Value $thisTarget.IPaddress
-
-                            #TODO: Find the configured MTU for the specific adapter;
-                            #      Then ensure that MSS + 42 is = Configured Value; Add Property that is pass/fail for this
-
-                            # Calls the PMTUD parameter set in Invoke-ICMPPMTUD
-                            if ($thisSource.IPAddress -in $global:localIPs) {
-                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress
-                            }
-                            else {
-                                $thisSourceResult = Invoke-Command -ComputerName $thisSource.NodeName `
-                                                                   -ArgumentList $thisSource.IPAddress, $thisTarget.IPAddress `
-                                                                   -ScriptBlock  ${Function:\Invoke-ICMPPMTUD}
-                            }
-
-                            $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $thisSourceResult.Connectivity
-                            $Result | Add-Member -MemberType NoteProperty -Name MTU -Value $thisSourceResult.MTU
-                            $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
-
-                            $StageResults += $Result
-                            Remove-Variable Result -ErrorAction SilentlyContinue
-                        }
-                    }
-                }
-            }
-
-            $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage1 -Value $StageResults
-
-            Write-Host 'Completed Stage 1 - Connectivity and PMTUD'
-        }
-
-        '2' { # ICMP Reliability
-            Write-Host 'Beginning Stage 2 - ICMP Reliability'
-
-            $StageResults = @()
-            if ($IPTarget) {
-                foreach ($thisSource in $Mapping) {
-                    Write-Progress -Id 0 -Activity 'Source Progression' -Status "Testing ICMP from Source $thisSource" -PercentComplete (($sourcesCompleted / $Mapping.Count) * 100)
-                    $targets = $Mapping -ne $thisSource
-
-                    $thisSourceResult = @()
-                    $targetsCompleted = 0              
-                    $targets | ForEach-Object {
-                        $thisTarget = $_
-
-                        Write-Progress -Id 1 -ParentId 0 -Activity 'Target Progression' -Status "Testing ICMP to target $thisTarget" -PercentComplete (($targetsCompleted / $targets.Count) * 100)
-                        
-                        $thisComputerName = (Resolve-DnsName -Name $thisSource -DnsOnly).NameHost.Split('.')[0]
-                        $thisSourceMSS = ($NetStackResults.Stage1 | Where-Object{$_.SourceHostName -eq $thisComputerName -and $_.Destination -eq $thisTarget}).MSS
-
-                        $Result = New-Object -TypeName psobject
-                        $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisComputerName
-                        $Result | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource
-                        $Result | Add-Member -MemberType NoteProperty -Name Destination -Value $thisTarget
+                        $thisSourceMSS = $thisSourceResult.MSS
 
                         # Calls the Reliability parameter set in icmp.psm1
                         if ($thisSource -in $global:localIPs) {
@@ -268,36 +200,46 @@ Function Test-NetStack {
 
                         $targetsCompleted ++
                     }
-
-                    Remove-Variable targetsCompleted -ErrorAction SilentlyContinue
-
-                    $sourcesCompleted ++
                 }
-
-                Remove-Variable sourcesCompleted -ErrorAction SilentlyContinue
             }
             elseif ($Nodes) {
                 $TestableNets | ForEach-Object {
                     $thisTestableNet = $_
-                    #Write-Progress -Id 0 -Activity 'Network Progression' -Status "Testing ICMP from Network $($thisTestableNet.Name)" -PercentComplete (($NetworksCompleted / $thisTestableNet.Count) * 100)
 
-                    foreach ($thisSource in $thisTestableNet.Group) {
+                    $thisTestableNet.Group | ForEach-Object {
+                        $thisSource = $_
                         $thisSourceResult = @()
-                        
-                        Write-Progress -Id 0 -Activity 'Source Progression' -Status "Testing ICMP from Source $($thisSource.NodeName) and IP $($thisSource.IPAddress)" -PercentComplete (($sourcesCompleted / $thisTestableNet.Group.Count) * 100)
 
                         $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
                             $thisTarget = $_
-                            $thisSourceMSS = ($NetStackResults.Stage1 | Where-Object {$_.Source -eq $thisSource.IPAddress -and $_.Destination -eq $thisTarget.IPAddress}).MSS
-                            
-                            # Need to use the NodeName Property in case there is only 1 target. Count method would not be available.
-                            $numTargets = ($thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName).NodeName.Count
-                            Write-Progress -Id 1 -ParentId 0 -Activity 'Target Progression' -Status "Testing ICMP to target $($thisTarget.NodeName) and IP $($thisTarget.IPAddress)" -PercentComplete (($targetsCompleted / $numTargets) * 100)
-                        
+
                             $Result = New-Object -TypeName psobject
                             $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisSource.NodeName
                             $Result | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource.IPAddress
                             $Result | Add-Member -MemberType NoteProperty -Name Destination -Value $thisTarget.IPaddress
+
+                            #TODO: Find the configured MTU for the specific adapter;
+                            #      Then ensure that MSS + 42 is = Configured Value; Add Property that is pass/fail for this
+
+                            # Calls the PMTUD parameter set in Invoke-ICMPPMTUD
+                            if ($thisSource.IPAddress -in $global:localIPs) {
+                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress
+                            }
+                            else {
+                                $thisSourceResult = Invoke-Command -ComputerName $thisSource.NodeName `
+                                                                    -ArgumentList $thisSource.IPAddress, $thisTarget.IPAddress `
+                                                                    -ScriptBlock  ${Function:\Invoke-ICMPPMTUD}
+                            }
+
+                            $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $thisSourceResult.Connectivity
+                            $Result | Add-Member -MemberType NoteProperty -Name MTU -Value $thisSourceResult.MTU
+                            $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
+
+                            $thisSourceMSS = $thisSourceResult.MSS
+
+                            # Need to use the NodeName Property in case there is only 1 target. Count method would not be available.
+                            $numTargets = ($thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName).NodeName.Count
+                            Write-Progress -Id 1 -ParentId 0 -Activity 'Target Progression' -Status "Testing ICMP to target $($thisTarget.NodeName) and IP $($thisTarget.IPAddress)" -PercentComplete (($targetsCompleted / $numTargets) * 100)
 
                             # Calls the Reliability parameter set in icmp.psm1
                             if ($thisSource.IPAddress -in $global:localIPs) {
@@ -322,28 +264,27 @@ Function Test-NetStack {
                             else { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Fail' }
 
                             $StageResults += $Result
-                            Remove-Variable Result -ErrorAction SilentlyContinue
-
                             $targetsCompleted ++
+
+                            Remove-Variable Result -ErrorAction SilentlyContinue
                         }
 
-                        Remove-Variable targetsCompleted -ErrorAction SilentlyContinue
-                    
                         $sourcesCompleted ++
+                        Remove-Variable targetsCompleted -ErrorAction SilentlyContinue
                     }
-                    
-                    Remove-Variable sourcesCompleted -ErrorAction SilentlyContinue
 
                     # $NetworksCompleted ++
+                    Remove-Variable sourcesCompleted -ErrorAction SilentlyContinue
                 }
             }
 
-            $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage2 -Value $StageResults
-            Write-Host 'Completed Stage 2 - ICMP Reliability'
+            $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage1 -Value $StageResults
+
+            Write-Host 'Completed Stage 1 - Connectivity and PMTUD'
         }
 
+        '2' {  }
         '3' {  }
-
         '4' {  }
         '5' {  }
         '6' {  }
