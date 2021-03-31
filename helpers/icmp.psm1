@@ -15,20 +15,20 @@ Function Invoke-ICMPPMTUD {
         [int] $StartBytes = 32,
 
         [Parameter(Mandatory=$false, Position=3)]
-        [int] $EndBytes = 10000, 
+        [int] $EndBytes = 10000,
 
         [Parameter(Mandatory=$false, Position=4)]
         [Switch] $Reliability = $false,
 
         [Parameter(Mandatory=$false, Position=5)]
-        [int] $Count = 1000, 
+        [int] $Count = 1000,
 
         [Parameter(Mandatory=$false, Position=6)]
-        [int] $testTime = 15, 
+        [int] $testTime = 15,
 
         # Used for Write-Progress must also specify ParentID
         [Parameter(Mandatory=$false, Position=7)]
-        [int] $ID, 
+        [int] $ID,
 
         # Used for Write-Progress must also specify ID
         [Parameter(Mandatory=$false, Position=8)]
@@ -47,7 +47,10 @@ Function Invoke-ICMPPMTUD {
             [string] $Destination,
 
             [Parameter(Mandatory=$false, Position=2)]
-            [int] $Size = 32
+            [int] $Size = 32,
+
+            [Parameter(Mandatory=$false, Position=3)]
+            [Switch] $RTT
         )
 
 Add-Type @"
@@ -89,7 +92,7 @@ Add-Type @"
         [DllImport("Iphlpapi.dll", SetLastError = true)]
         private static extern int IcmpSendEcho2Ex(IntPtr icmpHandle, IntPtr hEvent, IntPtr apcRoutine, IntPtr apcContext, int sourceAddress, int destinationAddress, string requestData, short requestSize, ref ICMP_OPTIONS requestOptions, ref ICMP_ECHO_REPLY replyBuffer, int replySize, int timeout);
 
-        public bool Ping(IPAddress sourceIp, IPAddress destIp, int dataSize)
+        public bool PingStatus(IPAddress sourceIp, IPAddress destIp, int dataSize)
         {
             IntPtr icmpHandle = IcmpCreateFile();
             ICMP_OPTIONS icmpOptions = new ICMP_OPTIONS();
@@ -100,11 +103,33 @@ Add-Type @"
 
             int replies = IcmpSendEcho2Ex(icmpHandle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, BitConverter.ToInt32(sourceIp.GetAddressBytes(), 0), BitConverter.ToInt32(destIp.GetAddressBytes(), 0), sData, (short)sData.Length, ref icmpOptions, ref icmpReply, Marshal.SizeOf(icmpReply), 30);
             IcmpCloseHandle(icmpHandle);
+
             if (replies > 0)
             {
                 return true;
             }
+
             return false;
+        }
+
+        public int PingRTT(IPAddress sourceIp, IPAddress destIp, int dataSize)
+        {
+            IntPtr icmpHandle = IcmpCreateFile();
+            ICMP_OPTIONS icmpOptions = new ICMP_OPTIONS();
+            icmpOptions.Ttl = 255;
+            icmpOptions.Flags = 0x02;
+            ICMP_ECHO_REPLY icmpReply = new ICMP_ECHO_REPLY();
+            string sData = CreateSendData(dataSize);
+
+            int replies = IcmpSendEcho2Ex(icmpHandle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, BitConverter.ToInt32(sourceIp.GetAddressBytes(), 0), BitConverter.ToInt32(destIp.GetAddressBytes(), 0), sData, (short)sData.Length, ref icmpOptions, ref icmpReply, Marshal.SizeOf(icmpReply), 30);
+            IcmpCloseHandle(icmpHandle);
+
+            if (replies > 0)
+            {
+                return icmpReply.RoundTripTime;
+            }
+
+            return -1;
         }
 
         private string CreateSendData(int length)
@@ -121,16 +146,23 @@ Add-Type @"
     }
 "@
 
-        $pinger = [ICMPPing]::new()
+        $pingStatus = [ICMPPing]::new()
 
-        return ($pinger.Ping($Source, $Destination, $Size))
+        if ($RTT) {
+            return ($pingStatus.PingRTT($Source, $Destination, $Size))
+        }
+        else {
+            return ($pingStatus.PingStatus($Source, $Destination, $Size))
+        }
+
+        
     }
 
 #endregion
     if (-Not($Reliability)) {
         [int] $lastKnownGood = -1
 
-        if ((Start-Ping -Destination $Destination -Source $Source -Size $StartBytes)) { 
+        if ((Start-Ping -Destination $Destination -Source $Source -Size $StartBytes)) {
             # update LKG
             $lastKnownGood = $StartBytes
 
@@ -153,7 +185,7 @@ Add-Type @"
 
                 } until ($PingTest -or $failedCounter -gt 3)
 
-        
+
                 # make payload smaller
                 if (-NOT $PingTest) {
                     # save the failed ping size
@@ -170,7 +202,7 @@ Add-Type @"
                 }
                 else { # ping worked, but we're not done; make payload larger
                     $LKG = $nextPing
-            
+
                     $nextPing = [math]::Round(($lastFailed + $lastKnownGood) / 2, 0)
 
                     if ($nextPing -le $lastKnownGood)
@@ -203,7 +235,7 @@ Add-Type @"
                 IP       = 20 Bytes
                 ICMP     = 8 Bytes
 
-                Total    = 42 Bytes    
+                Total    = 42 Bytes
             #>
 
             $obj = New-Object -TypeName psobject
@@ -248,14 +280,10 @@ Add-Type @"
 
             Write-Progress @progressParams
 
-            $ICMPResponse += Start-Ping -Source $Source -Destination $Destination -Size $StartBytes
+            #Specify the RTT Switch. We'll use this for more stuff later.
+            $ICMPResponse += Start-Ping -Source $Source -Destination $Destination -Size $StartBytes -RTT
         } until([System.DateTime]::Now -ge $startTime.AddSeconds($testTime))
-
-        $ICMPReliability = @{
-            Total  = $ICMPResponse.Count
-            Failed = $ICMPResponse.Where({$_ -ne $true}).Count
-        }
         
-        Return $ICMPReliability
+        Return $ICMPResponse
     }
 }

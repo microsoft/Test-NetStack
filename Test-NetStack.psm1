@@ -25,7 +25,7 @@ Function Test-NetStack {
 
     .PARAMETER Stage
         List of stages that specifies the tests to be run by Test-NetStack. By default, all stages will be run.
-
+        
         Tests will always occur in order of lowest stage first and it is highly recommended
         that you run all preceeding tests as they are built upon one another.
 
@@ -73,7 +73,7 @@ Function Test-NetStack {
     <#
     $here = Split-Path -Parent (Get-Module -Name Test-NetStack | Select-Object -First 1).Path
     $global:Log = New-Item -Name 'Results.log' -Path "$here\Results" -ItemType File -Force
-    $startTime = Get-Date -format:'yyyyMMdd-HHmmss' | Out-File $log
+    $startTime = Get-Date -format:'yyyyMMdd-HHmmss' | Out-File $log    
 
     $global:fail = 'FAIL'
     $global:testsFailed = 0
@@ -109,7 +109,7 @@ Function Test-NetStack {
         # These are the disqualified networks and adapters. Will keep this for reporting.
         if ($Disqualified) {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Disqualified -Value $Disqualified
-        }
+        }       
 
         if ($TestableNets) {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Testable -Value $TestableNets
@@ -126,7 +126,7 @@ Function Test-NetStack {
     else { $Mapping = $IPTarget.IPAddressToString }
     #endregion Connectivity Maps
 
-    # Get the IPs on the local system so you can avoid invoke-command
+    # Get the IPs on the local system so you can avoid invoke-command 
     $global:localIPs = (Get-NetIPAddress -AddressFamily IPv4 -Type Unicast).IPAddress
 
     Switch ( $Stage | Sort-Object ) {
@@ -183,6 +183,7 @@ Function Test-NetStack {
                                                                 -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
                         }
 
+                        <#
                         $Result | Add-Member -MemberType NoteProperty -Name ICMPSent -Value $thisSourceResult.Total
                         $Result | Add-Member -MemberType NoteProperty -Name ICMPFailed -Value $thisSourceResult.Failed
 
@@ -196,9 +197,41 @@ Function Test-NetStack {
                         else { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Fail' }
 
                         $StageResults += $Result
-                        Remove-Variable Result -ErrorAction SilentlyContinue
-
                         $targetsCompleted ++
+                        
+                        Remove-Variable Result -ErrorAction SilentlyContinue
+                        #>
+
+                        $TotalSent   = $thisSourceResult.Count
+                        $TotalFailed = ($thisSourceResult -eq '-1').Count
+                        $SuccessPercentage = ([Math]::Round((100 - (($TotalFailed / $TotalSent) * 100)), 2))
+                        #$PacketLoss  = ((($thisSourceResult -eq '-1').Count / $thisSourceResult.Count) * 100).ToString('###.##')
+
+                        $Result | Add-Member -MemberType NoteProperty -Name TotalSent   -Value $TotalSent
+                        $Result | Add-Member -MemberType NoteProperty -Name TotalFailed -Value $TotalFailed
+                        $Result | Add-Member -MemberType NoteProperty -Name Reliability -Value $SuccessPercentage
+                        #$Result | Add-Member -MemberType NoteProperty -Name PacketLoss -Value $PacketLoss
+
+                        # -1 (no response) will be ignored for LAT and JIT
+                        $Latency = Get-Latency -RoundTripTime ($thisSourceResult -ne -1)
+                        $Jitter  = Get-Jitter  -RoundTripTime ($thisSourceResult -ne -1)
+                            
+                        $Result | Add-Member -MemberType NoteProperty -Name Latency -Value $Latency
+                        $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $Jitter
+
+                        if ($TotalSent         -ge $Definitions.Reliability.ICMPSent        -and
+                            $SuccessPercentage -ge $Definitions.Reliability.ICMPReliability -and
+                            $PacketLoss        -le $Definitions.Reliability.ICMPPacketLoss  -and 
+                            $Latency           -le $Definitions.Reliability.ICMPLatency  -and 
+                            $Jitter            -le $Definitions.Reliability.ICMPJitter) {
+                            $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Pass'
+                        }
+                        else { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Fail' } #TODO: Update this with specific failure reasons
+                        
+                        $StageResults += $Result
+                        $targetsCompleted ++
+
+                        Remove-Variable Result -ErrorAction SilentlyContinue
                     }
                 }
             }
@@ -240,7 +273,7 @@ Function Test-NetStack {
                             # Need to use the NodeName Property in case there is only 1 target. Count method would not be available.
                             $numTargets = ($thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName).NodeName.Count
                             Write-Progress -Id 1 -ParentId 0 -Activity 'Target Progression' -Status "Testing ICMP to target $($thisTarget.NodeName) and IP $($thisTarget.IPAddress)" -PercentComplete (($targetsCompleted / $numTargets) * 100)
-
+                  
                             # Calls the Reliability parameter set in icmp.psm1
                             if ($thisSource.IPAddress -in $global:localIPs) {
                                 $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress -StartBytes $thisSourceMSS -Reliability
@@ -251,17 +284,31 @@ Function Test-NetStack {
                                                                     -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
                             }
 
-                            $Result | Add-Member -MemberType NoteProperty -Name ICMPSent -Value $thisSourceResult.Total
-                            $Result | Add-Member -MemberType NoteProperty -Name ICMPFailed -Value $thisSourceResult.Failed
+                            $TotalSent   = $thisSourceResult.Count
+                            $TotalFailed = ($thisSourceResult -eq '-1').Count
+                            $SuccessPercentage = ([Math]::Round((100 - (($TotalFailed / $TotalSent) * 100)), 2))
+                            #$PacketLoss  = ((($thisSourceResult -eq '-1').Count / $thisSourceResult.Count) * 100).ToString('###.##')
 
-                            $SuccessPercentage = ([Math]::Round((100 - (($thisSourceResult.Failed / $thisSourceResult.Total) * 100)), 2))
-                            $Result | Add-Member -MemberType NoteProperty -Name ICMPReliability -Value $SuccessPercentage
+                            $Result | Add-Member -MemberType NoteProperty -Name TotalSent   -Value $TotalSent
+                            $Result | Add-Member -MemberType NoteProperty -Name TotalFailed -Value $TotalFailed
+                            $Result | Add-Member -MemberType NoteProperty -Name Reliability -Value $SuccessPercentage
+                            #$Result | Add-Member -MemberType NoteProperty -Name PacketLoss -Value $PacketLoss
 
-                            if ($SuccessPercentage      -ge $Definitions.Reliability.ICMPReliability -and
-                                $thisSourceResult.Total -ge $Definitions.Reliability.sent) {
+                            # -1 (no response) will be ignored for LAT and JIT
+                            $Latency = Get-Latency -RoundTripTime ($thisSourceResult -ne -1)
+                            $Jitter  = Get-Jitter  -RoundTripTime ($thisSourceResult -ne -1)
+                            
+                            $Result | Add-Member -MemberType NoteProperty -Name Latency -Value $Latency
+                            $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $Jitter
+
+                            if ($TotalSent         -ge $Definitions.Reliability.ICMPSent        -and
+                                $SuccessPercentage -ge $Definitions.Reliability.ICMPReliability -and
+                                $PacketLoss        -le $Definitions.Reliability.ICMPPacketLoss  -and 
+                                $Latency           -le $Definitions.Reliability.ICMPLatency  -and 
+                                $Jitter            -le $Definitions.Reliability.ICMPJitter) {
                                 $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Pass'
                             }
-                            else { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Fail' }
+                            else { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Fail' } #TODO: Update this with specific failure reasons
 
                             $StageResults += $Result
                             $targetsCompleted ++

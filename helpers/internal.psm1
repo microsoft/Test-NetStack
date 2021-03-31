@@ -1,16 +1,43 @@
 #region Analysis
+    Class MTU {
+        [int] $MSS = '1472'
+
+        MTU () {}
+    }
+
     Class Reliability {
+        # Min # of ICMP packets per path for a reliability test
         [int] $ICMPSent = '2000'
+
+        # Minimum success percentage for a pass
         [int] $ICMPReliability = '90'
 
+        # Minimum success percentage for a pass
+        [int] $ICMPPacketLoss = '95'
+
+        # Maximum Milliseconds for a pass
+        [int] $ICMPLatency = '3'
+
+        # Maximum jitter 
+        [Double] $ICMPJitter = '.1'
+
         Reliability () {}
+    }
+
+    Class TCPPerf {
+        # Min TPUT by % of link speed
+        [int] $TPUT = '70'
+
+        TCPPerf () {}
     }
 
 
     # Stuff All Analysis Classes in Here
     Class Analyzer {
+        $MTU         = [MTU]::new()
         $Reliability = [Reliability]::new()
-
+        $TCPPerf     = [TCPPerf]::new()
+        
         Analyzer () {}
     }
 #endregion Analysis
@@ -94,9 +121,7 @@
         )
 
         $Mapper = @()
-        $Nodes | ForEach-Object {
-            $thisNode = $_
-
+        foreach ($thisNode in $Nodes) {
             if ($thisNode -eq $env:COMPUTERNAME) {
                 $AdapterIP = Get-NetIPAddress -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
                     Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
@@ -114,64 +139,58 @@
                 $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
             }
 
-            Try {
-                $ClusterIPs = (Get-ClusterResource | Where { $_.OwnerGroup -eq 'Cluster Group' -and $_.ResourceType -eq 'IP Address' } | Get-ClusterParameter -Name Address).Value
-            } Catch {}
+            $ClusRes = Get-ClusterResource -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Where { $_.OwnerGroup -eq 'Cluster Group' -and $_.ResourceType -eq 'IP Address' }
+            $ClusterIPs = ($ClustRes | Get-ClusterParameter -ErrorAction SilentlyContinue -Name Address).Value
 
             $NodeOutput = @()
-            $AdapterIP | ForEach-Object {
-                $thisAdapterIP = $_
+            foreach ($thisAdapterIP in ($AdapterIP | Where IPAddress -NotIn $ClusterIPs)) {
+                $Result = New-Object -TypeName psobject
+                $thisNetAdapter = $NetAdapter | Where InterfaceIndex -eq $thisAdapterIP.InterfaceIndex
+                $thisVMNetworkAdapter = $VMNetworkAdapter | Where DeviceID -EQ $thisNetAdapter.DeviceID
 
-                $thisAdapterIP | Where IPAddress -NotIn $ClusterIPs | ForEach-Object {
-                    $Result = New-Object -TypeName psobject
-                    $thisNetAdapter = $NetAdapter | Where InterfaceIndex -eq $_.InterfaceIndex
-                    $thisVMNetworkAdapter = $VMNetworkAdapter | Where DeviceID -EQ $thisNetAdapter.DeviceID
+                $Result | Add-Member -MemberType NoteProperty -Name NodeName -Value $thisNode
+                $Result | Add-Member -MemberType NoteProperty -Name InterfaceAlias -Value $thisAdapterIP.InterfaceAlias
+                $Result | Add-Member -MemberType NoteProperty -Name InterfaceIndex -Value $thisAdapterIP.InterfaceIndex
+                $Result | Add-Member -MemberType NoteProperty -Name IPAddress -Value $thisAdapterIP.IPAddress
+                $Result | Add-Member -MemberType NoteProperty -Name PrefixLength -Value $thisAdapterIP.PrefixLength
+                $Result | Add-Member -MemberType NoteProperty -Name AddressState -Value $thisAdapterIP.AddressState
 
-                    $Result | Add-Member -MemberType NoteProperty -Name NodeName -Value $thisNode
-                    $Result | Add-Member -MemberType NoteProperty -Name InterfaceAlias -Value $_.InterfaceAlias
-                    $Result | Add-Member -MemberType NoteProperty -Name InterfaceIndex -Value $_.InterfaceIndex
-                    $Result | Add-Member -MemberType NoteProperty -Name IPAddress -Value $_.IPAddress
-                    $Result | Add-Member -MemberType NoteProperty -Name PrefixLength -Value $_.PrefixLength
-                    $Result | Add-Member -MemberType NoteProperty -Name AddressState -Value $_.AddressState
+                $SubnetMask = Convert-CIDRToMask -PrefixLength $thisAdapterIP.PrefixLength
+                $SubNetInInt = Convert-IPv4ToInt -IPv4Address $SubnetMask
+                $IPInInt     = Convert-IPv4ToInt -IPv4Address $thisAdapterIP.IPAddress
 
-                    $SubnetMask = Convert-CIDRToMask -PrefixLength $_.PrefixLength
-                    $SubNetInInt = Convert-IPv4ToInt -IPv4Address $SubnetMask
-                    $IPInInt     = Convert-IPv4ToInt -IPv4Address $_.IPAddress
+                $Network    = Convert-IntToIPv4 -Integer ($SubNetInInt -band $IPInInt)
+                $Subnet     = "$($Network)/$($thisAdapterIP.PrefixLength)"
 
-                    $Network    = Convert-IntToIPv4 -Integer ($SubNetInInt -band $IPInInt)
-                    $Subnet     = "$($Network)/$($_.PrefixLength)"
-
-                    $Result | Add-Member -MemberType NoteProperty -Name SubnetMask -Value $SubnetMask
-                    $Result | Add-Member -MemberType NoteProperty -Name Network -Value $Network
-                    $Result | Add-Member -MemberType NoteProperty -Name Subnet -Value $Subnet
+                $Result | Add-Member -MemberType NoteProperty -Name SubnetMask -Value $SubnetMask
+                $Result | Add-Member -MemberType NoteProperty -Name Network -Value $Network
+                $Result | Add-Member -MemberType NoteProperty -Name Subnet -Value $Subnet
                     
-                    if ($thisVMNetworkAdapter) {
-                        $Result | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value $thisVMNetworkAdapter.Name
+                if ($thisVMNetworkAdapter) {
+                    $Result | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value $thisVMNetworkAdapter.Name
 
-                        if ($thisVMNetworkAdapter.IsolationSetting.IsolationMode -eq 'VLAN') {
-                            $VLAN = $thisVMNetworkAdapter.IsolationSetting.DefaultIsolationID
-                        }
-                        elseif ($thisVMNetworkAdapter.VlanSetting.OperationMode -eq 'Access') {
-                            $VLAN = $thisVMNetworkAdapter.VlanSetting.AccessVlanId
-                        }
-                        elseif ($thisVMNetworkAdapter.IsolationSetting.IsolationMode -eq 'None' -and
-                                $thisVMNetworkAdapter.VlanSetting.OperationMode -eq 'Untagged') {
-                                $VLAN = '0'
-                        }
-                        else { $thisInterfaceDetails.VLAN = 'Unsupported by Test-NetStack' }
+                    if ($thisVMNetworkAdapter.IsolationSetting.IsolationMode -eq 'VLAN') {
+                        $VLAN = $thisVMNetworkAdapter.IsolationSetting.DefaultIsolationID
                     }
-                    else {
-                        $VLAN = $thisNetAdapter.VlanID
-                        $Result | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value 'Not Applicable'
-
-                        if ($thisNetAdapter.VlanID) { $VLAN = $thisNetAdapter.VlanID }
-                        else { $VLAN = 'Unsupported' } # In this case, the adapter does not support VLANs
+                    elseif ($thisVMNetworkAdapter.VlanSetting.OperationMode -eq 'Access') {
+                        $VLAN = $thisVMNetworkAdapter.VlanSetting.AccessVlanId
                     }
-                    
-                    $Result | Add-Member -MemberType NoteProperty -Name VLAN -Value $VLAN
-
-                    $NodeOutput += $Result
+                    elseif ($thisVMNetworkAdapter.IsolationSetting.IsolationMode -eq 'None' -and
+                            $thisVMNetworkAdapter.VlanSetting.OperationMode -eq 'Untagged') {
+                            $VLAN = '0'
+                    }
+                    else { $thisInterfaceDetails.VLAN = 'Unsupported by Test-NetStack' }
                 }
+                else {
+                    $Result | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value 'Not Applicable'
+
+                    if ($thisNetAdapter.VlanID -in 0..4095) { $VLAN = $thisNetAdapter.VlanID }
+                    else { $VLAN = 'Unsupported' } # In this case, the adapter does not support VLANs
+                }
+                    
+                $Result | Add-Member -MemberType NoteProperty -Name VLAN -Value $VLAN
+
+                $NodeOutput += $Result
             }
 
             Remove-Variable AdapterIP -ErrorAction SilentlyContinue
@@ -182,11 +201,45 @@
         Return $Mapper
     }
 
-    Function Connect-NetworkMap {
+    Function Get-Jitter {
+        <#
+        .SYNOPSIS
+            This function takes input as a list of roundtriptimes and returns the jitter
+        #>
+
         param (
-            [PSCustomObject] $Mapping
+            [String[]] $RoundTripTime
         )
 
+        0..($RoundTripTime.Count - 1) | ForEach-Object {
+            $Iteration = $_
+
+            $Difference = $RoundTripTime[$Iteration] - $RoundTripTime[$Iteration + 1]
+            $RTTDif += [Math]::Abs($Difference)
+        }
+
+        return ($RTTDif / $RoundTripTime.Count).ToString('.####')
+    }
+
+    Function Get-Latency {
+        <#
+        .SYNOPSIS
+            This function takes input as a list of roundtriptimes and returns the latency
+
+        .Description
+            This function assumes that input is in ms. Since LAT must be > 0 and ICMP only provides ms precision, we normalize 0 to 1s
+            This function assumes that all input was successful. Scrub input before sending to this function.
+        #>
+
+        param (
+            [String[]] $RoundTripTime
+        )
+
+        $RTTNormalized = @()
+        $RTTNormalized = $RoundTripTime -replace 0, 1
+        $RTTNormalized | ForEach-Object { [int] $RTTNumerator = $RTTNumerator + $_ }
+
+        return ($RTTNumerator / $RTTNormalized.Count).ToString('.##')
 
     }
 #endregion Helper Functions
