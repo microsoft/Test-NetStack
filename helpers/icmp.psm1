@@ -264,22 +264,7 @@ Add-Type @"
 
         do {
             $now = [System.DateTime]::Now
-            $percentComplete = (($now - $startTime).TotalSeconds / $testTime) * 100
-
-            $progressParams = @{
-                Activity = 'Sending ICMP'
-                Status   = 'Reliability Test'
-                PercentComplete = $percentComplete
-                SecondsRemaining = ($testTime - ($now - $startTime).TotalSeconds)
-            }
-
-            if ($ID -and $ParentID) {
-                $progressParams.Add('Id', $ID)
-                $progressParams.Add('ParentId', $ParentID)
-            }
-
-            Write-Progress @progressParams
-
+            
             #Specify the RTT Switch. We'll use this for more stuff later.
             $ICMPResponse += Start-Ping -Source $Source -Destination $Destination -Size $StartBytes -RTT
         } until([System.DateTime]::Now -ge $startTime.AddSeconds($testTime))
