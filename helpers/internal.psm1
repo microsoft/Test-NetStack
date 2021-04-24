@@ -218,7 +218,7 @@
             $RTTDif += [Math]::Abs($Difference)
         }
 
-        return ($RTTDif / $RoundTripTime.Count).ToString('.####')
+        return ($RTTDif / $RoundTripTime.Count).ToString('.#####')
     }
 
     Function Get-Latency {
@@ -239,7 +239,7 @@
         $RTTNormalized = $RoundTripTime -replace 0, 1
         $RTTNormalized | ForEach-Object { [int] $RTTNumerator = $RTTNumerator + $_ }
 
-        return ($RTTNumerator / $RTTNormalized.Count).ToString('.##')
+        return ($RTTNumerator / $RTTNormalized.Count).ToString('.###')
 
     }
 #endregion Helper Functions
