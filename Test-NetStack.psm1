@@ -132,7 +132,7 @@ Function Test-NetStack {
     Switch ( $Stage | Sort-Object ) {
         '1' { # Connectivity and PMTUD
 
-            Write-Host 'Beginning Stage 1 - Connectivity and PMTUD'
+            Write-Host "Beginning Stage 1 - Connectivity and PMTUD - $([System.DateTime]::Now)"
             $StageResults = @()
 
             if ($IPTarget) {
@@ -157,6 +157,8 @@ Function Test-NetStack {
                         #TODO: Find the configured MTU for the specific adapter;
                         #      Then ensure that MSS + 42 is = Configured Value; Add Property that is pass/fail for this
 
+                        Write-Host ":: $([System.DateTime]::Now) :: $thisSource -> $thisTarget [PMTUD]"
+                        
                         # Calls the PMTUD parameter set in Invoke-ICMPPMTUD
                         if ($thisSource -in $global:localIPs) {
                             $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget
@@ -172,7 +174,8 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
 
                         $thisSourceMSS = $thisSourceResult.MSS
-
+                        Write-Host ":: $([System.DateTime]::Now) :: $thisSource -> $thisTarget [Reliability]"
+                        
                         # Calls the Reliability parameter set in icmp.psm1
                         if ($thisSource -in $global:localIPs) {
                             $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget -StartBytes $thisSourceMSS -Reliability
@@ -183,30 +186,10 @@ Function Test-NetStack {
                                                                 -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
                         }
 
-                        <#
-                        $Result | Add-Member -MemberType NoteProperty -Name ICMPSent -Value $thisSourceResult.Total
-                        $Result | Add-Member -MemberType NoteProperty -Name ICMPFailed -Value $thisSourceResult.Failed
-
-                        $SuccessPercentage = ([Math]::Round((100 - (($thisSourceResult.Failed / $thisSourceResult.Total) * 100)), 2))
-                        $Result | Add-Member -MemberType NoteProperty -Name ICMPReliability -Value $SuccessPercentage
-
-                        if ($SuccessPercentage      -ge $Definitions.Reliability.ICMPReliability -and
-                            $thisSourceResult.Total -ge $Definitions.Reliability.sent) {
-                            $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Pass'
-                        }
-                        else { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Fail' }
-
-                        $StageResults += $Result
-                        $targetsCompleted ++
-                        
-                        Remove-Variable Result -ErrorAction SilentlyContinue
-                        #>
-
                         $TotalSent   = $thisSourceResult.Count
                         $TotalFailed = ($thisSourceResult -eq '-1').Count
                         $SuccessPercentage = ([Math]::Round((100 - (($TotalFailed / $TotalSent) * 100)), 2))
-                        #$PacketLoss  = ((($thisSourceResult -eq '-1').Count / $thisSourceResult.Count) * 100).ToString('###.##')
-
+                        
                         $Result | Add-Member -MemberType NoteProperty -Name TotalSent   -Value $TotalSent
                         $Result | Add-Member -MemberType NoteProperty -Name TotalFailed -Value $TotalFailed
                         $Result | Add-Member -MemberType NoteProperty -Name Reliability -Value $SuccessPercentage
@@ -327,7 +310,7 @@ Function Test-NetStack {
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage1 -Value $StageResults
 
-            Write-Host 'Completed Stage 1 - Connectivity and PMTUD'
+            Write-Host "Completed Stage 1 - Connectivity and PMTUD - $([System.DateTime]::Now)"
         }
 
         '2' {  }
