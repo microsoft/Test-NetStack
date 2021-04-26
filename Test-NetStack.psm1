@@ -137,7 +137,6 @@ Function Test-NetStack {
 
             if ($IPTarget) {
                 foreach ($thisSource in $Mapping) {
-                    #Write-Progress -Id 0 -Activity 'Source Progression' -Status "Testing ICMP from Source $thisSource" -PercentComplete (($sourcesCompleted / $Mapping.Count) * 100)
                     $targets = $Mapping -ne $thisSource
 
                     $thisSourceResult = @()
@@ -145,8 +144,6 @@ Function Test-NetStack {
 
                     $targets | ForEach-Object {
                         $thisTarget = $_
-                        #Write-Progress -Id 1 -ParentId 0 -Activity 'Target Progression' -Status "Testing ICMP to target $thisTarget" -PercentComplete (($targetsCompleted / $targets.Count) * 100)
-
                         $thisComputerName = (Resolve-DnsName -Name $thisSource -DnsOnly).NameHost.Split('.')[0]
 
                         $Result = New-Object -TypeName psobject
@@ -255,7 +252,6 @@ Function Test-NetStack {
 
                             # Need to use the NodeName Property in case there is only 1 target. Count method would not be available.
                             $numTargets = ($thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName).NodeName.Count
-                            #Write-Progress -Id 1 -ParentId 0 -Activity 'Target Progression' -Status "Testing ICMP to target $($thisTarget.NodeName) and IP $($thisTarget.IPAddress)" -PercentComplete (($targetsCompleted / $numTargets) * 100)
                   
                             # Calls the Reliability parameter set in icmp.psm1
                             if ($thisSource.IPAddress -in $global:localIPs) {
