@@ -235,7 +235,7 @@ Function Test-NetStack {
                             #TODO: Find the configured MTU for the specific adapter;
                             #      Then ensure that MSS + 42 is = Configured Value; Add Property that is pass/fail for this
 
-	                    Write-Host ":: $([System.DateTime]::Now) :: $($thisSource.NodeName) -> $($thisTarget.NodeName) [PMTUD]"
+	                    Write-Host ":: $([System.DateTime]::Now) :: $($thisSource.NodeName) [$($thisSource.IPAddress)] -> $($thisTarget.NodeName) [$($thisTarget.IPaddress)] [PMTUD]"
                             # Calls the PMTUD parameter set in Invoke-ICMPPMTUD
                             if ($thisSource.IPAddress -in $global:localIPs) {
                                 $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress
@@ -255,7 +255,7 @@ Function Test-NetStack {
                             # Need to use the NodeName Property in case there is only 1 target. Count method would not be available.
                             $numTargets = ($thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName).NodeName.Count
 
-                            Write-Host ":: $([System.DateTime]::Now) :: $($thisSource.NodeName) -> $($thisTarget.NodeName) [Reliability]"                  
+	                    Write-Host ":: $([System.DateTime]::Now) :: $($thisSource.NodeName) [$($thisSource.IPAddress)] -> $($thisTarget.NodeName) [$($thisTarget.IPaddress)] [Reliability]"
                             # Calls the Reliability parameter set in icmp.psm1
                             if ($thisSource.IPAddress -in $global:localIPs) {
                                 $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress -StartBytes $thisSourceMSS -Reliability
