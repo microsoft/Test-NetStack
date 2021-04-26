@@ -137,6 +137,7 @@ Function Test-NetStack {
 
             if ($IPTarget) {
                 foreach ($thisSource in $Mapping) {
+                    #Write-Progress -Id 0 -Activity 'Source Progression' -Status "Testing ICMP from Source $thisSource" -PercentComplete (($sourcesCompleted / $Mapping.Count) * 100)
                     $targets = $Mapping -ne $thisSource
 
                     $thisSourceResult = @()
@@ -234,6 +235,7 @@ Function Test-NetStack {
                             #TODO: Find the configured MTU for the specific adapter;
                             #      Then ensure that MSS + 42 is = Configured Value; Add Property that is pass/fail for this
 
+	                    Write-Host ":: $([System.DateTime]::Now) :: $($thisSource.NodeName) -> $($thisTarget.NodeName) [PMTUD]"
                             # Calls the PMTUD parameter set in Invoke-ICMPPMTUD
                             if ($thisSource.IPAddress -in $global:localIPs) {
                                 $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress
@@ -252,7 +254,8 @@ Function Test-NetStack {
 
                             # Need to use the NodeName Property in case there is only 1 target. Count method would not be available.
                             $numTargets = ($thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName).NodeName.Count
-                  
+
+                            Write-Host ":: $([System.DateTime]::Now) :: $($thisSource.NodeName) -> $($thisTarget.NodeName) [Reliability]"                  
                             # Calls the Reliability parameter set in icmp.psm1
                             if ($thisSource.IPAddress -in $global:localIPs) {
                                 $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress -StartBytes $thisSourceMSS -Reliability
