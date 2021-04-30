@@ -154,6 +154,8 @@
                 $Result | Add-Member -MemberType NoteProperty -Name IPAddress -Value $thisAdapterIP.IPAddress
                 $Result | Add-Member -MemberType NoteProperty -Name PrefixLength -Value $thisAdapterIP.PrefixLength
                 $Result | Add-Member -MemberType NoteProperty -Name AddressState -Value $thisAdapterIP.AddressState
+                $Result | Add-Member -MemberType NoteProperty -Name InterfaceDescription -Value $thisNetAdapter.InterfaceDescription
+                $Result | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
 
                 $SubnetMask = Convert-CIDRToMask -PrefixLength $thisAdapterIP.PrefixLength
                 $SubNetInInt = Convert-IPv4ToInt -IPv4Address $SubnetMask

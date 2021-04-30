@@ -312,7 +312,96 @@ Function Test-NetStack {
             Write-Host "Completed Stage 1 - Connectivity and PMTUD - $([System.DateTime]::Now)"
         }
 
-        '2' {  }
+        '2' { # TCP CTS Traffic
+            Write-Host "Beginning Stage 2 - TCP - $([System.DateTime]::Now)"
+            $StageResults = @()
+
+            if ($IPTarget) {
+                $NodeList = @()
+
+                foreach ($IPAddress in $IPTarget) {
+                    $NodeList += (Resolve-DnsName -Name $IPAddress -DnsOnly).NameHost.Split('.')[0]
+                }
+                $Nodes = $NodeList
+
+                $Mapping = Get-Connectivity -Nodes $Nodes
+
+                $VLANSupportedNets = $Mapping | Where-Object VLAN -ne 'Unsupported' | Group-Object Subnet, VLAN
+                $TestableNets  = $VLANSupportedNets | Where-Object Count -ne 1
+
+                $DisqualifiedByVLANSupport    = $Mapping | Where-Object VLAN -eq 'Unsupported' | Group-Object Subnet, VLAN
+                $DisqualifiedByInterfaceCount = $VLANSupportedNets | Where-Object Count -eq 1
+
+                $Disqualified = New-Object -TypeName psobject
+                if ($DisqualifiedByVLANSupport) {
+                    $Disqualified | Add-Member -MemberType NoteProperty -Name VLAN         -Value $DisqualifiedByVLANSupport
+                }
+
+                if ($DisqualifiedByInterfaceCount) {
+                    $Disqualified | Add-Member -MemberType NoteProperty -Name OneIntSubnet -Value $DisqualifiedByInterfaceCount
+                }
+
+                # These are the disqualified networks and adapters. Will keep this for reporting.
+                if ($Disqualified) {
+                    $NetStackResults | Add-Member -MemberType NoteProperty -Name Disqualified -Value $Disqualified
+                }       
+
+                if ($TestableNets) {
+                    $NetStackResults | Add-Member -MemberType NoteProperty -Name Testable -Value $TestableNets
+                }
+                else {
+                    $NetStackResults | Add-Member -MemberType NoteProperty -Name Testable -Value 'None Available'
+
+                    Write-Verbose 'No testable networks found'
+                    break
+                }
+
+                Remove-Variable -Name VLANSupportedNets, Disqualified, DisqualifiedByVLANSupport, DisqualifiedByInterfaceCount -ErrorAction SilentlyContinue
+            }
+            
+            $TestableNets | ForEach-Object {
+                $thisTestableNet = $_
+
+                $thisTestableNet.Group | ForEach-Object {
+                    $thisSource = $_
+                    $thisSourceResult = @()
+
+                    $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
+                        $thisTarget = $_
+
+                        $Result = New-Object -TypeName psobject
+                        $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisSource.NodeName
+                        $Result | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource.IPAddress
+                        $Result | Add-Member -MemberType NoteProperty -Name Destination -Value $thisTarget.IPaddress
+
+                        $thisSourceResult = Invoke-TCP -Source $thisSource -Destination $thisTarget
+
+                        $Result | Add-Member -MemberType NoteProperty -Name ServerRecvBitsPerSecond -Value $thisSourceResult.ServerRecvBitsPerSecond
+                        $Result | Add-Member -MemberType NoteProperty -Name ServerSendBitsPerSecond -Value $thisSourceResult.ServerSendBitsPerSecond
+                        $Result | Add-Member -MemberType NoteProperty -Name ClientRecvBitsPerSecond -Value $thisSourceResult.ClientRecvBitsPerSecond
+                        $Result | Add-Member -MemberType NoteProperty -Name ClientSendBitsPerSecond -Value $thisSourceResult.ClientSendBitsPerSecond
+                        $Result | Add-Member -MemberType NoteProperty -Name MinLinkSpeedBitsPerSecond -Value $thisSourceResult.MinLinkSpeed
+
+                        $ThroughputPercentageDec = [Double]$Definitions.TCPPerf.TPUT / 100.0
+                        $AcceptableThroughput = $thisSourceResult.MinLinkSpeed * $ThroughputPercentageDec
+
+                        $Success = ($thisSourceResult.ServerRecvBitsPerSecond -gt $AcceptableThroughput) -and `
+                                    ($thisSourceResult.ServerSendBitsPerSecond -gt $AcceptableThroughput) -and `
+                                    ($thisSourceResult.ClientRecvBitsPerSecond -gt $AcceptableThroughput) -and `
+                                    ($thisSourceResult.ClientSendBitsPerSecond -gt $AcceptableThroughput)
+
+                        if ($Success) { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Pass' }
+                        else { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Fail' }
+
+                        $StageResults += $Result
+                        Remove-Variable Result -ErrorAction SilentlyContinue
+                    }
+                }
+            }
+
+            $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage2 -Value $StageResults
+            Write-Host "Completed Stage 2 - TCP - $([System.DateTime]::Now)"
+        }
         '3' {  }
         '4' {  }
         '5' {  }
