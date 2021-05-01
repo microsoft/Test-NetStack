@@ -106,6 +106,11 @@ Add-Type @"
 
             if (replies > 0)
             {
+                if (icmpReply.DataSize != dataSize)
+                {
+                    return false;
+                }
+
                 return true;
             }
 
