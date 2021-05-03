@@ -23,6 +23,7 @@ function Invoke-TCP {
         Copy-Item C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\Test-NetStack\tools\CTS-Traffic -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
     }
     
+    Invoke-Command -ComputerName $Source.NodeName, $Destination.NodeName -ScriptBlock { New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow | Out-Null }
 
     # CTS Traffic Rate Limit is specified in bytes/second
     $ServerLinkSpeed = $Source.LinkSpeed.split(" ")
@@ -40,8 +41,6 @@ function Invoke-TCP {
         ("Kbps") {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) * [Math]::Pow(10, 3) / 8}
         ("bps") {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) / 8}
     }
-
-    Invoke-Command -ComputerName $Source.NodeName, $Destination.NodeName -ScriptBlock { New-NetFirewallRule -DisplayName "CtsTraffic" -Direction Inbound -Protocol TCP -LocalPort 4444 -Action Allow | Out-Null }
     
     $ServerRecvCounter = Start-Job `
     -ScriptBlock {
