@@ -374,24 +374,24 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource.IPAddress
                         $Result | Add-Member -MemberType NoteProperty -Name Destination -Value $thisTarget.IPaddress
 
-                        $thisSourceResult = Invoke-TCP -Source $thisSource -Destination $thisTarget
+                        $thisSourceResult = Invoke-TCP -Receiver $thisSource -Sender $thisTarget
 
-                        $Result | Add-Member -MemberType NoteProperty -Name ServerRecvBitsPerSecond -Value $thisSourceResult.ServerRecvBitsPerSecond
-                        $Result | Add-Member -MemberType NoteProperty -Name ServerSendBitsPerSecond -Value $thisSourceResult.ServerSendBitsPerSecond
-                        $Result | Add-Member -MemberType NoteProperty -Name ClientRecvBitsPerSecond -Value $thisSourceResult.ClientRecvBitsPerSecond
-                        $Result | Add-Member -MemberType NoteProperty -Name ClientSendBitsPerSecond -Value $thisSourceResult.ClientSendBitsPerSecond
-                        $Result | Add-Member -MemberType NoteProperty -Name MinLinkSpeedBitsPerSecond -Value $thisSourceResult.MinLinkSpeed
+                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
+                        $Result | Add-Member -MemberType NoteProperty -Name ReceivedGbps -Value $thisSourceResult.ReceivedGbps
+                        $Result | Add-Member -MemberType NoteProperty -Name ReceivedPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
+                        $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.TCPPerf.TPUT
+                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
 
                         $ThroughputPercentageDec = [Double]$Definitions.TCPPerf.TPUT / 100.0
-                        $AcceptableThroughput = $thisSourceResult.MinLinkSpeed * $ThroughputPercentageDec
+                        $AcceptableThroughput = $thisSourceResult.RawData.MinLinkSpeedBitsPerSecond * $ThroughputPercentageDec
 
-                        $Success = ($thisSourceResult.ServerRecvBitsPerSecond -gt $AcceptableThroughput) -and `
-                                    ($thisSourceResult.ServerSendBitsPerSecond -gt $AcceptableThroughput) -and `
-                                    ($thisSourceResult.ClientRecvBitsPerSecond -gt $AcceptableThroughput) -and `
-                                    ($thisSourceResult.ClientSendBitsPerSecond -gt $AcceptableThroughput)
+                        $Success = ($thisSourceResult.RawData.ServerRxbps -gt $AcceptableThroughput) -and `
+                                    ($thisSourceResult.RawData.ServerTxbps -gt $AcceptableThroughput) -and `
+                                    ($thisSourceResult.RawData.ClientRxbps -gt $AcceptableThroughput) -and `
+                                    ($thisSourceResult.RawData.ClientTxbps -gt $AcceptableThroughput)
 
-                        if ($Success) { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Pass' }
-                        else { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Fail' }
+                        if ($Success) { $Result | Add-Member -MemberType NoteProperty -Name LinkStatus -Value 'Pass' }
+                        else { $Result | Add-Member -MemberType NoteProperty -Name LinkStatus -Value 'Fail' }
 
                         $StageResults += $Result
                         Remove-Variable Result -ErrorAction SilentlyContinue
