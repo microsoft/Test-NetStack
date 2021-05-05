@@ -2,31 +2,31 @@ function Invoke-TCP {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true, Position=0)]
-        [PSObject] $Source,
+        [PSObject] $Receiver,
 
         [Parameter(Mandatory=$true, Position=1)]
-        [PSObject] $Destination
+        [PSObject] $Sender
     )
 
-    Write-Host ":: $([System.DateTime]::Now) :: $($Source.NodeName) [$($Source.IPAddress)] <-> $($Destination.NodeName) [$($Destination.IPaddress)] [CTS Traffic]"
+    Write-Host ":: $([System.DateTime]::Now) :: $($Sender.NodeName) [$($Sender.IPaddress)] -> $($Receiver.NodeName) [$($Receiver.IPAddress)] [CTS Traffic]"
 
     $TCPResults = New-Object -TypeName psobject
 
-    if (!($Source.IPAddress -in $global:localIPs) -and !(Invoke-Command -ComputerName $Source.NodeName -ScriptBlock { Test-Path -Path "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" })) {
-        $DestinationSession = New-PSSession -ComputerName $Source.NodeName
-        Invoke-Command -ComputerName $Source.NodeName -ScriptBlock {cmd /c "mkdir C:\Test-NetStack\tools\CTS-Traffic"} -ErrorAction SilentlyContinue
+    if (!($Receiver.IPAddress -in $global:localIPs) -and !(Invoke-Command -ComputerName $Receiver.NodeName -ScriptBlock { Test-Path -Path "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" })) {
+        $DestinationSession = New-PSSession -ComputerName $Receiver.NodeName
+        Invoke-Command -ComputerName $Receiver.NodeName -ScriptBlock {cmd /c "mkdir C:\Test-NetStack\tools\CTS-Traffic"} -ErrorAction SilentlyContinue
         Copy-Item C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\Test-NetStack\tools\CTS-Traffic -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
     }
-    if (!($Destination.IPAddress -in $global:localIPs) -and !(Invoke-Command -ComputerName $Destination.NodeName -ScriptBlock { Test-Path -Path "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" })) {
-        $DestinationSession = New-PSSession -ComputerName $Destination.NodeName
-        Invoke-Command -ComputerName $Destination.NodeName -ScriptBlock {cmd /c "mkdir C:\Test-NetStack\tools\CTS-Traffic"} -ErrorAction SilentlyContinue
+    if (!($Sender.IPAddress -in $global:localIPs) -and !(Invoke-Command -ComputerName $Sender.NodeName -ScriptBlock { Test-Path -Path "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" })) {
+        $DestinationSession = New-PSSession -ComputerName $Sender.NodeName
+        Invoke-Command -ComputerName $Sender.NodeName -ScriptBlock {cmd /c "mkdir C:\Test-NetStack\tools\CTS-Traffic"} -ErrorAction SilentlyContinue
         Copy-Item C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\Test-NetStack\tools\CTS-Traffic -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
     }
     
-    Invoke-Command -ComputerName $Source.NodeName, $Destination.NodeName -ScriptBlock { New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow | Out-Null }
+    Invoke-Command -ComputerName $Receiver.NodeName, $Sender.NodeName -ScriptBlock { New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow | Out-Null }
 
     # CTS Traffic Rate Limit is specified in bytes/second
-    $ServerLinkSpeed = $Source.LinkSpeed.split(" ")
+    $ServerLinkSpeed = $Receiver.LinkSpeed.split(" ")
     Switch($ServerLinkSpeed[1]) {            
         ("Gbps") {$ServerLinkSpeedBps = [Int]::Parse($ServerLinkSpeed[0]) * [Math]::Pow(10, 9) / 8}
         ("Mbps") {$ServerLinkSpeedBps = [Int]::Parse($ServerLinkSpeed[0]) * [Math]::Pow(10, 6) / 8}
@@ -34,7 +34,7 @@ function Invoke-TCP {
         ("bps") {$ServerLinkSpeedBps = [Int]::Parse($ServerLinkSpeed[0]) / 8}
     }
 
-    $ClientLinkSpeed = $Destination.LinkSpeed.split(" ")
+    $ClientLinkSpeed = $Sender.LinkSpeed.split(" ")
     Switch($ClientLinkSpeed[1]) {              
         ("Gbps") {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) * [Math]::Pow(10, 9) / 8}
         ("Mbps") {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) * [Math]::Pow(10, 6) / 8}
@@ -53,7 +53,7 @@ function Invoke-TCP {
          } `
          -ArgumentList $ServerInterfaceDescription
     } `
-    -ArgumentList $Source.NodeName,$Source.InterfaceDescription
+    -ArgumentList $Receiver.NodeName,$Receiver.InterfaceDescription
     
     $ServerSendCounter = Start-Job `
     -ScriptBlock {
@@ -66,7 +66,7 @@ function Invoke-TCP {
          } `
          -ArgumentList $ServerInterfaceDescription
     } `
-    -ArgumentList $Source.NodeName,$Source.InterfaceDescription
+    -ArgumentList $Receiver.NodeName,$Receiver.InterfaceDescription
 
     $ServerOutput = Start-Job `
     -ScriptBlock {
@@ -78,7 +78,7 @@ function Invoke-TCP {
          } `
          -ArgumentList $ServerIP
     } `
-    -ArgumentList $Source.NodeName,$Source.IPAddress,$Source.LinkSpeed
+    -ArgumentList $Receiver.NodeName,$Receiver.IPAddress,$Receiver.LinkSpeed
 
     $ClientRecvCounter = Start-Job `
     -ScriptBlock {
@@ -91,7 +91,7 @@ function Invoke-TCP {
          } `
          -ArgumentList $ClientInterfaceDescription
     } `
-    -ArgumentList $Destination.NodeName,$Destination.InterfaceDescription
+    -ArgumentList $Sender.NodeName,$Sender.InterfaceDescription
 
     $ClientSendCounter = Start-Job `
     -ScriptBlock {
@@ -104,7 +104,7 @@ function Invoke-TCP {
          } `
          -ArgumentList $ClientInterfaceDescription
     } `
-    -ArgumentList $Destination.NodeName,$Destination.InterfaceDescription
+    -ArgumentList $Sender.NodeName,$Sender.InterfaceDescription
     
     $ClientOutput = Start-Job `
     -ScriptBlock {
@@ -116,7 +116,7 @@ function Invoke-TCP {
          } `
          -ArgumentList $ServerIP,$ClientIP,$ClientLinkSpeed
     } `
-    -ArgumentList $Destination.NodeName,$Source.IPAddress,$Destination.IPAddress,$ClientLinkSpeedBps
+    -ArgumentList $Sender.NodeName,$Receiver.IPAddress,$Sender.IPAddress,$ClientLinkSpeedBps
     
 
     Start-Sleep 20
@@ -155,16 +155,26 @@ function Invoke-TCP {
     $ServerLinkSpeedBitsPerSecond = $ServerLinkSpeedBps * 8
     $ClientLinkSpeedBitsPerSecond = $ClientLinkSpeedBps * 8
 
-    $MinLinkSpeed = ($ServerLinkSpeedBitsPerSecond, $ClientLinkSpeedBitsPerSecond | Measure-Object -Minimum).Minimum
-    Write-Verbose "Minimum Link Speed bps: $MinLinkSpeed"
+    $MinLinkSpeedBitsPerSecond = ($ServerLinkSpeedBitsPerSecond, $ClientLinkSpeedBitsPerSecond | Measure-Object -Minimum).Minimum
+    Write-Verbose "Minimum Link Speed bps: $MinLinkSpeedBitsPerSecond"
 
+    $RawData = New-Object -TypeName psobject
+    $RawData | Add-Member -MemberType NoteProperty -Name ServerRxbps -Value $ServerRecvBitsPerSecond
+    $RawData | Add-Member -MemberType NoteProperty -Name ServerTxbps -Value $ServerSendBitsPerSecond
+    $RawData | Add-Member -MemberType NoteProperty -Name ClientRxbps -Value $ClientRecvBitsPerSecond
+    $RawData | Add-Member -MemberType NoteProperty -Name ClientTxbps -Value $ClientSendBitsPerSecond
+    $RawData | Add-Member -MemberType NoteProperty -Name MinLinkSpeedbps -Value $MinLinkSpeedBitsPerSecond
 
-    $TCPResults | Add-Member -MemberType NoteProperty -Name ServerRecvBitsPerSecond -Value $ServerRecvBitsPerSecond
-    $TCPResults | Add-Member -MemberType NoteProperty -Name ServerSendBitsPerSecond -Value $ServerSendBitsPerSecond
-    $TCPResults | Add-Member -MemberType NoteProperty -Name ClientRecvBitsPerSecond -Value $ClientRecvBitsPerSecond
-    $TCPResults | Add-Member -MemberType NoteProperty -Name ClientSendBitsPerSecond -Value $ClientSendBitsPerSecond
-    $TCPResults | Add-Member -MemberType NoteProperty -Name MinLinkSpeed -Value $MinLinkSpeed
+    $ReceiverLinkSpeedGbps = [Math]::Round($ServerLinkSpeedBitsPerSecond * [Math]::Pow(10, -9), 2)
+    $ReceivedGbps = [Math]::Round($ServerRecvBitsPerSecond * [Math]::Pow(10, -9), 2)
+    $ReceivedPercentageOfLinkSpeed = [Math]::Round(($ServerRecvBitsPerSecond / $ServerLinkSpeedBitsPerSecond) * 100, 2)
 
+    $TCPResults | Add-Member -MemberType NoteProperty -Name ReceiverLinkSpeedGbps -Value $ReceiverLinkSpeedGbps
+    $TCPResults | Add-Member -MemberType NoteProperty -Name ReceivedGbps -Value $ReceivedGbps
+    $TCPResults | Add-Member -MemberType NoteProperty -Name ReceivedPctgOfLinkSpeed -Value $ReceivedPercentageOfLinkSpeed
+    $TCPResults | Add-Member -MemberType NoteProperty -Name RawData -Value $RawData
+
+    Invoke-Command -ComputerName $Receiver.NodeName, $Sender.NodeName -ScriptBlock { Remove-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" | Out-Null }
 
     Return $TCPResults
 }
