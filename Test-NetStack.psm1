@@ -25,7 +25,7 @@ Function Test-NetStack {
 
     .PARAMETER Stage
         List of stages that specifies the tests to be run by Test-NetStack. By default, all stages will be run.
-        
+
         Tests will always occur in order of lowest stage first and it is highly recommended
         that you run all preceeding tests as they are built upon one another.
 
@@ -73,62 +73,39 @@ Function Test-NetStack {
     <#
     $here = Split-Path -Parent (Get-Module -Name Test-NetStack | Select-Object -First 1).Path
     $global:Log = New-Item -Name 'Results.log' -Path "$here\Results" -ItemType File -Force
-    $startTime = Get-Date -format:'yyyyMMdd-HHmmss' | Out-File $log    
+    $startTime = Get-Date -format:'yyyyMMdd-HHmmss' | Out-File $log
 
     $global:fail = 'FAIL'
     $global:testsFailed = 0
-
     #>
-    $Definitions = [Analyzer]::new()
 
-    # Add prerequisite tester here
-        #TODO: Add check, If Stage contains '2', it must contain '1' as it builds on it.
+    # Call Prerequisites
 
     # Each stages adds their results to this and is eventually returned by this function
     $NetStackResults = New-Object -TypeName psobject
 
     #region Connectivity Maps
-    if ($Nodes) {
-        $Mapping = Get-Connectivity -Nodes $Nodes
+    if ($Nodes) { $Mapping = Get-ConnectivityMapping -Nodes $Nodes }
+    else        { $Mapping = Get-ConnectivityMapping -IPTarget $IPTarget }
 
-        $VLANSupportedNets = $Mapping | Where-Object VLAN -ne 'Unsupported' | Group-Object Subnet, VLAN
-        $TestableNets  = $VLANSupportedNets | Where-Object Count -ne 1
+    $TestableNetworks     = Get-TestableNetworksFromMapping     -Mapping $Mapping
+    $DisqualifiedNetworks = Get-DisqualifiedNetworksFromMapping -Mapping $Mapping
 
-        $DisqualifiedByVLANSupport    = $Mapping | Where-Object VLAN -eq 'Unsupported' | Group-Object Subnet, VLAN
-        $DisqualifiedByInterfaceCount = $VLANSupportedNets | Where-Object Count -eq 1
-
-        $Disqualified = New-Object -TypeName psobject
-        if ($DisqualifiedByVLANSupport) {
-            $Disqualified | Add-Member -MemberType NoteProperty -Name VLANNotSupported -Value $DisqualifiedByVLANSupport
-        }
-
-        if ($DisqualifiedByInterfaceCount) {
-            $Disqualified | Add-Member -MemberType NoteProperty -Name OneInterfaceInSubnet -Value $DisqualifiedByInterfaceCount
-        }
-
-        # These are the disqualified networks and adapters. Will keep this for reporting.
-        if ($Disqualified) {
-            $NetStackResults | Add-Member -MemberType NoteProperty -Name Disqualified -Value $Disqualified
-        }       
-
-        if ($TestableNets) {
-            $NetStackResults | Add-Member -MemberType NoteProperty -Name Testable -Value $TestableNets
-        }
-        else {
-            $NetStackResults | Add-Member -MemberType NoteProperty -Name Testable -Value 'None Available'
-
-            Write-Verbose 'No testable networks found'
-            break
-        }
-
-        Remove-Variable -Name VLANSupportedNets, Disqualified, DisqualifiedByVLANSupport, DisqualifiedByInterfaceCount -ErrorAction SilentlyContinue
+    # If at least one note property doesn't exist, then no disqualified networks were identified
+    if (($DisqualifiedNetworks | Get-Member -MemberType NoteProperty).Count) {
+        $NetStackResults | Add-Member -MemberType NoteProperty -Name DisqualifiedNetworks -Value $DisqualifiedNetworks
     }
-    else { $Mapping = $IPTarget.IPAddressToString }
+    else { Remove-Variable -Name DisqualifiedNetworks -ErrorAction SilentlyContinue }
+
+    if ($TestableNetworks) { $NetStackResults | Add-Member -MemberType NoteProperty -Name TestableNetworks -Value $TestableNetworks }
+    else { throw 'No Testable Networks Found' }
     #endregion Connectivity Maps
 
-    # Get the IPs on the local system so you can avoid invoke-command 
-    $localIPs = (Get-NetIPAddress -AddressFamily IPv4 -Type Unicast).IPAddress
+    # Get the IPs on the local system so you can avoid invoke-command
+    #$localIPs = (Get-NetIPAddress -AddressFamily IPv4 -Type Unicast).IPAddress
 
+    # Defines the stage requirements - internal.psm1
+    $Definitions = [Analyzer]::new()
     Switch ( $Stage | Sort-Object ) {
         '1' { # Connectivity and PMTUD
 
@@ -136,7 +113,7 @@ Function Test-NetStack {
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PWD -ChildPath 'Helpers\*') -Include '*.psm1'
-            $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }            
+            $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
             $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
             $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
@@ -176,7 +153,7 @@ Function Test-NetStack {
                             $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $thisSourceResult.Connectivity
                             $Result | Add-Member -MemberType NoteProperty -Name MTU -Value $thisSourceResult.MTU
                             $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
-                
+
                             if ($thisSource -in $localIPs) {
                                 $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget -StartBytes $thisSourceMSS -Reliability
                             }
@@ -185,7 +162,7 @@ Function Test-NetStack {
                                                                    -ArgumentList $thisSource, $thisTarget, $thisSourceResult.MSS , $null, $true `
                                                                    -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
                             }
-            
+
                             $TotalSent   = $thisSourceResult.Count
                             $TotalFailed = ($thisSourceResult -eq '-1').Count
                             $SuccessPercentage = ([Math]::Round((100 - (($TotalFailed / $TotalSent) * 100)), 2))
@@ -197,20 +174,20 @@ Function Test-NetStack {
                             # -1 (no response) will be ignored for LAT and JIT
                             $Latency = Get-Latency -RoundTripTime ($thisSourceResult -ne -1)
                             $Jitter  = Get-Jitter  -RoundTripTime ($thisSourceResult -ne -1)
-                            
+
                             $Result | Add-Member -MemberType NoteProperty -Name Latency -Value $Latency
                             $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $Jitter
 
                             #TODO: Check if stage value is passed into the runspace; otherwise this section may be broken
                             if ($TotalSent         -ge $Definitions.Reliability.ICMPSent        -and
                                 $SuccessPercentage -ge $Definitions.Reliability.ICMPReliability -and
-                                $PacketLoss        -le $Definitions.Reliability.ICMPPacketLoss  -and 
-                                $Latency           -le $Definitions.Reliability.ICMPLatency  -and 
+                                $PacketLoss        -le $Definitions.Reliability.ICMPPacketLoss  -and
+                                $Latency           -le $Definitions.Reliability.ICMPLatency  -and
                                 $Jitter            -le $Definitions.Reliability.ICMPJitter) {
                                 $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass'
                             }
                             else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' } #TODO: Update this with specific failure reasons
-                        
+
                             return $Result
                         })
 
@@ -266,7 +243,7 @@ Function Test-NetStack {
                                 $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $thisSourceResult.Connectivity
                                 $Result | Add-Member -MemberType NoteProperty -Name MTU -Value $thisSourceResult.MTU
                                 $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
-                
+
                                 if ($thisSource -in $localIPs) {
                                     $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget -StartBytes $thisSourceMSS -Reliability
                                 }
@@ -275,7 +252,7 @@ Function Test-NetStack {
                                                                        -ArgumentList $thisSource, $thisTarget, $thisSourceResult.MSS , $null, $true `
                                                                        -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
                                 }
-            
+
                                 $TotalSent   = $thisSourceResult.Count
                                 $TotalFailed = ($thisSourceResult -eq '-1').Count
                                 $SuccessPercentage = ([Math]::Round((100 - (($TotalFailed / $TotalSent) * 100)), 2))
@@ -287,20 +264,20 @@ Function Test-NetStack {
                                 # -1 (no response) will be ignored for LAT and JIT
                                 $Latency = Get-Latency -RoundTripTime ($thisSourceResult -ne -1)
                                 $Jitter  = Get-Jitter  -RoundTripTime ($thisSourceResult -ne -1)
-                            
+
                                 $Result | Add-Member -MemberType NoteProperty -Name Latency -Value $Latency
                                 $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $Jitter
 
                                 #TODO: Check if stage value is passed into the runspace; otherwise this section may be broken
                                 if ($TotalSent         -ge $Definitions.Reliability.ICMPSent        -and
                                     $SuccessPercentage -ge $Definitions.Reliability.ICMPReliability -and
-                                    $PacketLoss        -le $Definitions.Reliability.ICMPPacketLoss  -and 
-                                    $Latency           -le $Definitions.Reliability.ICMPLatency  -and 
+                                    $PacketLoss        -le $Definitions.Reliability.ICMPPacketLoss  -and
+                                    $Latency           -le $Definitions.Reliability.ICMPLatency  -and
                                     $Jitter            -le $Definitions.Reliability.ICMPJitter) {
                                     $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass'
                                 }
                                 else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' } #TODO: Update this with specific failure reasons
-                        
+
 
                                 return $Result
                             })
@@ -337,7 +314,7 @@ Function Test-NetStack {
                     $AllJobs = $AllJobs -ne $thisJob
 
                     Write-Host ":: $([System.DateTime]::Now) :: [Completed] ($thisSourceHostName) $($thisSource) -> $($thisTarget)"
-                } 
+                }
             }
 
             $RunspacePool.Close()
@@ -380,7 +357,7 @@ Function Test-NetStack {
                 # These are the disqualified networks and adapters. Will keep this for reporting.
                 if ($Disqualified) {
                     $NetStackResults | Add-Member -MemberType NoteProperty -Name Disqualified -Value $Disqualified
-                }       
+                }
 
                 if ($TestableNets) {
                     $NetStackResults | Add-Member -MemberType NoteProperty -Name Testable -Value $TestableNets
@@ -394,7 +371,7 @@ Function Test-NetStack {
 
                 Remove-Variable -Name VLANSupportedNets, Disqualified, DisqualifiedByVLANSupport, DisqualifiedByInterfaceCount -ErrorAction SilentlyContinue
             }
-            
+
             $TestableNets | ForEach-Object {
                 $thisTestableNet = $_
 
