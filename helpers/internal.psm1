@@ -26,7 +26,7 @@
 
     Class TCPPerf {
         # Min TPUT by % of link speed
-        [int] $TPUT = '70'
+        [int] $TPUT = '90'
 
         TCPPerf () {}
     }
