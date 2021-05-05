@@ -137,6 +137,8 @@ Function Get-ConnectivityMapping {
                 $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
 
                 $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
+
+                $RDMAAdapter = Get-NetAdapterRdma -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
             }
             else {
                 # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
@@ -145,6 +147,7 @@ Function Get-ConnectivityMapping {
 
                 $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
                 $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
+                $RDMAAdapter = Get-NetAdapterRdma -CimSession $thisNode -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
             }
 
             $ClusRes = Get-ClusterResource -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Where { $_.OwnerGroup -eq 'Cluster Group' -and $_.ResourceType -eq 'IP Address' }
@@ -164,6 +167,12 @@ Function Get-ConnectivityMapping {
                 $Result | Add-Member -MemberType NoteProperty -Name AddressState -Value $thisAdapterIP.AddressState
                 $Result | Add-Member -MemberType NoteProperty -Name InterfaceDescription -Value $thisNetAdapter.InterfaceDescription
                 $Result | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
+
+                if ($thisNetAdapter.Name -in $RDMAAdapter) {
+                    $Result | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $true
+                } else {
+                    $Result | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $false
+                }
 
                 $SubnetMask = Convert-CIDRToMask -PrefixLength $thisAdapterIP.PrefixLength
                 $SubNetInInt = Convert-IPv4ToInt -IPv4Address $SubnetMask
@@ -209,6 +218,7 @@ Function Get-ConnectivityMapping {
 
         $Mapping += $NodeOutput
         Remove-Variable AdapterIP -ErrorAction SilentlyContinue
+        Remove-Variable RDMAAdapter -ErrorAction SilentlyContinue
     }
 
     foreach ($thisNode in $Nodes) {
@@ -219,6 +229,8 @@ Function Get-ConnectivityMapping {
             $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
 
             $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
+
+            $RDMAAdapter = Get-NetAdapterRdma -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
         }
         else {
             # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
@@ -227,6 +239,7 @@ Function Get-ConnectivityMapping {
 
             $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
             $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
+            $RDMAAdapter = Get-NetAdapterRdma -CimSession $thisNode -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
         }
 
         $ClusRes = Get-ClusterResource -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Where { $_.OwnerGroup -eq 'Cluster Group' -and $_.ResourceType -eq 'IP Address' }
@@ -246,6 +259,12 @@ Function Get-ConnectivityMapping {
             $Result | Add-Member -MemberType NoteProperty -Name AddressState -Value $thisAdapterIP.AddressState
             $Result | Add-Member -MemberType NoteProperty -Name InterfaceDescription -Value $thisNetAdapter.InterfaceDescription
             $Result | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
+
+            if ($thisNetAdapter.Name -in $RDMAAdapter) {
+                $Result | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $true
+            } else {
+                $Result | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $false
+            }
 
             $SubnetMask = Convert-CIDRToMask -PrefixLength $thisAdapterIP.PrefixLength
             $SubNetInInt = Convert-IPv4ToInt -IPv4Address $SubnetMask
@@ -287,6 +306,7 @@ Function Get-ConnectivityMapping {
 
         $Mapping += $NodeOutput
         Remove-Variable AdapterIP -ErrorAction SilentlyContinue
+        Remove-Variable RDMAAdapter -ErrorAction SilentlyContinue
     }
 
    Return $Mapping

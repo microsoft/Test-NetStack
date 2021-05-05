@@ -372,7 +372,7 @@ Function Test-NetStack {
                 Remove-Variable -Name VLANSupportedNets, Disqualified, DisqualifiedByVLANSupport, DisqualifiedByInterfaceCount -ErrorAction SilentlyContinue
             }
 
-            $TestableNets | ForEach-Object {
+            $TestableNetworks | ForEach-Object {
                 $thisTestableNet = $_
 
                 $thisTestableNet.Group | ForEach-Object {
@@ -415,7 +415,80 @@ Function Test-NetStack {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage2 -Value $StageResults
             Write-Host "Completed Stage 2 - TCP - $([System.DateTime]::Now)"
         }
-        '3' {  }
+        '3' { 
+            Write-Host "Beginning Stage 3 - NDK Ping - $([System.DateTime]::Now)"
+            $StageResults = @()
+
+            if ($IPTarget -and !($Nodes)) {
+                $NodeList = @()
+
+                foreach ($IPAddress in $IPTarget) {
+                    $NodeList += (Resolve-DnsName -Name $IPAddress -DnsOnly).NameHost.Split('.')[0]
+                }
+                $Nodes = $NodeList
+
+                $Mapping = Get-Connectivity -Nodes $Nodes
+
+                $VLANSupportedNets = $Mapping | Where-Object VLAN -ne 'Unsupported' | Group-Object Subnet, VLAN
+                $TestableNets  = $VLANSupportedNets | Where-Object Count -ne 1
+
+                $DisqualifiedByVLANSupport    = $Mapping | Where-Object VLAN -eq 'Unsupported' | Group-Object Subnet, VLAN
+                $DisqualifiedByInterfaceCount = $VLANSupportedNets | Where-Object Count -eq 1
+
+                $Disqualified = New-Object -TypeName psobject
+                if ($DisqualifiedByVLANSupport) {
+                    $Disqualified | Add-Member -MemberType NoteProperty -Name VLAN         -Value $DisqualifiedByVLANSupport
+                }
+
+                if ($DisqualifiedByInterfaceCount) {
+                    $Disqualified | Add-Member -MemberType NoteProperty -Name OneIntSubnet -Value $DisqualifiedByInterfaceCount
+                }
+
+                # These are the disqualified networks and adapters. Will keep this for reporting.
+                if ($Disqualified) {
+                    $NetStackResults | Add-Member -MemberType NoteProperty -Name Disqualified -Value $Disqualified
+                }       
+
+                if ($TestableNets) {
+                    $NetStackResults | Add-Member -MemberType NoteProperty -Name Testable -Value $TestableNets
+                }
+                else {
+                    $NetStackResults | Add-Member -MemberType NoteProperty -Name Testable -Value 'None Available'
+
+                    Write-Verbose 'No testable networks found'
+                    break
+                }
+
+                Remove-Variable -Name VLANSupportedNets, Disqualified, DisqualifiedByVLANSupport, DisqualifiedByInterfaceCount -ErrorAction SilentlyContinue
+            }
+            
+            $TestableNetworks | ForEach-Object {
+                $thisTestableNet = $_
+
+                $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
+                    $thisSource = $_
+                    $thisSourceResult = @()
+                    
+                    $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
+                        $thisTarget = $_
+
+                        $Result = New-Object -TypeName psobject
+                        $Result | Add-Member -MemberType NoteProperty -Name ServerHostName -Value $thisSource.NodeName
+                        $Result | Add-Member -MemberType NoteProperty -Name Server -Value $thisSource.IPAddress
+                        $Result | Add-Member -MemberType NoteProperty -Name Client -Value $thisTarget.IPaddress
+
+                        $thisSourceResult = Invoke-NDKPing -Server $thisSource -Client $thisTarget
+
+                        $Result | Add-Member -MemberType NoteProperty -Name ServerSuccess -Value $thisSourceResult.ServerSuccess
+                        $StageResults += $Result
+                        Remove-Variable Result -ErrorAction SilentlyContinue
+                    }
+                }
+            }
+
+            $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage3 -Value $StageResults
+            Write-Host "Completed Stage 3 - NDK Ping - $([System.DateTime]::Now)" 
+        }
         '4' {  }
         '5' {  }
         '6' {  }
