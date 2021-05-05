@@ -160,7 +160,7 @@ Add-Type @"
             return ($pingStatus.PingStatus($Source, $Destination, $Size))
         }
 
-        
+
     }
 
 #endregion
@@ -268,12 +268,10 @@ Add-Type @"
         $startTime = [System.DateTime]::Now
 
         do {
-            $now = [System.DateTime]::Now
-            
             #Specify the RTT Switch. We'll use this for more stuff later.
             $ICMPResponse += Start-Ping -Source $Source -Destination $Destination -Size $StartBytes -RTT
         } until([System.DateTime]::Now -ge $startTime.AddSeconds($testTime))
-        
+
         Return $ICMPResponse
     }
 }

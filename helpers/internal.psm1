@@ -1,138 +1,146 @@
 #region Analysis
-    Class MTU {
-        [int] $MSS = '1472'
+Class MTU {
+    [int] $MSS = '1472'
 
-        MTU () {}
-    }
+    MTU () {}
+}
 
-    Class Reliability {
-        # Min # of ICMP packets per path for a reliability test
-        [int] $ICMPSent = '2000'
+Class Reliability {
+    # Min # of ICMP packets per path for a reliability test
+    [int] $ICMPSent = '2000'
 
-        # Minimum success percentage for a pass
-        [int] $ICMPReliability = '90'
+    # Minimum success percentage for a pass
+    [int] $ICMPReliability = '90'
 
-        # Minimum success percentage for a pass
-        [int] $ICMPPacketLoss = '95'
+    # Minimum success percentage for a pass
+    [int] $ICMPPacketLoss = '95'
 
-        # Maximum Milliseconds for a pass
-        [int] $ICMPLatency = '3'
+    # Maximum Milliseconds for a pass
+    [int] $ICMPLatency = '3'
 
-        # Maximum jitter 
-        [Double] $ICMPJitter = '.1'
+    # Maximum jitter
+    [Double] $ICMPJitter = '.1'
 
-        Reliability () {}
-    }
+    Reliability () {}
+}
 
-    Class TCPPerf {
+Class TCPPerf {
         # Min TPUT by % of link speed
         [int] $TPUT = '90'
 
-        TCPPerf () {}
-    }
+    TCPPerf () {}
+}
 
 
-    # Stuff All Analysis Classes in Here
-    Class Analyzer {
-        $MTU         = [MTU]::new()
-        $Reliability = [Reliability]::new()
-        $TCPPerf     = [TCPPerf]::new()
-        
-        Analyzer () {}
-    }
+# Stuff All Analysis Classes in Here
+Class Analyzer {
+    $MTU         = [MTU]::new()
+    $Reliability = [Reliability]::new()
+    $TCPPerf     = [TCPPerf]::new()
+
+    Analyzer () {}
+}
 #endregion Analysis
 
 #region DataTypes
-    Class InterfaceDetails {
-        [string] $Node
-        [string] $InterfaceAlias
-        [string] $InterfaceIndex
-        [String] $IPAddress
-        [String] $PrefixLength
-        [String] $AddressState
+Class InterfaceDetails {
+    [string] $Node
+    [string] $InterfaceAlias
+    [string] $InterfaceIndex
+    [String] $IPAddress
+    [String] $PrefixLength
+    [String] $AddressState
 
-        [String] $Network
-        [String] $Subnet
-        [String] $SubnetMask
-        [String] $VLAN
+    [String] $Network
+    [String] $Subnet
+    [String] $SubnetMask
+    [String] $VLAN
 
-        [string] $VMNetworkAdapterName
-    }
+    [string] $VMNetworkAdapterName
+}
 #endregion DataTypes
 
 #region Non-Exported Helpers
-    Function Convert-CIDRToMask {
-        param (
-            [Parameter(Mandatory = $true)]
-            [int] $PrefixLength
-        )
+Function Convert-CIDRToMask {
+    param (
+        [Parameter(Mandatory = $true)]
+        [int] $PrefixLength
+    )
 
-        $bitString = ('1' * $prefixLength).PadRight(32, '0')
+    $bitString = ('1' * $prefixLength).PadRight(32, '0')
 
-        [String] $MaskString = @()
+    [String] $MaskString = @()
 
-        for($i = 0; $i -lt 32; $i += 8){
-            $byteString = $bitString.Substring($i,8)
-            $MaskString += "$([Convert]::ToInt32($byteString, 2))."
-        }
-
-        Return $MaskString.TrimEnd('.')
+    for($i = 0; $i -lt 32; $i += 8){
+        $byteString = $bitString.Substring($i,8)
+        $MaskString += "$([Convert]::ToInt32($byteString, 2))."
     }
 
-    Function Convert-MaskToCIDR {
-        param (
-            [Parameter(Mandatory = $true)]
-            [IPAddress] $SubnetMask
-        )
+    Return $MaskString.TrimEnd('.')
+}
 
-        [String] $binaryString = @()
-        $SubnetMask.GetAddressBytes() | ForEach-Object { $binaryString += [Convert]::ToString($_, 2) }
+Function Convert-MaskToCIDR {
+    param (
+        [Parameter(Mandatory = $true)]
+        [IPAddress] $SubnetMask
+    )
 
-        Return $binaryString.TrimEnd('0').Length
-    }
+    [String] $binaryString = @()
+    $SubnetMask.GetAddressBytes() | ForEach-Object { $binaryString += [Convert]::ToString($_, 2) }
 
-    Function Convert-IPv4ToInt {
-        Param (
-            [Parameter(Mandatory = $true)]
-            [IPAddress] $IPv4Address
-        )
+    Return $binaryString.TrimEnd('0').Length
+}
 
-        $bytes = $IPv4Address.GetAddressBytes()
+Function Convert-IPv4ToInt {
+    Param (
+        [Parameter(Mandatory = $true)]
+        [IPAddress] $IPv4Address
+    )
 
-        Return [System.BitConverter]::ToUInt32($bytes,0)
-    }
+    $bytes = $IPv4Address.GetAddressBytes()
 
-    Function Convert-IntToIPv4 {
-        Param (
-            [Parameter(Mandatory = $true)]
-            [uint32]$Integer
-        )
+    Return [System.BitConverter]::ToUInt32($bytes,0)
+}
 
-        $bytes = [System.BitConverter]::GetBytes($Integer)
+Function Convert-IntToIPv4 {
+    Param (
+        [Parameter(Mandatory = $true)]
+        [uint32]$Integer
+    )
 
-        Return ([IPAddress]($bytes)).ToString()
-    }
+    $bytes = [System.BitConverter]::GetBytes($Integer)
+
+    Return ([IPAddress]($bytes)).ToString()
+}
 #endregion Non-Exported Helpers
 
 #region Helper Functions
-    Function Get-Connectivity {
-        param (
-            [string[]] $Nodes
-        )
+Function Get-ConnectivityMapping {
+    param (
+        [string[]] $Nodes,
+        [string[]] $IPTarget
+   )
 
-        $Mapper = @()
-        foreach ($thisNode in $Nodes) {
+    #TODO: Add IP Target disqualification if the addressState not eq not preferred
+
+    $Mapping = @()
+    $localIPs = (Get-NetIPAddress -AddressFamily IPv4 -Type Unicast).IPAddress
+
+    foreach ($IP in $IPTarget) {
+        $thisNode = (Resolve-DnsName -Name $IP -DnsOnly).NameHost.Split('.')[0]
+
+        if ($thisNode) { # Resolution Available
             if ($thisNode -eq $env:COMPUTERNAME) {
-                $AdapterIP = Get-NetIPAddress -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
+                $AdapterIP = Get-NetIPAddress -IPAddress $IP -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
                     Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
                 $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
 
                 $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
             }
-            else { 
+            else {
                 # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
-                $AdapterIP = Get-NetIPAddress -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
+                $AdapterIP = Get-NetIPAddress -IPAddress $IP -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
                                 Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
                 $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
@@ -167,7 +175,7 @@
                 $Result | Add-Member -MemberType NoteProperty -Name SubnetMask -Value $SubnetMask
                 $Result | Add-Member -MemberType NoteProperty -Name Network -Value $Network
                 $Result | Add-Member -MemberType NoteProperty -Name Subnet -Value $Subnet
-                    
+
                 if ($thisVMNetworkAdapter) {
                     $Result | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value $thisVMNetworkAdapter.Name
 
@@ -189,59 +197,169 @@
                     if ($thisNetAdapter.VlanID -in 0..4095) { $VLAN = $thisNetAdapter.VlanID }
                     else { $VLAN = 'Unsupported' } # In this case, the adapter does not support VLANs
                 }
-                    
+
                 $Result | Add-Member -MemberType NoteProperty -Name VLAN -Value $VLAN
 
                 $NodeOutput += $Result
             }
-
-            Remove-Variable AdapterIP -ErrorAction SilentlyContinue
-            
-            $Mapper += $NodeOutput
+        }
+        else { # No DNS Available; we should never get here if the prerequisites do their job
+            throw 'DNS Not available; required for remoting and to identify realistic system expectations.'
         }
 
-        Return $Mapper
+        $Mapping += $NodeOutput
+        Remove-Variable AdapterIP -ErrorAction SilentlyContinue
     }
 
-    Function Get-Jitter {
-        <#
-        .SYNOPSIS
-            This function takes input as a list of roundtriptimes and returns the jitter
-        #>
+    foreach ($thisNode in $Nodes) {
+        if ($thisNode -eq $env:COMPUTERNAME) {
+            $AdapterIP = Get-NetIPAddress -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
+                Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
-        param (
-            [String[]] $RoundTripTime
-        )
+            $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
 
-        0..($RoundTripTime.Count - 1) | ForEach-Object {
-            $Iteration = $_
+            $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
+        }
+        else {
+            # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
+            $AdapterIP = Get-NetIPAddress -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
+                            Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
-            $Difference = $RoundTripTime[$Iteration] - $RoundTripTime[$Iteration + 1]
-            $RTTDif += [Math]::Abs($Difference)
+            $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
+            $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
         }
 
-        return ($RTTDif / $RoundTripTime.Count).ToString('.#####')
+        $ClusRes = Get-ClusterResource -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Where { $_.OwnerGroup -eq 'Cluster Group' -and $_.ResourceType -eq 'IP Address' }
+        $ClusterIPs = ($ClustRes | Get-ClusterParameter -ErrorAction SilentlyContinue -Name Address).Value
+
+        $NodeOutput = @()
+        foreach ($thisAdapterIP in ($AdapterIP | Where IPAddress -NotIn $ClusterIPs)) {
+            $Result = New-Object -TypeName psobject
+            $thisNetAdapter = $NetAdapter | Where InterfaceIndex -eq $thisAdapterIP.InterfaceIndex
+            $thisVMNetworkAdapter = $VMNetworkAdapter | Where DeviceID -EQ $thisNetAdapter.DeviceID
+
+            $Result | Add-Member -MemberType NoteProperty -Name NodeName -Value $thisNode
+            $Result | Add-Member -MemberType NoteProperty -Name InterfaceAlias -Value $thisAdapterIP.InterfaceAlias
+            $Result | Add-Member -MemberType NoteProperty -Name InterfaceIndex -Value $thisAdapterIP.InterfaceIndex
+            $Result | Add-Member -MemberType NoteProperty -Name IPAddress -Value $thisAdapterIP.IPAddress
+            $Result | Add-Member -MemberType NoteProperty -Name PrefixLength -Value $thisAdapterIP.PrefixLength
+            $Result | Add-Member -MemberType NoteProperty -Name AddressState -Value $thisAdapterIP.AddressState
+            $Result | Add-Member -MemberType NoteProperty -Name InterfaceDescription -Value $thisNetAdapter.InterfaceDescription
+            $Result | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
+
+            $SubnetMask = Convert-CIDRToMask -PrefixLength $thisAdapterIP.PrefixLength
+            $SubNetInInt = Convert-IPv4ToInt -IPv4Address $SubnetMask
+            $IPInInt     = Convert-IPv4ToInt -IPv4Address $thisAdapterIP.IPAddress
+
+            $Network    = Convert-IntToIPv4 -Integer ($SubNetInInt -band $IPInInt)
+            $Subnet     = "$($Network)/$($thisAdapterIP.PrefixLength)"
+
+            $Result | Add-Member -MemberType NoteProperty -Name SubnetMask -Value $SubnetMask
+            $Result | Add-Member -MemberType NoteProperty -Name Network -Value $Network
+            $Result | Add-Member -MemberType NoteProperty -Name Subnet -Value $Subnet
+
+            if ($thisVMNetworkAdapter) {
+                $Result | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value $thisVMNetworkAdapter.Name
+
+                if ($thisVMNetworkAdapter.IsolationSetting.IsolationMode -eq 'VLAN') {
+                    $VLAN = $thisVMNetworkAdapter.IsolationSetting.DefaultIsolationID
+                }
+                elseif ($thisVMNetworkAdapter.VlanSetting.OperationMode -eq 'Access') {
+                    $VLAN = $thisVMNetworkAdapter.VlanSetting.AccessVlanId
+                }
+                elseif ($thisVMNetworkAdapter.IsolationSetting.IsolationMode -eq 'None' -and
+                        $thisVMNetworkAdapter.VlanSetting.OperationMode -eq 'Untagged') {
+                        $VLAN = '0'
+                }
+                else { $thisInterfaceDetails.VLAN = 'Unsupported by Test-NetStack' }
+            }
+            else {
+                $Result | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value 'Not Applicable'
+
+                if ($thisNetAdapter.VlanID -in 0..4095) { $VLAN = $thisNetAdapter.VlanID }
+                else { $VLAN = 'Unsupported' } # In this case, the adapter does not support VLANs
+            }
+
+            $Result | Add-Member -MemberType NoteProperty -Name VLAN -Value $VLAN
+
+            $NodeOutput += $Result
+        }
+
+        $Mapping += $NodeOutput
+        Remove-Variable AdapterIP -ErrorAction SilentlyContinue
     }
 
-    Function Get-Latency {
-        <#
-        .SYNOPSIS
-            This function takes input as a list of roundtriptimes and returns the latency
+   Return $Mapping
+}
 
-        .Description
-            This function assumes that input is in ms. Since LAT must be > 0 and ICMP only provides ms precision, we normalize 0 to 1s
-            This function assumes that all input was successful. Scrub input before sending to this function.
-        #>
+Function Get-TestableNetworksFromMapping {
+    param ( $Mapping )
 
-        param (
-            [String[]] $RoundTripTime
-        )
+    $VLANSupportedNets = $Mapping | Where-Object VLAN -ne 'Unsupported' | Group-Object Subnet, VLAN
+    $UsableNetworks  = $VLANSupportedNets | Where-Object Count -ne 1
 
-        $RTTNormalized = @()
-        $RTTNormalized = $RoundTripTime -replace 0, 1
-        $RTTNormalized | ForEach-Object { [int] $RTTNumerator = $RTTNumerator + $_ }
+    if ($UsableNetworks) { Return $UsableNetworks }
+    else { Return 'None Available' }
+}
 
-        return ($RTTNumerator / $RTTNormalized.Count).ToString('.###')
+Function Get-DisqualifiedNetworksFromMapping {
+    param ( $Mapping )
 
+    $VLANSupportedNets = $Mapping | Where-Object VLAN -ne 'Unsupported' | Group-Object Subnet, VLAN
+    $DisqualifiedByInterfaceCount = $VLANSupportedNets | Where-Object Count -eq 1
+    $DisqualifiedByVLANSupport    = $Mapping | Where-Object VLAN -eq 'Unsupported' | Group-Object Subnet, VLAN
+
+    $Disqualified = New-Object -TypeName psobject
+    if ($DisqualifiedByVLANSupport) {
+        $Disqualified | Add-Member -MemberType NoteProperty -Name VLANNotSupported -Value $DisqualifiedByVLANSupport
     }
+
+    if ($DisqualifiedByInterfaceCount) {
+        $Disqualified | Add-Member -MemberType NoteProperty -Name OneInterfaceInSubnet -Value $DisqualifiedByInterfaceCount
+    }
+
+    Return $Disqualified
+}
+
+Function Get-Jitter {
+    <#
+    .SYNOPSIS
+        This function takes input as a list of roundtriptimes and returns the jitter
+    #>
+
+    param (
+        [String[]] $RoundTripTime
+    )
+
+    0..($RoundTripTime.Count - 1) | ForEach-Object {
+        $Iteration = $_
+
+        $Difference = $RoundTripTime[$Iteration] - $RoundTripTime[$Iteration + 1]
+        $RTTDif += [Math]::Abs($Difference)
+    }
+
+    return ($RTTDif / $RoundTripTime.Count).ToString('.#####')
+}
+
+Function Get-Latency {
+    <#
+    .SYNOPSIS
+        This function takes input as a list of roundtriptimes and returns the latency
+
+    .Description
+        This function assumes that input is in ms. Since LAT must be > 0 and ICMP only provides ms precision, we normalize 0 to 1s
+        This function assumes that all input was successful. Scrub input before sending to this function.
+    #>
+
+    param (
+        [String[]] $RoundTripTime
+    )
+
+    $RTTNormalized = @()
+    $RTTNormalized = $RoundTripTime -replace 0, 1
+    $RTTNormalized | ForEach-Object { [int] $RTTNumerator = $RTTNumerator + $_ }
+
+    return ($RTTNumerator / $RTTNormalized.Count).ToString('.###')
+
+}
 #endregion Helper Functions
