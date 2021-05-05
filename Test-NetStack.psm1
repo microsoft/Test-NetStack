@@ -99,11 +99,11 @@ Function Test-NetStack {
 
         $Disqualified = New-Object -TypeName psobject
         if ($DisqualifiedByVLANSupport) {
-            $Disqualified | Add-Member -MemberType NoteProperty -Name VLAN         -Value $DisqualifiedByVLANSupport
+            $Disqualified | Add-Member -MemberType NoteProperty -Name VLANNotSupported -Value $DisqualifiedByVLANSupport
         }
 
         if ($DisqualifiedByInterfaceCount) {
-            $Disqualified | Add-Member -MemberType NoteProperty -Name OneIntSubnet -Value $DisqualifiedByInterfaceCount
+            $Disqualified | Add-Member -MemberType NoteProperty -Name OneInterfaceInSubnet -Value $DisqualifiedByInterfaceCount
         }
 
         # These are the disqualified networks and adapters. Will keep this for reporting.
@@ -127,92 +127,109 @@ Function Test-NetStack {
     #endregion Connectivity Maps
 
     # Get the IPs on the local system so you can avoid invoke-command 
-    $global:localIPs = (Get-NetIPAddress -AddressFamily IPv4 -Type Unicast).IPAddress
+    $localIPs = (Get-NetIPAddress -AddressFamily IPv4 -Type Unicast).IPAddress
 
     Switch ( $Stage | Sort-Object ) {
         '1' { # Connectivity and PMTUD
 
             Write-Host "Beginning Stage 1 - Connectivity and PMTUD - $([System.DateTime]::Now)"
+
+            $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PWD -ChildPath 'Helpers\*') -Include '*.psm1'
+            $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }            
+
+            $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
+            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
+            $RunspacePool.Open()
+
+            $AllJobs = @()
             $StageResults = @()
 
             if ($IPTarget) {
                 foreach ($thisSource in $Mapping) {
-                    #Write-Progress -Id 0 -Activity 'Source Progression' -Status "Testing ICMP from Source $thisSource" -PercentComplete (($sourcesCompleted / $Mapping.Count) * 100)
                     $targets = $Mapping -ne $thisSource
+                    $thisComputerName = (Resolve-DnsName -Name $thisSource -DnsOnly).NameHost.Split('.')[0]
 
                     $thisSourceResult = @()
-                    $targetsCompleted = 0
-
                     $targets | ForEach-Object {
                         $thisTarget = $_
-                        $thisComputerName = (Resolve-DnsName -Name $thisSource -DnsOnly).NameHost.Split('.')[0]
 
-                        $Result = New-Object -TypeName psobject
-                        $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisComputerName
-                        $Result | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource
-                        $Result | Add-Member -MemberType NoteProperty -Name Destination -Value $thisTarget
+                        $PowerShell = [powershell]::Create()
+                        $PowerShell.RunspacePool = $RunspacePool
 
-                        #TODO: Find the configured MTU for the specific adapter;
-                        #      Then ensure that MSS + 42 is = Configured Value; Add Property that is pass/fail for this
+                        [void] $PowerShell.AddScript({
+                            param ( $thisComputerName, $thisSource, $thisTarget, $localIPs, $Definitions )
 
-                        Write-Host ":: $([System.DateTime]::Now) :: $thisSource -> $thisTarget [PMTUD]"
-                        
-                        # Calls the PMTUD parameter set in Invoke-ICMPPMTUD
-                        if ($thisSource -in $global:localIPs) {
-                            $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget
-                        }
-                        else {
-                            $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
-                                                                -ArgumentList $thisSource, $thisTarget `
-                                                                -ScriptBlock  ${Function:\Invoke-ICMPPMTUD}
-                        }
+                            if ($thisSource -in $localIPs) {
+                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget
+                            }
+                            else {
+                                $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
+                                                                   -ArgumentList $thisSource, $thisTarget `
+                                                                   -ScriptBlock  ${Function:\Invoke-ICMPPMTUD}
+                            }
 
-                        $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $thisSourceResult.Connectivity
-                        $Result | Add-Member -MemberType NoteProperty -Name MTU -Value $thisSourceResult.MTU
-                        $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
+                            $Result = New-Object -TypeName psobject
+                            $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisComputerName
+                            $Result | Add-Member -MemberType NoteProperty -Name Source         -Value $thisSource
+                            $Result | Add-Member -MemberType NoteProperty -Name Destination    -Value $thisTarget
+                            $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $thisSourceResult.Connectivity
+                            $Result | Add-Member -MemberType NoteProperty -Name MTU -Value $thisSourceResult.MTU
+                            $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
+                
+                            if ($thisSource -in $localIPs) {
+                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget -StartBytes $thisSourceMSS -Reliability
+                            }
+                            else {
+                                $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
+                                                                   -ArgumentList $thisSource, $thisTarget, $thisSourceResult.MSS , $null, $true `
+                                                                   -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
+                            }
+            
+                            $TotalSent   = $thisSourceResult.Count
+                            $TotalFailed = ($thisSourceResult -eq '-1').Count
+                            $SuccessPercentage = ([Math]::Round((100 - (($TotalFailed / $TotalSent) * 100)), 2))
 
-                        $thisSourceMSS = $thisSourceResult.MSS
-                        Write-Host ":: $([System.DateTime]::Now) :: $thisSource -> $thisTarget [Reliability]"
-                        
-                        # Calls the Reliability parameter set in icmp.psm1
-                        if ($thisSource -in $global:localIPs) {
-                            $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget -StartBytes $thisSourceMSS -Reliability
-                        }
-                        else {
-                            $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
-                                                                -ArgumentList $thisSource, $thisTarget, $thisSourceMSS, $null, $true `
-                                                                -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
-                        }
+                            $Result | Add-Member -MemberType NoteProperty -Name TotalSent   -Value $TotalSent
+                            $Result | Add-Member -MemberType NoteProperty -Name TotalFailed -Value $TotalFailed
+                            $Result | Add-Member -MemberType NoteProperty -Name Reliability -Value $SuccessPercentage
 
-                        $TotalSent   = $thisSourceResult.Count
-                        $TotalFailed = ($thisSourceResult -eq '-1').Count
-                        $SuccessPercentage = ([Math]::Round((100 - (($TotalFailed / $TotalSent) * 100)), 2))
-                        
-                        $Result | Add-Member -MemberType NoteProperty -Name TotalSent   -Value $TotalSent
-                        $Result | Add-Member -MemberType NoteProperty -Name TotalFailed -Value $TotalFailed
-                        $Result | Add-Member -MemberType NoteProperty -Name Reliability -Value $SuccessPercentage
-                        #$Result | Add-Member -MemberType NoteProperty -Name PacketLoss -Value $PacketLoss
-
-                        # -1 (no response) will be ignored for LAT and JIT
-                        $Latency = Get-Latency -RoundTripTime ($thisSourceResult -ne -1)
-                        $Jitter  = Get-Jitter  -RoundTripTime ($thisSourceResult -ne -1)
+                            # -1 (no response) will be ignored for LAT and JIT
+                            $Latency = Get-Latency -RoundTripTime ($thisSourceResult -ne -1)
+                            $Jitter  = Get-Jitter  -RoundTripTime ($thisSourceResult -ne -1)
                             
-                        $Result | Add-Member -MemberType NoteProperty -Name Latency -Value $Latency
-                        $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $Jitter
+                            $Result | Add-Member -MemberType NoteProperty -Name Latency -Value $Latency
+                            $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $Jitter
 
-                        if ($TotalSent         -ge $Definitions.Reliability.ICMPSent        -and
-                            $SuccessPercentage -ge $Definitions.Reliability.ICMPReliability -and
-                            $PacketLoss        -le $Definitions.Reliability.ICMPPacketLoss  -and 
-                            $Latency           -le $Definitions.Reliability.ICMPLatency  -and 
-                            $Jitter            -le $Definitions.Reliability.ICMPJitter) {
-                            $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Pass'
-                        }
-                        else { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Fail' } #TODO: Update this with specific failure reasons
+                            #TODO: Check if stage value is passed into the runspace; otherwise this section may be broken
+                            if ($TotalSent         -ge $Definitions.Reliability.ICMPSent        -and
+                                $SuccessPercentage -ge $Definitions.Reliability.ICMPReliability -and
+                                $PacketLoss        -le $Definitions.Reliability.ICMPPacketLoss  -and 
+                                $Latency           -le $Definitions.Reliability.ICMPLatency  -and 
+                                $Jitter            -le $Definitions.Reliability.ICMPJitter) {
+                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass'
+                            }
+                            else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' } #TODO: Update this with specific failure reasons
                         
-                        $StageResults += $Result
-                        $targetsCompleted ++
+                            return $Result
+                        })
 
-                        Remove-Variable Result -ErrorAction SilentlyContinue
+                        $param = @{
+                            thisComputerName = $thisComputerName
+                            thisSource  = $thisSource
+                            thisTarget  = $thisTarget
+                            localIPs    = $localIPs
+                            Definitions = $Definitions
+                        }
+
+                        [void] $PowerShell.AddParameters($param)
+
+                        Write-Host ":: $([System.DateTime]::Now) :: [Started] $thisSource -> $thisTarget"
+                        $asyncJobObj = @{ JobHandle   = $PowerShell
+                                          AsyncHandle = $PowerShell.BeginInvoke() }
+
+                        $AllJobs += $asyncJobObj
+                        #Remove-Variable Result -ErrorAction SilentlyContinue
                     }
                 }
             }
@@ -227,85 +244,104 @@ Function Test-NetStack {
                         $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
                             $thisTarget = $_
 
-                            $Result = New-Object -TypeName psobject
-                            $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisSource.NodeName
-                            $Result | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource.IPAddress
-                            $Result | Add-Member -MemberType NoteProperty -Name Destination -Value $thisTarget.IPaddress
+                            $PowerShell = [powershell]::Create()
+                            $PowerShell.RunspacePool = $RunspacePool
 
-                            #TODO: Find the configured MTU for the specific adapter;
-                            #      Then ensure that MSS + 42 is = Configured Value; Add Property that is pass/fail for this
+                            [void] $PowerShell.AddScript({
+                                param ( $thisComputerName, $thisSource, $thisTarget, $localIPs, $Definitions )
 
-	                    Write-Host ":: $([System.DateTime]::Now) :: $($thisSource.NodeName) [$($thisSource.IPAddress)] -> $($thisTarget.NodeName) [$($thisTarget.IPaddress)] [PMTUD]"
-                            # Calls the PMTUD parameter set in Invoke-ICMPPMTUD
-                            if ($thisSource.IPAddress -in $global:localIPs) {
-                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress
-                            }
-                            else {
-                                $thisSourceResult = Invoke-Command -ComputerName $thisSource.NodeName `
-                                                                    -ArgumentList $thisSource.IPAddress, $thisTarget.IPAddress `
-                                                                    -ScriptBlock  ${Function:\Invoke-ICMPPMTUD}
-                            }
+                                if ($thisSource -in $localIPs) {
+                                    $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget
+                                }
+                                else {
+                                    $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
+                                                                       -ArgumentList $thisSource, $thisTarget `
+                                                                       -ScriptBlock  ${Function:\Invoke-ICMPPMTUD}
+                                }
 
-                            $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $thisSourceResult.Connectivity
-                            $Result | Add-Member -MemberType NoteProperty -Name MTU -Value $thisSourceResult.MTU
-                            $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
+                                $Result = New-Object -TypeName psobject
+                                $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisComputerName
+                                $Result | Add-Member -MemberType NoteProperty -Name Source         -Value $thisSource
+                                $Result | Add-Member -MemberType NoteProperty -Name Destination    -Value $thisTarget
+                                $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $thisSourceResult.Connectivity
+                                $Result | Add-Member -MemberType NoteProperty -Name MTU -Value $thisSourceResult.MTU
+                                $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
+                
+                                if ($thisSource -in $localIPs) {
+                                    $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget -StartBytes $thisSourceMSS -Reliability
+                                }
+                                else {
+                                    $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
+                                                                       -ArgumentList $thisSource, $thisTarget, $thisSourceResult.MSS , $null, $true `
+                                                                       -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
+                                }
+            
+                                $TotalSent   = $thisSourceResult.Count
+                                $TotalFailed = ($thisSourceResult -eq '-1').Count
+                                $SuccessPercentage = ([Math]::Round((100 - (($TotalFailed / $TotalSent) * 100)), 2))
 
-                            $thisSourceMSS = $thisSourceResult.MSS
+                                $Result | Add-Member -MemberType NoteProperty -Name TotalSent   -Value $TotalSent
+                                $Result | Add-Member -MemberType NoteProperty -Name TotalFailed -Value $TotalFailed
+                                $Result | Add-Member -MemberType NoteProperty -Name Reliability -Value $SuccessPercentage
 
-                            # Need to use the NodeName Property in case there is only 1 target. Count method would not be available.
-                            $numTargets = ($thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName).NodeName.Count
-
-	                    Write-Host ":: $([System.DateTime]::Now) :: $($thisSource.NodeName) [$($thisSource.IPAddress)] -> $($thisTarget.NodeName) [$($thisTarget.IPaddress)] [Reliability]"
-                            # Calls the Reliability parameter set in icmp.psm1
-                            if ($thisSource.IPAddress -in $global:localIPs) {
-                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress -StartBytes $thisSourceMSS -Reliability
-                            }
-                            else {
-                                $thisSourceResult = Invoke-Command -ComputerName $thisSource.NodeName `
-                                                                    -ArgumentList $thisSource.IPAddress, $thisTarget.IPAddress, $thisSourceMSS, $null, $true `
-                                                                    -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
-                            }
-
-                            $TotalSent   = $thisSourceResult.Count
-                            $TotalFailed = ($thisSourceResult -eq '-1').Count
-                            $SuccessPercentage = ([Math]::Round((100 - (($TotalFailed / $TotalSent) * 100)), 2))
-                            #$PacketLoss  = ((($thisSourceResult -eq '-1').Count / $thisSourceResult.Count) * 100).ToString('###.##')
-
-                            $Result | Add-Member -MemberType NoteProperty -Name TotalSent   -Value $TotalSent
-                            $Result | Add-Member -MemberType NoteProperty -Name TotalFailed -Value $TotalFailed
-                            $Result | Add-Member -MemberType NoteProperty -Name Reliability -Value $SuccessPercentage
-                            #$Result | Add-Member -MemberType NoteProperty -Name PacketLoss -Value $PacketLoss
-
-                            # -1 (no response) will be ignored for LAT and JIT
-                            $Latency = Get-Latency -RoundTripTime ($thisSourceResult -ne -1)
-                            $Jitter  = Get-Jitter  -RoundTripTime ($thisSourceResult -ne -1)
+                                # -1 (no response) will be ignored for LAT and JIT
+                                $Latency = Get-Latency -RoundTripTime ($thisSourceResult -ne -1)
+                                $Jitter  = Get-Jitter  -RoundTripTime ($thisSourceResult -ne -1)
                             
-                            $Result | Add-Member -MemberType NoteProperty -Name Latency -Value $Latency
-                            $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $Jitter
+                                $Result | Add-Member -MemberType NoteProperty -Name Latency -Value $Latency
+                                $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $Jitter
 
-                            if ($TotalSent         -ge $Definitions.Reliability.ICMPSent        -and
-                                $SuccessPercentage -ge $Definitions.Reliability.ICMPReliability -and
-                                $PacketLoss        -le $Definitions.Reliability.ICMPPacketLoss  -and 
-                                $Latency           -le $Definitions.Reliability.ICMPLatency  -and 
-                                $Jitter            -le $Definitions.Reliability.ICMPJitter) {
-                                $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Pass'
+                                #TODO: Check if stage value is passed into the runspace; otherwise this section may be broken
+                                if ($TotalSent         -ge $Definitions.Reliability.ICMPSent        -and
+                                    $SuccessPercentage -ge $Definitions.Reliability.ICMPReliability -and
+                                    $PacketLoss        -le $Definitions.Reliability.ICMPPacketLoss  -and 
+                                    $Latency           -le $Definitions.Reliability.ICMPLatency  -and 
+                                    $Jitter            -le $Definitions.Reliability.ICMPJitter) {
+                                    $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass'
+                                }
+                                else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' } #TODO: Update this with specific failure reasons
+                        
+
+                                return $Result
+                            })
+
+                            $param = @{
+                                thisComputerName = $thisSource.NodeName
+                                thisSource  = $thisSource.IPAddress
+                                thisTarget  = $thisTarget.IPaddress
+                                localIPs    = $localIPs
+                                Definitions = $Definitions
                             }
-                            else { $Result | Add-Member -MemberType NoteProperty -Name StageStatus -Value 'Fail' } #TODO: Update this with specific failure reasons
 
-                            $StageResults += $Result
-                            $targetsCompleted ++
+                            [void] $PowerShell.AddParameters($param)
 
+                            Write-Host ":: $([System.DateTime]::Now) :: [Started] ($($thisSource.NodeName)) $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
+                            $asyncJobObj = @{ JobHandle   = $PowerShell
+                                              AsyncHandle = $PowerShell.BeginInvoke() }
+
+                            $AllJobs += $asyncJobObj
                             Remove-Variable Result -ErrorAction SilentlyContinue
                         }
-
-                        $sourcesCompleted ++
-                        Remove-Variable targetsCompleted -ErrorAction SilentlyContinue
                     }
-
-                    # $NetworksCompleted ++
-                    Remove-Variable sourcesCompleted -ErrorAction SilentlyContinue
                 }
             }
+
+            While ($AllJobs -ne $null) {
+                $AllJobs | Where-Object { $_.AsyncHandle.IsCompleted } | ForEach-Object {
+                    $thisJob = $_
+                    $StageResults += $thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)
+                    $thisSourceHostName = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).SourceHostName
+                    $thisSource = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).Source
+                    $thisTarget = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).Destination
+
+                    $AllJobs = $AllJobs -ne $thisJob
+
+                    Write-Host ":: $([System.DateTime]::Now) :: [Completed] ($thisSourceHostName) $($thisSource) -> $($thisTarget)"
+                } 
+            }
+
+            $RunspacePool.Close()
+            $RunspacePool.Dispose()
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage1 -Value $StageResults
 
