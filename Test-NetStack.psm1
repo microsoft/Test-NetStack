@@ -328,7 +328,7 @@ Function Test-NetStack {
         '2' { # TCP CTS Traffic
             Write-Host "Beginning Stage 2 - TCP - $([System.DateTime]::Now)"
             $StageResults = @()
-
+     
             if ($IPTarget) {
                 $NodeList = @()
 
@@ -371,7 +371,7 @@ Function Test-NetStack {
 
                 Remove-Variable -Name VLANSupportedNets, Disqualified, DisqualifiedByVLANSupport, DisqualifiedByInterfaceCount -ErrorAction SilentlyContinue
             }
-
+            
             $TestableNetworks | ForEach-Object {
                 $thisTestableNet = $_
 
@@ -383,9 +383,9 @@ Function Test-NetStack {
                         $thisTarget = $_
 
                         $Result = New-Object -TypeName psobject
-                        $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisSource.NodeName
-                        $Result | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource.IPAddress
-                        $Result | Add-Member -MemberType NoteProperty -Name Destination -Value $thisTarget.IPaddress
+                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
+                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
+                        $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisTarget.IPaddress
 
                         $thisSourceResult = Invoke-TCP -Receiver $thisSource -Sender $thisTarget
 
@@ -396,14 +396,16 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
 
                         $ThroughputPercentageDec = [Double]$Definitions.TCPPerf.TPUT / 100.0
-                        $AcceptableThroughput = $thisSourceResult.RawData.MinLinkSpeedBitsPerSecond * $ThroughputPercentageDec
+                        $AcceptableThroughput = $thisSourceResult.RawData.MinLinkSpeedbps * $ThroughputPercentageDec
 
+                        <#
                         $Success = ($thisSourceResult.RawData.ServerRxbps -gt $AcceptableThroughput) -and `
                                     ($thisSourceResult.RawData.ServerTxbps -gt $AcceptableThroughput) -and `
                                     ($thisSourceResult.RawData.ClientRxbps -gt $AcceptableThroughput) -and `
                                     ($thisSourceResult.RawData.ClientTxbps -gt $AcceptableThroughput)
+                        #>
 
-                        if ($Success) { $Result | Add-Member -MemberType NoteProperty -Name LinkStatus -Value 'Pass' }
+                        if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge [Double]$Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name LinkStatus -Value 'Pass' }
                         else { $Result | Add-Member -MemberType NoteProperty -Name LinkStatus -Value 'Fail' }
 
                         $StageResults += $Result
