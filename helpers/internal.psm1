@@ -31,12 +31,20 @@ Class TCPPerf {
     TCPPerf () {}
 }
 
+Class NDKPerf {
+        # Min TPUT by % of link speed
+        [int] $TPUT = '90'
+
+    NDKPerf () {}
+}
+
 
 # Stuff All Analysis Classes in Here
 Class Analyzer {
     $MTU         = [MTU]::new()
     $Reliability = [Reliability]::new()
     $TCPPerf     = [TCPPerf]::new()
+    $NDKPerf     = [NDKPerf]::new()
 
     Analyzer () {}
 }
@@ -133,7 +141,7 @@ Function Get-ConnectivityMapping {
             if ($thisNode -eq $env:COMPUTERNAME) {
                 $AdapterIP = Get-NetIPAddress -IPAddress $IP -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
                     Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
-
+                
                 $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
 
                 $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
@@ -144,7 +152,7 @@ Function Get-ConnectivityMapping {
                 # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
                 $AdapterIP = Get-NetIPAddress -IPAddress $IP -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
                                 Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
-
+                
                 $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
                 $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
                 $RDMAAdapter = Get-NetAdapterRdma -CimSession $thisNode -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
