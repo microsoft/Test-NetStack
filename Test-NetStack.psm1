@@ -211,7 +211,7 @@ Function Test-NetStack {
                 }
             }
             elseif ($Nodes) {
-                $TestableNets | ForEach-Object {
+                $TestableNetworks | ForEach-Object {
                     $thisTestableNet = $_
 
                     $thisTestableNet.Group | ForEach-Object {
@@ -340,22 +340,23 @@ Function Test-NetStack {
 
                         $Result = New-Object -TypeName psobject
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
-                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
                         $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisTarget.IPaddress
-
+                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
+                        
                         $thisSourceResult = Invoke-TCP -Receiver $thisSource -Sender $thisTarget
 
-                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
-                        $Result | Add-Member -MemberType NoteProperty -Name ReceivedGbps -Value $thisSourceResult.ReceivedGbps
-                        $Result | Add-Member -MemberType NoteProperty -Name ReceivedPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
+                        $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
+                        $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.ReceivedGbps
+                        $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
                         $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.TCPPerf.TPUT
-                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
-
+                        
                         $ThroughputPercentageDec = [Double]$Definitions.TCPPerf.TPUT / 100.0
                         $AcceptableThroughput = $thisSourceResult.RawData.MinLinkSpeedbps * $ThroughputPercentageDec
 
-                        if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge [Double]$Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name LinkStatus -Value 'Pass' }
-                        else { $Result | Add-Member -MemberType NoteProperty -Name LinkStatus -Value 'Fail' }
+                        if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge [Double]$Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                        else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+
+                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
 
                         $StageResults += $Result
                         Remove-Variable Result -ErrorAction SilentlyContinue
@@ -381,13 +382,15 @@ Function Test-NetStack {
                         $thisTarget = $_
 
                         $Result = New-Object -TypeName psobject
-                        $Result | Add-Member -MemberType NoteProperty -Name ServerHostName -Value $thisSource.NodeName
-                        $Result | Add-Member -MemberType NoteProperty -Name Server -Value $thisSource.IPAddress
-                        $Result | Add-Member -MemberType NoteProperty -Name Client -Value $thisTarget.IPaddress
+                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
+                        $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisTarget.IPaddress
+                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
 
                         $thisSourceResult = Invoke-NDKPing -Server $thisSource -Client $thisTarget
 
-                        $Result | Add-Member -MemberType NoteProperty -Name ServerSuccess -Value $thisSourceResult.ServerSuccess
+                        if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                        else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+
                         $StageResults += $Result
                         Remove-Variable Result -ErrorAction SilentlyContinue
                     }
@@ -411,20 +414,21 @@ Function Test-NetStack {
                         $thisTarget = $_
 
                         $Result = New-Object -TypeName psobject
-                        $Result | Add-Member -MemberType NoteProperty -Name ServerHostName -Value $thisSource.NodeName
-                        $Result | Add-Member -MemberType NoteProperty -Name Server -Value $thisSource.IPAddress
-                        $Result | Add-Member -MemberType NoteProperty -Name Client -Value $thisTarget.IPaddress
+                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
+                        $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisTarget.IPaddress
+                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
 
-                        $thisSourceResult = Invoke-NDKPerf1to1 -Server $thisSource -Client $thisTarget -ExpectedTPUT $Definitions.NDKPerf.TPUT -Verbose
+                        $thisSourceResult = Invoke-NDKPerf1to1 -Server $thisSource -Client $thisTarget -ExpectedTPUT $Definitions.NDKPerf.TPUT
 
-                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
-                        $Result | Add-Member -MemberType NoteProperty -Name ReceivedGbps -Value $thisSourceResult.ReceivedGbps
-                        $Result | Add-Member -MemberType NoteProperty -Name ReceivedPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
+                        $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
+                        $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.ReceivedGbps
+                        $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
                         $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.NDKPerf.TPUT
-                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
 
                         if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge [Double]$Definitions.NDKPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
                         else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+
+                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
 
                         $StageResults += $Result
                         Remove-Variable Result -ErrorAction SilentlyContinue
