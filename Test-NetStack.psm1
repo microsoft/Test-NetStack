@@ -350,10 +350,10 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
                         $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.TCPPerf.TPUT
                         
-                        $ThroughputPercentageDec = [Double]$Definitions.TCPPerf.TPUT / 100.0
+                        $ThroughputPercentageDec = $Definitions.TCPPerf.TPUT / 100.0
                         $AcceptableThroughput = $thisSourceResult.RawData.MinLinkSpeedbps * $ThroughputPercentageDec
 
-                        if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge [Double]$Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                        if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
                         else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
 
                         $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
@@ -425,7 +425,7 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
                         $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.NDKPerf.TPUT
 
-                        if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge [Double]$Definitions.NDKPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                        if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.NDKPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
                         else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
 
                         $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData

@@ -179,7 +179,7 @@ function Invoke-NDKPerf1to1 {
 
     $ReceiverLinkSpeedGbps = [Math]::Round(($ServerLinkSpeedBps * 8) * [Math]::Pow(10, -9), 2)
     $ReceivedGbps = [Math]::Round(($ServerBytesPerSecond * 8) * [Math]::Pow(10, -9), 2)
-    $ReceivedPctgOfLinkSpeed = [Math]::Round(($ServerBytesPerSecond / $ServerLinkSpeedBps) * 100, 2)
+    $ReceivedPctgOfLinkSpeed = [Math]::Round(($ReceivedGbps / $ReceiverLinkSpeedGbps) * 100, 2)
 
     $NDKPerf1to1Results | Add-Member -MemberType NoteProperty -Name ReceiverLinkSpeedGbps -Value $ReceiverLinkSpeedGbps
     $NDKPerf1to1Results | Add-Member -MemberType NoteProperty -Name ReceivedGbps -Value $ReceivedGbps
