@@ -74,7 +74,7 @@ function Invoke-TCP {
         Invoke-Command -ComputerName $ServerName `
         -ScriptBlock { 
             param([string]$ServerIP)
-            cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$ServerIP -consoleverbosity:1 -ServerExitLimit:64 -pattern:duplex" 
+            cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$ServerIP -consoleverbosity:1 -ServerExitLimit:64 -TimeLimit:20000 -pattern:duplex" 
          } `
          -ArgumentList $ServerIP
     } `

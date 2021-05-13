@@ -438,7 +438,32 @@ Function Test-NetStack {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage4 -Value $StageResults
             Write-Host "Completed Stage 4 - NDK Perf 1:1 - $([System.DateTime]::Now)"
         }
-        '5' {  }
+        '5' { 
+            Write-Host "Beginning Stage 5 - NDK Perf N:1 - $([System.DateTime]::Now)"
+            $StageResults = @()
+            $TestableNetworks | ForEach-Object {
+                $thisTestableNet = $_
+
+                $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
+                    $thisSource = $_
+                    #$thisSourceResult = @()
+                    $ClientNetwork = @($thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object -FilterScript { $_.RDMAEnabled })
+                    #$ClientNetwork = $thisTestableNet.Group
+                    $thisSourceResult = Invoke-NDKPerfNto1 -Server $thisSource -ClientNetwork $ClientNetwork
+
+                    $Result = New-Object -TypeName psobject
+                    $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
+                    $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
+                    $Result | Add-Member -MemberType NoteProperty -Name NClientResults -Value $thisSourceResult.NClientResults
+                    $Result | Add-Member -MemberType NoteProperty -Name ClientNetworksTested -Value $thisSourceResult.ClientNetworksTested
+
+                    $StageResults += $Result
+                    Remove-Variable Result -ErrorAction SilentlyContinue
+                }
+            }
+            $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage5 -Value $StageResults
+            Write-Host "Completed Stage 5 - NDK Perf N:1 - $([System.DateTime]::Now)"
+        }
         '6' {  }
     }
 
