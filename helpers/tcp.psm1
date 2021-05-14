@@ -112,7 +112,7 @@ function Invoke-TCP {
         Invoke-Command -ComputerName $ClientName `
         -ScriptBlock { 
             param([string]$ServerIP,[string]$ClientIP,[string]$ClientLinkSpeed)
-            cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$ServerIP -bind:$ClientIP -connections:64 -consoleverbosity:1 -iterations:2 -RateLimit:$ClientLinkSpeed -pattern:duplex"  
+            cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$ServerIP -bind:$ClientIP -connections:64 -consoleverbosity:1 -pattern:duplex"  
          } `
          -ArgumentList $ServerIP,$ClientIP,$ClientLinkSpeed
     } `
@@ -167,7 +167,7 @@ function Invoke-TCP {
 
     $ReceiverLinkSpeedGbps = [Math]::Round($ServerLinkSpeedBitsPerSecond * [Math]::Pow(10, -9), 2)
     $ReceivedGbps = [Math]::Round($ServerRecvBitsPerSecond * [Math]::Pow(10, -9), 2)
-    $ReceivedPercentageOfLinkSpeed = [Math]::Round(($ServerRecvBitsPerSecond / $ServerLinkSpeedBitsPerSecond) * 100, 2)
+    $ReceivedPercentageOfLinkSpeed = [Math]::Round(($ReceivedGbps / $ReceiverLinkSpeedGbps) * 100, 2)
 
     $TCPResults | Add-Member -MemberType NoteProperty -Name ReceiverLinkSpeedGbps -Value $ReceiverLinkSpeedGbps
     $TCPResults | Add-Member -MemberType NoteProperty -Name ReceivedGbps -Value $ReceivedGbps
