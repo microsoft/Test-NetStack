@@ -496,16 +496,24 @@ Function Test-NetStack {
 
         '4' {  
             Write-Host "Beginning Stage 4 - NDK Perf 1:1 - $([System.DateTime]::Now)"
-            $StageResults = @()
-            $TestableNetworks | ForEach-Object {
-                $thisTestableNet = $_
 
-                $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
-                    $thisSource = $_
-                    $thisSourceResult = @()
-                    
-                    $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
-                        $thisTarget = $_
+            $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PWD -ChildPath 'Helpers\*') -Include '*.psm1'
+            $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
+
+            $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
+            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
+            $RunspacePool.Open()
+
+            foreach ($group in $runspaceGroups) {
+                $GroupedJobs = @()
+                foreach ($pair in $group) {
+
+                    $PowerShell = [powershell]::Create()
+                    $PowerShell.RunspacePool = $RunspacePool
+
+                    [void] $PowerShell.AddScript({
+                        param ( $thisComputerName, $thisSource, $thisTarget, $localIPs, $Definitions )
 
                         $Result = New-Object -TypeName psobject
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
@@ -524,11 +532,44 @@ Function Test-NetStack {
 
                         $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
 
-                        $StageResults += $Result
-                        Remove-Variable Result -ErrorAction SilentlyContinue
+                        Return $Result
+                    })
+
+                    $param = @{
+                        thisComputerName = $pair.Source.NodeName
+                        thisSource  = $pair.Source
+                        thisTarget  = $pair.Target
+                        localIPs    = $localIPs
+                        Definitions = $Definitions
+                    }
+
+                    [void] $PowerShell.AddParameters($param)
+
+                    Write-Host ":: $([System.DateTime]::Now) :: [Started] $($pair.Source.IPAddress) -> ($($pair.Target.NodeName)) $($pair.Target.IPAddress)"
+                    $asyncJobObj = @{ JobHandle   = $PowerShell
+                                        AsyncHandle = $PowerShell.BeginInvoke() }
+
+                    $GroupedJobs += $asyncJobObj
+                }
+
+                While ($GroupedJobs -ne $null) {
+                    $GroupedJobs | Where-Object { $_.AsyncHandle.IsCompleted } | ForEach-Object {
+                        $thisJob = $_
+                        $StageResults += $thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)
+                        $thisReceiverHostName = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).ReceiverHostName
+                        $thisSource = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).Sender
+                        $thisTarget = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).Receiver
+
+                        $GroupedJobs = $GroupedJobs -ne $thisJob
+
+                        Write-Host ":: $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)"
                     }
                 }
             }
+
+            $RunspacePool.Close()
+            $RunspacePool.Dispose()
+            
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage4 -Value $StageResults
             Write-Host "Completed Stage 4 - NDK Perf 1:1 - $([System.DateTime]::Now)"
         }

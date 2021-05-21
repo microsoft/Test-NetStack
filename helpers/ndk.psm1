@@ -59,8 +59,6 @@ function Invoke-NDKPerf1to1 {
         [int] $ExpectedTPUT
     )
 
-    Write-Host ":: $([System.DateTime]::Now) :: $($Client.NodeName) [$($Client.IPaddress)] -> $($Server.NodeName) [$($Server.IPAddress)] [NDK Perf 1:1]"
-
     $NDKPerf1to1Results = New-Object -TypeName psobject
 
     $ServerLinkSpeed = $Server.LinkSpeed.split(" ")
