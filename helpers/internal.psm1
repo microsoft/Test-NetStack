@@ -349,6 +349,52 @@ Function Get-DisqualifiedNetworksFromMapping {
     Return $Disqualified
 }
 
+Function Get-RunspaceGroups {
+    param ( $TestableNetworks )
+    # create list of all valid source->target pairs
+    $allPairs = @()
+    $TestableNetworks | ForEach-Object {
+        $thisTestableNet = $_
+        $thisTestableNet.Group | ForEach-Object {
+            $thisSource = $_
+            $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
+                $thisTarget = $_
+                $thisPair = New-Object -TypeName psobject
+                $thisPair | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource
+                $thisPair | Add-Member -MemberType NoteProperty -Name Target -Value $thisTarget
+                $allPairs += $thisPair
+            }
+        }
+    }
+
+    # build up groups of pairs that can be run simultaneously - no common elements
+    $runspaceGroups = @()
+    while ($allPairs -ne $null) {
+        $allPairs | ForEach-Object {
+            $thisPair = $_
+            $added = $false
+            for ($i = 0; $i -lt $runspaceGroups.Count; $i++) {
+                $invalidGroup = $false
+                foreach ($pair in $runspaceGroups[$i]) {
+                    if (($pair.Source -eq $thisPair.Source) -or ($pair.Target -eq $thisPair.Target) -or ($pair.Source -eq $thisPair.Target) -or ($pair.Target -eq $thisPair.Source)) {
+                        $invalidGroup = $true
+                    }
+                }
+                if (!$invalidGroup -and !$added) {
+                    $runspaceGroups[$i] += $thisPair
+                    $added = $true
+                }
+            }
+            if (!$added) {
+                $runspaceGroups += , @($thisPair)
+            }
+            $allPairs = $allPairs -ne $thisPair
+        }
+    }
+
+    Return $runspaceGroups
+}
+
 Function Get-Jitter {
     <#
     .SYNOPSIS

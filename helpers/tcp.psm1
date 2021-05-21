@@ -8,8 +8,6 @@ function Invoke-TCP {
         [PSObject] $Sender
     )
 
-    Write-Host ":: $([System.DateTime]::Now) :: $($Sender.NodeName) [$($Sender.IPaddress)] -> $($Receiver.NodeName) [$($Receiver.IPAddress)] [CTS Traffic]"
-
     $TCPResults = New-Object -TypeName psobject
 
     if (!($Receiver.IPAddress -in $global:localIPs) -and !(Invoke-Command -ComputerName $Receiver.NodeName -ScriptBlock { Test-Path -Path "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" })) {

@@ -8,8 +8,6 @@ function Invoke-NDKPing {
         [PSObject] $Client
     )
 
-    Write-Host ":: $([System.DateTime]::Now) :: $($Client.NodeName) [$($Client.IPaddress)] -> $($Server.NodeName) [$($Server.IPAddress)] [NDK Ping]"
-
     $NDKPingResults = New-Object -TypeName psobject
 
     $ServerOutput = Start-Job `
@@ -393,4 +391,145 @@ function Invoke-NDKPerfNto1 {
     $NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name ClientNetworksTested -Value $ClientNetworksTested
     $NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name NClientResults -Value $NClientResults
     Return $NDKPerfNto1Results
+}
+
+
+function Invoke-NDKPerfNtoN {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true, Position=0)]
+        [PSObject] $ServerList,
+
+        [Parameter(Mandatory=$true, Position=1)]
+        [PSObject] $ClientNetwork
+    )
+
+    $NDKPerfNtoNResults = New-Object -TypeName psobject
+    $ClientNetworksTested = @()
+    $NClientResults = @()
+    $ResultString = ""
+
+    $j = 9000
+    $ServerList | ForEach-Object {
+
+        $RandomClientNodes = If ($ClientNetwork.Count -eq 1) { $ClientNetwork[0] } Else { $ClientNetwork[0..$i] }
+        $N = $RandomClientNodes.Count
+        if ($ClientNetworksTested) { $ClientNetworksTested = $ClientNetworksTested, $RandomClientNodes.IPAddress }
+        else { $ClientNetworksTested = $RandomClientNodes.IPAddress }
+
+        $ServerOutput = @()
+        $ClientOutput = @()
+        $ServerCounter = @()
+        $ClientCounter = @()
+        $ServerSuccess = $True
+        $MultiClientSuccess = $True
+
+        $RandomClientNodes | ForEach-Object {
+            Start-Sleep -Seconds 1
+                        
+            $ClientName = $_.NodeName
+            $ClientIP = $_.IPAddress
+            $ClientIF = $_.InterfaceIndex
+            $ClientInterfaceDescription = $_.InterfaceDescription
+            $ClientLinkSpeed = [Int]::Parse($_.LinkSpeed.Split()[0]) * [Math]::Pow(10, 9) / 8
+            $ServerLinkSpeed = [Int]::Parse($Server.LinkSpeed.Split()[0]) * [Math]::Pow(10, 9) / 8
+
+            $ServerCounter += Start-Job `
+            -ScriptBlock {
+                param([string]$ServerName,[string]$ServerInterfaceDescription)
+                Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 20 #-ErrorAction Ignore
+            } `
+            -ArgumentList $Server.NodeName,$Server.InterfaceDescription
+
+            $ServerOutput += Start-Job `
+            -ScriptBlock {
+                param([string]$ServerName,[string]$ServerIP,[string]$ServerIF,[int]$j)
+                Invoke-Command -ComputerName $ServerName `
+                -ScriptBlock {
+                    param([string]$ServerIP,[string]$ServerIF,[int]$j)
+                    cmd /c "NdkPerfCmd.exe -S -ServerAddr $($ServerIP):$j  -ServerIf $ServerIF -TestType rperf -W 20 2>&1" 
+                } `
+                -ArgumentList $ServerIP,$ServerIF,$j
+            } `
+            -ArgumentList $Server.NodeName,$Server.IPAddress,$Server.InterfaceIndex,$j
+
+            $ClientCounter += Start-Job `
+            -ScriptBlock {
+                param([string]$ClientName,[string]$ClientInterfaceDescription)
+                Get-Counter -ComputerName $ClientName -Counter "\RDMA Activity($ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 20
+            } `
+            -ArgumentList $ClientName,$ClientInterfaceDescription
+
+            $ClientOutput += Start-Job `
+            -ScriptBlock {
+                param([string]$ClientName,[string]$ServerIP,[string]$ClientIP,[string]$ClientIF,[int]$j)
+                Invoke-Command -Computername $ClientName `
+                -ScriptBlock {
+                    param([string]$ServerIP,[string]$ClientIP,[string]$ClientIF,[int]$j)
+                    cmd /c "NdkPerfCmd.exe -C -ServerAddr  $($ServerIP):$j -ClientAddr $($ClientIP) -ClientIf $($ClientIF) -TestType rperf 2>&1" 
+                } `
+                -ArgumentList $ServerIP,$ClientIP,$ClientIF,$j
+            } `
+            -ArgumentList $ClientName,$Server.IPAddress,$ClientIP,$ClientIF,$j
+
+            Start-Sleep -Seconds 1
+            $j++
+        }
+                        
+        Start-Sleep -Seconds 20
+        Write-Host "##################################################`r`n"
+        $ServerBytesPerSecond = 0
+        $k = 0
+        $ServerCounter | ForEach-Object {
+                            
+            $read = Receive-Job $_
+
+            $FlatServerOutput = $read.Readings.split(":") | ForEach-Object {
+                try {[uint64]($_) * 8} catch{}
+            }
+            $ServerBytesPerSecond = ($FlatServerOutput | Measure-Object -Maximum).Maximum
+            $ServerSuccess = $ServerSuccess -and ($ServerBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8)
+                            
+            $k++
+        }
+        $ResultString += "| ($Server.NodeName)`t`t| ($Server.IPAddress)`t| $ServerBytesPerSecond `t`t|" 
+
+        $ServerOutput | ForEach-Object {
+            $job = Receive-Job $_
+            Write-Host $job
+        }
+        Write-Host "`r`n##################################################`r`n"
+
+        $k = 0
+        $ClientCounter | ForEach-Object {
+                            
+            $written = Receive-Job $_
+            $FlatClientOutput = $written.Readings.split(":") | ForEach-Object {
+                try {[uint64]($_) * 8} catch{}
+            }
+            $ClientName = $RandomClientNodes[$k].NodeName
+            $ClientBytesPerSecond = ($FlatClientOutput | Measure-Object -Maximum).Maximum
+            $IndividualClientSuccess = ($ClientBytesPerSecond -gt ($ServerLinkSpeed, $ClientLinkSpeed | Measure-Object -Minimum).Minimum * .8)
+            $MultiClientSuccess = $MultiClientSuccess -and $IndividualClientSuccess
+                            
+            $ResultString +=  "`r|`t`t`t`t`t`t`t`t`t| $($ClientName)`t`t| $($ClientIP)`t|"
+            $ResultString += " $ClientBytesPerSecond bps`t| $IndividualClientSuccess`t|"
+            $k++
+        }
+
+        $k = 0
+        $ClientOutput | ForEach-Object {
+            $job = Receive-Job $_
+            Write-Host $job
+        }
+        Write-Host "`r`n##################################################`r`n"
+
+        $Success = $ServerSuccess -and $MultiClientSuccess
+        if ($Success) { $NClientResults += "N = $($N): Pass" }
+        else { $NClientResults += "N = $($N): Fail" }
+        
+    }
+    #$NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name ClientNetworksTested -Value $ClientNetworksTested
+    #$NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name NClientResults -Value $NClientResults
+    Return $NDKPerfNtoNResults
 }
