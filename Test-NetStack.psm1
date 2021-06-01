@@ -581,16 +581,22 @@ Function Test-NetStack {
 
                 $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
                     $thisSource = $_
-                    #$thisSourceResult = @()
                     $ClientNetwork = @($thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object -FilterScript { $_.RDMAEnabled })
-                    #$ClientNetwork = $thisTestableNet.Group
-                    $thisSourceResult = Invoke-NDKPerfNto1 -Server $thisSource -ClientNetwork $ClientNetwork
+                    
+                    $thisSourceResult = Invoke-NDKPerfNto1 -Server $thisSource -ClientNetwork $ClientNetwork -ExpectedTPUT $Definitions.NDKPerf.TPUT
 
                     $Result = New-Object -TypeName psobject
                     $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
                     $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
-                    $Result | Add-Member -MemberType NoteProperty -Name NClientResults -Value $thisSourceResult.NClientResults
-                    $Result | Add-Member -MemberType NoteProperty -Name ClientNetworksTested -Value $thisSourceResult.ClientNetworksTested
+
+                    $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
+                    $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.RxGbps
+
+                    if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name ServerStatus -Value 'Pass' }
+                    else { $Result | Add-Member -MemberType NoteProperty -Name ServerStatus -Value 'Fail' }
+                    
+                    $Result | Add-Member -MemberType NoteProperty -Name ClientNetworkTested -Value $thisSourceResult.ClientNetworkTested
+                    $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
 
                     $StageResults += $Result
                     Remove-Variable Result -ErrorAction SilentlyContinue
@@ -599,7 +605,35 @@ Function Test-NetStack {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage5 -Value $StageResults
             Write-Host "Completed Stage 5 - NDK Perf N:1 - $([System.DateTime]::Now)"
         }
-        '6' {  }
+        '6' {  
+            Write-Host "Beginning Stage 6 - NDK Perf N:N - $([System.DateTime]::Now)"
+            $StageResults = @()
+            $TestableNetworks | ForEach-Object {
+                $thisTestableNet = $_
+
+                $ServerList = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
+
+                $thisSourceResult = Invoke-NDKPerfNtoN -ServerList $ServerList -ExpectedTPUT $Definitions.NDKPerf.TPUT
+
+                $Result = New-Object -TypeName psobject
+                $thisSubnet = $thisTestableNet.Name.Split(',')[0]
+                $thisVLAN = $thisTestableNet.Name.Split(',')[1].Trim()
+                $Result | Add-Member -MemberType NoteProperty -Name Subnet -Value $thisSubnet
+                $Result | Add-Member -MemberType NoteProperty -Name VLAN -Value $thisVLAN
+
+                $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.RxGbps
+
+                if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name ServerStatus -Value 'Pass' }
+                else { $Result | Add-Member -MemberType NoteProperty -Name ServerStatus -Value 'Fail' }
+                    
+                $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
+
+                $StageResults += $Result
+                Remove-Variable Result -ErrorAction SilentlyContinue
+            }
+            $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage6 -Value $StageResults
+            Write-Host "Completed Stage 6 - NDK Perf N:N - $([System.DateTime]::Now)"
+        }
     }
 
     Return $NetStackResults
