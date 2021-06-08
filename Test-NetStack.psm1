@@ -108,6 +108,10 @@ Function Test-NetStack {
 
     # Defines the stage requirements - internal.psm1
     $Definitions = [Analyzer]::new()
+    
+    $ResultsSummary = New-Object -TypeName psobject
+    $StageFailures = 0
+
     Switch ( $Stage | Sort-Object ) {
         '1' { # Connectivity and PMTUD
 
@@ -322,6 +326,9 @@ Function Test-NetStack {
             $RunspacePool.Close()
             $RunspacePool.Dispose()
 
+            if ('Fail' -in $StageResults.PathStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage1 -Value 'Fail'; $StageFailures++ }
+            else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage1 -Value 'Pass' }
+
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage1 -Value $StageResults
 
             Write-Host "Completed Stage 1 - Connectivity and PMTUD - $([System.DateTime]::Now)"
@@ -338,6 +345,7 @@ Function Test-NetStack {
             $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
             $RunspacePool.Open()
 
+            $StageResults = @()
             foreach ($group in $runspaceGroups) {
                 $GroupedJobs = @()
                 foreach ($pair in $group) {
@@ -406,6 +414,9 @@ Function Test-NetStack {
             $RunspacePool.Close()
             $RunspacePool.Dispose()
 
+            if ('Fail' -in $StageResults.PathStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage2 -Value 'Fail'; $StageFailures++ }
+            else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage2 -Value 'Pass' }
+            
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage2 -Value $StageResults
             Write-Host "Completed Stage 2 - TCP - $([System.DateTime]::Now)"
         }
@@ -489,6 +500,8 @@ Function Test-NetStack {
             $RunspacePool.Close()
             $RunspacePool.Dispose()
 
+            if ('Fail' -in $StageResults.PathStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage3 -Value 'Fail'; $StageFailures++ }
+            else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage3 -Value 'Pass' }
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage3 -Value $StageResults
             Write-Host "Completed Stage 3 - NDK Ping - $([System.DateTime]::Now)"
@@ -505,6 +518,7 @@ Function Test-NetStack {
             $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
             $RunspacePool.Open()
 
+            $StageResults = @()
             foreach ($group in $runspaceGroups) {
                 $GroupedJobs = @()
                 foreach ($pair in $group) {
@@ -569,6 +583,9 @@ Function Test-NetStack {
 
             $RunspacePool.Close()
             $RunspacePool.Dispose()
+
+            if ('Fail' -in $StageResults.PathStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage4 -Value 'Fail'; $StageFailures++ }
+            else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage4 -Value 'Pass' }
             
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage4 -Value $StageResults
             Write-Host "Completed Stage 4 - NDK Perf 1:1 - $([System.DateTime]::Now)"
@@ -602,6 +619,10 @@ Function Test-NetStack {
                     Remove-Variable Result -ErrorAction SilentlyContinue
                 }
             }
+
+            if ('Fail' -in $StageResults.ServerStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage5 -Value 'Fail'; $StageFailures++ }
+            else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage5 -Value 'Pass' }
+
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage5 -Value $StageResults
             Write-Host "Completed Stage 5 - NDK Perf N:1 - $([System.DateTime]::Now)"
         }
@@ -631,10 +652,20 @@ Function Test-NetStack {
                 $StageResults += $Result
                 Remove-Variable Result -ErrorAction SilentlyContinue
             }
+
+            if ('Fail' -in $StageResults.ServerStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage6 -Value 'Fail'; $StageFailures++ }
+            else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage6 -Value 'Pass' }
+
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage6 -Value $StageResults
             Write-Host "Completed Stage 6 - NDK Perf N:N - $([System.DateTime]::Now)"
         }
     }
+    
+    if ($StageFailures -gt 0) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name NetStack -Value 'Fail' }
+    else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name NetStack -Value 'Pass' }
 
+    $NetStackResults | Add-Member -MemberType NoteProperty -Name ResultsSummary -Value $ResultsSummary
+
+    Write-LogFile -NetStackResults $NetStackResults
     Return $NetStackResults
 }

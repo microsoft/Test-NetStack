@@ -432,15 +432,9 @@ function Invoke-NDKPerfNtoN {
     }
     Write-Host "`r`n##################################################`r`n"
 
-    Write-Host "Success: $ServerSuccess"
-
     $RawData = New-Object -TypeName psobject
     $RawData | Add-Member -MemberType NoteProperty -Name ServerBytesPerSecond -Value $ServerBpsArray
-    #$RawData | Add-Member -MemberType NoteProperty -Name MinLinkSpeedBps -Value $MinAcceptableLinkSpeedBps
 
-    #$ReceiverLinkSpeedGbps = [Math]::Round(($ServerLinkSpeedBps * 8) * [Math]::Pow(10, -9), 2)
-
-    #$NDKPerfNtoNResults | Add-Member -MemberType NoteProperty -Name ReceiverLinkSpeedGbps -Value $ReceiverLinkSpeedGbps
     $NDKPerfNtoNResults | Add-Member -MemberType NoteProperty -Name RxGbps -Value $ServerGbpsArray
     $NDKPerfNtoNResults | Add-Member -MemberType NoteProperty -Name ServerSuccess -Value $ServerSuccess
     $NDKPerfNtoNResults | Add-Member -MemberType NoteProperty -Name RawData -Value $RawData

@@ -436,4 +436,38 @@ Function Get-Latency {
     return ($RTTNumerator / $RTTNormalized.Count).ToString('.###')
 
 }
+
+Function Write-LogFile {
+    param ( $NetStackResults )
+    $NetStackResults.PSObject.Properties | ForEach-Object {
+        $_.Name | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+        if ($_.Name -like 'DisqualifiedNetworks') {
+            $DisqualifiedNetworks = $_
+            $DisqualifiedNetworks.Value.PSObject.Properties | ForEach-Object {
+                $DisqualificationCategory = $_
+                "`r`nDisqualification Category: $($DisqualificationCategory.Name)" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                $DisqualificationCategory.Value.PSObject.Properties | ForEach-Object {
+                    $_.Name | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                    if ($_.Name -like 'Group') {
+                        ($_.Value | ConvertTo-Json) | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                    } else {
+                        $_.Value | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                    }
+                }
+            }
+            "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+        } elseif ($_.Name -like 'TestableNetworks') {
+            $TestableNetworks = $_
+            $TestableNetworks.Value | ForEach-Object {
+                ($_ | ConvertTo-Json) | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+            }
+            "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+        } elseif ($_.Name -like 'Stage*') {
+            $_.Value | Select-Object -Property * -ExcludeProperty RawData | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+        } elseif ($_.Name -like 'ResultsSummary') {
+            $_.Value | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+        }
+        "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+    }
+}
 #endregion Helper Functions
