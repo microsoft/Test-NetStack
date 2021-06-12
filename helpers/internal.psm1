@@ -142,7 +142,7 @@ Function Get-ConnectivityMapping {
                 $AdapterIP = Get-NetIPAddress -IPAddress $IP -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
                     Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
                 
-                $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
+                $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex -ErrorAction SilentlyContinue
 
                 $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
 
@@ -153,7 +153,7 @@ Function Get-ConnectivityMapping {
                 $AdapterIP = Get-NetIPAddress -IPAddress $IP -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
                                 Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
                 
-                $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
+                $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex -ErrorAction SilentlyContinue
                 $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
                 $RDMAAdapter = Get-NetAdapterRdma -CimSession $thisNode -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
             }
@@ -234,7 +234,7 @@ Function Get-ConnectivityMapping {
             $AdapterIP = Get-NetIPAddress -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
                 Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
-            $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
+            $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex -ErrorAction SilentlyContinue
 
             $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
 
@@ -245,7 +245,7 @@ Function Get-ConnectivityMapping {
             $AdapterIP = Get-NetIPAddress -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
                             Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
-            $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
+            $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex -ErrorAction SilentlyContinue
             $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
             $RDMAAdapter = Get-NetAdapterRdma -CimSession $thisNode -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
         }
@@ -446,20 +446,17 @@ Function Write-LogFile {
             $DisqualifiedNetworks.Value.PSObject.Properties | ForEach-Object {
                 $DisqualificationCategory = $_
                 "`r`nDisqualification Category: $($DisqualificationCategory.Name)" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                $DisqualificationCategory.Value.PSObject.Properties | ForEach-Object {
+                $DisqualificationCategory.Value | ForEach-Object {
                     $_.Name | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                    if ($_.Name -like 'Group') {
-                        ($_.Value | ConvertTo-Json) | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                    } else {
-                        $_.Value | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
-                    }
+                    $_.Group | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
                 }
             }
             "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         } elseif ($_.Name -like 'TestableNetworks') {
             $TestableNetworks = $_
             $TestableNetworks.Value | ForEach-Object {
-                ($_ | ConvertTo-Json) | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                $_.Values | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
+                $_.Group | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
             }
             "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8
         } elseif ($_.Name -like 'Stage*') {
