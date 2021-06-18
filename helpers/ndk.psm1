@@ -16,7 +16,7 @@ function Invoke-NDKPing {
         Invoke-Command -ComputerName $ServerName `
         -ScriptBlock {
             param([string]$ServerIP,[string]$ServerIF)
-            cmd /c "NdkPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rping -W 5 2>&1"
+            cmd /c "NdkPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rping -W 15 2>&1"
         } `
         -ArgumentList $ServerIP,$ServerIF
     } `
@@ -148,20 +148,22 @@ function Invoke-NDKPerf1to1 {
         Start-Sleep -Seconds 5
                                         
         $ServerOutput = Receive-Job $ServerOutput
-                                        
-        Write-Verbose "NDK Perf Server Output: "
+        
+        <#                                
+        Write-Host "NDK Perf Server Output: "
         $ServerOutput | ForEach-Object {
             $ServerSuccess = $_ -match 'completes'
-            if ($_) { Write-Verbose $_ }
+            if ($_) { Write-Host $_ }
         }
-        Write-Verbose "`r`n"
+        Write-Host "`r`n"
         
-        Write-Verbose "NDK Perf Client Output: "
+        Write-Host "NDK Perf Client Output: "
         $ClientOutput | ForEach-Object {
             $ClientSuccess = $_ -match 'completes'
-            if ($_) { Write-Verbose $_ }
+            if ($_) { Write-Host $_ }
         }
-        Write-Verbose "`r`n##################################################`r`n"
+        Write-Host "`r`n##################################################`r`n"
+        #>
             
         $MinLinkSpeedBps = ($ServerLinkSpeedBps, $ClientLinkSpeedBps | Measure-Object -Minimum).Minimum
         $Success = ($ServerBytesPerSecond -gt $MinLinkSpeedBps * $ExpectedTPUTDec) -and ($ClientBytesPerSecond -gt $MinLinkSpeedBps * $ExpectedTPUTDec)
@@ -233,7 +235,7 @@ function Invoke-NDKPerfNto1 {
         } `
         -ArgumentList $Server.NodeName,$Server.InterfaceDescription
 
-        Write-Host "Server $($Server.IPAddress) listening on port $j"
+        #Write-Host "Server $($Server.IPAddress) listening on port $j"
         $ServerOutput += Start-Job `
         -ScriptBlock {
             param([string]$ServerName,[string]$ServerIP,[string]$ServerIF,[int]$j)
@@ -253,7 +255,7 @@ function Invoke-NDKPerfNto1 {
         } `
         -ArgumentList $ClientName,$ClientInterfaceDescription
 
-        Write-Host "Client $ClientIP sending to server $($Server.IPAddress) on port $j"
+        #Write-Host "Client $ClientIP sending to server $($Server.IPAddress) on port $j"
         $ClientOutput += Start-Job `
         -ScriptBlock {
             param([string]$ClientName,[string]$ServerIP,[string]$ClientIP,[string]$ClientIF,[int]$j)
@@ -271,7 +273,7 @@ function Invoke-NDKPerfNto1 {
     }
                         
     Start-Sleep -Seconds 20
-    Write-Host "##################################################`r`n"
+    #Write-Host "##################################################`r`n"
 
     $ServerBytesPerSecond = 0
     $ServerBpsArray = @()
@@ -291,6 +293,7 @@ function Invoke-NDKPerfNto1 {
         $ServerSuccess = $ServerSuccess -and ($ServerBytesPerSecond -gt $MinAcceptableLinkSpeedBps)
     }
 
+    <#
     $ServerOutput | ForEach-Object {
         $job = Receive-Job $_
         Write-Host $job
@@ -302,7 +305,8 @@ function Invoke-NDKPerfNto1 {
         Write-Host $job
     }
     Write-Host "`r`n##################################################`r`n"
-    
+    #>
+
     $RawData = New-Object -TypeName psobject
     $RawData | Add-Member -MemberType NoteProperty -Name ServerBytesPerSecond -Value $ServerBpsArray
     $RawData | Add-Member -MemberType NoteProperty -Name MinLinkSpeedBps -Value $MinAcceptableLinkSpeedBps
@@ -327,6 +331,11 @@ function Invoke-NDKPerfNtoN {
         [Parameter(Mandatory=$true, Position=1)]
         [int] $ExpectedTPUT
     )
+
+    $thisSubnet = ($ServerList | Select-Object -First 1).subnet
+    $thisVLAN = ($ServerList | Select-Object -First 1).VLAN
+    
+    Write-Host "Testing N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)"
 
     $NDKPerfNtoNResults = New-Object -TypeName psobject
     $ExpectedTPUTDec = $ExpectedTPUT / 100
@@ -361,7 +370,7 @@ function Invoke-NDKPerfNtoN {
             } `
             -ArgumentList $Server.NodeName,$Server.InterfaceDescription
 
-            Write-Host "Server $($Server.IPAddress) listening on port $j"
+            #Write-Host "Server $($Server.IPAddress) listening on port $j"
             $ServerOutput += Start-Job `
             -ScriptBlock {
                 param([string]$ServerName,[string]$ServerIP,[string]$ServerIF,[int]$j)
@@ -381,7 +390,7 @@ function Invoke-NDKPerfNtoN {
             } `
             -ArgumentList $ClientName,$ClientInterfaceDescription
 
-            Write-Host "Client $ClientIP sending to server $($Server.IPAddress) on port $j"
+            #Write-Host "Client $ClientIP sending to server $($Server.IPAddress) on port $j"
             $ClientOutput += Start-Job `
             -ScriptBlock {
                 param([string]$ClientName,[string]$ServerIP,[string]$ClientIP,[string]$ClientIF,[int]$j)
@@ -399,7 +408,7 @@ function Invoke-NDKPerfNtoN {
         }
                         
         Start-Sleep -Seconds 20
-        Write-Host "##################################################`r`n"   
+        #Write-Host "##################################################`r`n"   
     }
 
 
@@ -420,6 +429,7 @@ function Invoke-NDKPerfNtoN {
         $ServerSuccess = $ServerSuccess -and ($ServerBytesPerSecond -gt $MinAcceptableLinkSpeedBps)
     }
 
+    <#
     $ServerOutput | ForEach-Object {
         $job = Receive-Job $_
         Write-Host $job
@@ -431,6 +441,7 @@ function Invoke-NDKPerfNtoN {
         Write-Host $job
     }
     Write-Host "`r`n##################################################`r`n"
+    #>
 
     $RawData = New-Object -TypeName psobject
     $RawData | Add-Member -MemberType NoteProperty -Name ServerBytesPerSecond -Value $ServerBpsArray
