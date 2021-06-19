@@ -609,8 +609,8 @@ Function Test-NetStack {
                     $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
                     $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.RxGbps
 
-                    if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name ServerStatus -Value 'Pass' }
-                    else { $Result | Add-Member -MemberType NoteProperty -Name ServerStatus -Value 'Fail' }
+                    if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Pass' }
+                    else { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail' }
                     
                     $Result | Add-Member -MemberType NoteProperty -Name ClientNetworkTested -Value $thisSourceResult.ClientNetworkTested
                     $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
@@ -620,7 +620,7 @@ Function Test-NetStack {
                 }
             }
 
-            if ('Fail' -in $StageResults.ServerStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage5 -Value 'Fail'; $StageFailures++ }
+            if ('Fail' -in $StageResults.ReceiverStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage5 -Value 'Fail'; $StageFailures++ }
             else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage5 -Value 'Pass' }
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage5 -Value $StageResults
@@ -644,8 +644,8 @@ Function Test-NetStack {
 
                 $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.RxGbps
 
-                if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name ServerStatus -Value 'Pass' }
-                else { $Result | Add-Member -MemberType NoteProperty -Name ServerStatus -Value 'Fail' }
+                if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Pass' }
+                else { $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail' }
                     
                 $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
 
@@ -653,7 +653,7 @@ Function Test-NetStack {
                 Remove-Variable Result -ErrorAction SilentlyContinue
             }
 
-            if ('Fail' -in $StageResults.ServerStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage6 -Value 'Fail'; $StageFailures++ }
+            if ('Fail' -in $StageResults.NetworkStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage6 -Value 'Fail'; $StageFailures++ }
             else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage6 -Value 'Pass' }
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage6 -Value $StageResults
@@ -666,6 +666,8 @@ Function Test-NetStack {
 
     $NetStackResults | Add-Member -MemberType NoteProperty -Name ResultsSummary -Value $ResultsSummary
 
+    $Failures = Get-Failures -NetStackResults $NetStackResults
+    $NetStackResults | Add-Member -MemberType NoteProperty -Name Failures -Value $Failures
     Write-LogFile -NetStackResults $NetStackResults
     Return $NetStackResults
 }
