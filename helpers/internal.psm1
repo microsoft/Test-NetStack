@@ -531,6 +531,59 @@ Function Get-Failures {
             if ($StageHadFailures) {
                 $Failures | Add-Member -MemberType NoteProperty -Name $_.Name -Value $StageFailures
             }
+        } elseif ($_.Name -like 'Stage5') {
+            $StageResults = $_.Value
+
+            $InterfaceFailures = @()
+            $Interfaces | ForEach-Object {
+                $thisInterface = $_
+                $thisInterfaceResults = $StageResults | Where-Object Receiver -eq $thisInterface
+                if ($thisInterfaceResults.ReceiverStatus -notcontains "Pass") {
+                    $InterfaceFailures += $thisInterface
+                }
+            }
+
+            $MachineFailures = @()
+            $HostNames | ForEach-Object {
+                $thisHost = $_
+                $thisMachineResults = $StageResults | Where-Object ReceiverHostName -eq $thisHost
+                if ($thisMachineResults.ReceiverStatus -notcontains "Pass") {
+                    $MachineFailures += $thisHost
+                }
+            }
+
+            $StageFailures = New-Object -TypeName psobject
+            $StageHadFailures = $false
+            if ($InterfaceFailures.Count -gt 0) {
+                $StageFailures | Add-Member -MemberType NoteProperty -Name InterfaceFailures -Value $InterfaceFailures
+                $StageHadFailures = $true
+            }
+            if ($MachineFailures.Count -gt 0) {
+                $StageFailures | Add-Member -MemberType NoteProperty -Name MachineFailures -Value $MachineFailures
+                $StageHadFailures = $true
+            }
+            if ($StageHadFailures) {
+                $Failures | Add-Member -MemberType NoteProperty -Name $_.Name -Value $StageFailures
+            }
+        } elseif ($_.Name -like 'Stage6') {
+            $StageResults = $_.Value
+            
+            $NetworkFailures = @()
+            $AllFailures = $StageResults | Where-Object NetworkStatus -eq Fail
+            $AllFailures | ForEach-Object {
+                $NetworkFailures += "Subnet $($_.subnet) VLAN $($_.VLAN)"
+            }
+
+            $StageFailures = New-Object -TypeName psobject
+            $StageHadFailures = $false
+            if ($NetworkFailures.Count -gt 0) {
+                $StageFailures | Add-Member -MemberType NoteProperty -Name NetworkFailures -Value $NetworkFailures
+                $StageHadFailures = $true
+            }
+            if ($StageHadFailures) {
+                $Failures | Add-Member -MemberType NoteProperty -Name $_.Name -Value $StageFailures
+            }
+            
         }
     }
     Return $Failures
@@ -638,11 +691,31 @@ Function Write-LogFile {
                             $NetStackResults.Failures.Stage4.MachineFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
                         }
                     }
+                    'Stage5' {
+                        if ($NetStackResults.Failures.Stage5.PSObject.Properties.Name -contains "InterfaceFailures") {
+                            "Interface Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (N:1) failed for the following target NICs. Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage5.InterfaceFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                        if ($NetStackResults.Failures.Stage5.PSObject.Properties.Name -contains "MachineFailures") {
+                            "`nMachine Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (N:1) failed across all source machines for the following target machines. Verify NIC RDMA provisioning and traffic class settings. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage5.MachineFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                    }
+                    'Stage6' {
+                        if ($NetStackResults.Failures.Stage6.PSObject.Properties.Name -contains "NetworkFailures") {
+                            "Network Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (N:N) failed for networks with the following subnet/VLAN. Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage6.NetworkFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                    }
                  }
                 "`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
             }
         } elseif ($_.Name -like 'ResultsSummary') {
             $_.Value | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+            break
         }
         "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
     }
