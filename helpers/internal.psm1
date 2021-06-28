@@ -141,8 +141,11 @@ Function Get-ConnectivityMapping {
             if ($thisNode -eq $env:COMPUTERNAME) {
                 $AdapterIP = Get-NetIPAddress -IPAddress $IP -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
                     Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
+
+                # Remove APIPA
+                $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
                 
-                $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex -ErrorAction SilentlyContinue
+                $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
 
                 $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
 
@@ -153,7 +156,10 @@ Function Get-ConnectivityMapping {
                 $AdapterIP = Get-NetIPAddress -IPAddress $IP -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
                                 Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
                 
-                $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex -ErrorAction SilentlyContinue
+                # Remove APIPA
+                $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
+
+                $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
                 $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
                 $RDMAAdapter = Get-NetAdapterRdma -CimSession $thisNode -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
             }
@@ -234,7 +240,10 @@ Function Get-ConnectivityMapping {
             $AdapterIP = Get-NetIPAddress -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
                 Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
-            $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex -ErrorAction SilentlyContinue
+            # Remove APIPA
+            $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
+
+            $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
 
             $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
 
@@ -245,7 +254,10 @@ Function Get-ConnectivityMapping {
             $AdapterIP = Get-NetIPAddress -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
                             Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
-            $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex -ErrorAction SilentlyContinue
+            # Remove APIPA
+            $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
+            
+            $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
             $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
             $RDMAAdapter = Get-NetAdapterRdma -CimSession $thisNode -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
         }
