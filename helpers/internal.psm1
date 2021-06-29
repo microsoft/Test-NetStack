@@ -141,6 +141,9 @@ Function Get-ConnectivityMapping {
             if ($thisNode -eq $env:COMPUTERNAME) {
                 $AdapterIP = Get-NetIPAddress -IPAddress $IP -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
                     Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
+
+                # Remove APIPA
+                $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
                 
                 $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
 
@@ -153,13 +156,16 @@ Function Get-ConnectivityMapping {
                 $AdapterIP = Get-NetIPAddress -IPAddress $IP -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
                                 Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
                 
+                # Remove APIPA
+                $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
+
                 $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
                 $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
                 $RDMAAdapter = Get-NetAdapterRdma -CimSession $thisNode -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
             }
 
             $ClusRes = Get-ClusterResource -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Where { $_.OwnerGroup -eq 'Cluster Group' -and $_.ResourceType -eq 'IP Address' }
-            $ClusterIPs = ($ClustRes | Get-ClusterParameter -ErrorAction SilentlyContinue -Name Address).Value
+            $ClusterIPs = ($ClusRes | Get-ClusterParameter -ErrorAction SilentlyContinue -Name Address).Value
 
             $NodeOutput = @()
             foreach ($thisAdapterIP in ($AdapterIP | Where IPAddress -NotIn $ClusterIPs)) {
@@ -234,6 +240,9 @@ Function Get-ConnectivityMapping {
             $AdapterIP = Get-NetIPAddress -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
                 Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
+            # Remove APIPA
+            $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
+
             $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
 
             $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
@@ -245,13 +254,16 @@ Function Get-ConnectivityMapping {
             $AdapterIP = Get-NetIPAddress -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
                             Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
+            # Remove APIPA
+            $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
+            
             $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
             $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
             $RDMAAdapter = Get-NetAdapterRdma -CimSession $thisNode -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
         }
 
         $ClusRes = Get-ClusterResource -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Where { $_.OwnerGroup -eq 'Cluster Group' -and $_.ResourceType -eq 'IP Address' }
-        $ClusterIPs = ($ClustRes | Get-ClusterParameter -ErrorAction SilentlyContinue -Name Address).Value
+        $ClusterIPs = ($ClusRes | Get-ClusterParameter -ErrorAction SilentlyContinue -Name Address).Value
 
         $NodeOutput = @()
         foreach ($thisAdapterIP in ($AdapterIP | Where IPAddress -NotIn $ClusterIPs)) {
@@ -349,6 +361,52 @@ Function Get-DisqualifiedNetworksFromMapping {
     Return $Disqualified
 }
 
+Function Get-RunspaceGroups {
+    param ( $TestableNetworks )
+    # create list of all valid source->target pairs
+    $allPairs = @()
+    $TestableNetworks | ForEach-Object {
+        $thisTestableNet = $_
+        $thisTestableNet.Group | ForEach-Object {
+            $thisSource = $_
+            $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
+                $thisTarget = $_
+                $thisPair = New-Object -TypeName psobject
+                $thisPair | Add-Member -MemberType NoteProperty -Name Source -Value $thisSource
+                $thisPair | Add-Member -MemberType NoteProperty -Name Target -Value $thisTarget
+                $allPairs += $thisPair
+            }
+        }
+    }
+
+    # build up groups of pairs that can be run simultaneously - no common elements
+    $runspaceGroups = @()
+    while ($allPairs -ne $null) {
+        $allPairs | ForEach-Object {
+            $thisPair = $_
+            $added = $false
+            for ($i = 0; $i -lt $runspaceGroups.Count; $i++) {
+                $invalidGroup = $false
+                foreach ($pair in $runspaceGroups[$i]) {
+                    if (($pair.Source -eq $thisPair.Source) -or ($pair.Target -eq $thisPair.Target) -or ($pair.Source -eq $thisPair.Target) -or ($pair.Target -eq $thisPair.Source)) {
+                        $invalidGroup = $true
+                    }
+                }
+                if (!$invalidGroup -and !$added) {
+                    $runspaceGroups[$i] += $thisPair
+                    $added = $true
+                }
+            }
+            if (!$added) {
+                $runspaceGroups += , @($thisPair)
+            }
+            $allPairs = $allPairs -ne $thisPair
+        }
+    }
+
+    Return $runspaceGroups
+}
+
 Function Get-Jitter {
     <#
     .SYNOPSIS
@@ -389,5 +447,289 @@ Function Get-Latency {
 
     return ($RTTNumerator / $RTTNormalized.Count).ToString('.###')
 
+}
+
+
+Function Get-Failures {
+    param ( $NetStackResults )
+    $HostNames = $NetStackResults.TestableNetworks.Group.NodeName | Select-Object -Unique
+    $Interfaces = $NetStackResults.TestableNetworks.Group.IPAddress | Select-Object -Unique
+    $Failures = New-Object -TypeName psobject
+    $NetStackResults.PSObject.Properties | ForEach-Object {
+        if ($_.Name -like 'Stage1') {
+            $Stage1Results = $_.Value
+            
+            $IndividualFailures = @()
+            $AllFailures = $Stage1Results | Where-Object PathStatus -eq Fail
+            $AllFailures | ForEach-Object {
+                $IndividualFailures += "($($_.SourceHostName)) $($_.Source) -> $($_.Destination)"
+            }
+
+            $InterfaceFailures = @()
+            $Interfaces | ForEach-Object {
+                $thisInterface = $_
+                $thisInterfaceResults = $Stage1Results | Where-Object Source -eq $thisInterface
+                if ($thisInterfaceResults.PathStatus -notcontains "Pass") {
+                    $InterfaceFailures += $thisInterface
+                }
+            }
+
+            $MachineFailures = @()
+            $HostNames | ForEach-Object {
+                $thisHost = $_
+                $thisMachineResults = $Stage1Results | Where-Object SourceHostName -eq $thisHost
+                if ($thisMachineResults.PathStatus -notcontains "Pass") {
+                    $MachineFailures += $thisHost
+                }
+            }
+
+            $Stage1Failures = New-Object -TypeName psobject
+            $Stage1HadFailures = $false
+            if ($IndividualFailures.Count -gt 0) {
+                $Stage1Failures | Add-Member -MemberType NoteProperty -Name IndividualFailures -Value $IndividualFailures
+                $Stage1HadFailures = $true
+            }
+            if ($InterfaceFailures.Count -gt 0) {
+                $Stage1Failures | Add-Member -MemberType NoteProperty -Name InterfaceFailures -Value $InterfaceFailures
+                $Stage1HadFailures = $true
+            }
+            if ($MachineFailures.Count -gt 0) {
+                $Stage1Failures | Add-Member -MemberType NoteProperty -Name MachineFailures -Value $MachineFailures
+                $Stage1HadFailures = $true
+            }
+            if ($Stage1HadFailures) {
+                $Failures | Add-Member -MemberType NoteProperty -Name Stage1 -Value $Stage1Failures
+            }
+        } elseif (($_.Name -like 'Stage2') -or ($_.Name -like 'Stage3') -or ($_.Name -like 'Stage4')) {
+            $StageResults = $_.Value
+            $IndividualFailures = @()
+            $AllFailures = $StageResults | Where-Object PathStatus -eq Fail
+            $AllFailures | ForEach-Object {
+                $IndividualFailures += "$($_.Sender) -> $($_.Receiver) ($($_.ReceiverHostName))"
+            }
+
+            $InterfaceFailures = @()
+            $Interfaces | ForEach-Object {
+                $thisInterface = $_
+                $thisInterfaceResults = $StageResults | Where-Object Receiver -eq $thisInterface
+                if ($thisInterfaceResults.PathStatus -notcontains "Pass") {
+                    $InterfaceFailures += $thisInterface
+                }
+            }
+
+            $MachineFailures = @()
+            $HostNames | ForEach-Object {
+                $thisHost = $_
+                $thisMachineResults = $StageResults | Where-Object ReceiverHostName -eq $thisHost
+                if ($thisMachineResults.PathStatus -notcontains "Pass") {
+                    $MachineFailures += $thisHost
+                }
+            }
+
+            $StageFailures = New-Object -TypeName psobject
+            $StageHadFailures = $false
+            if ($IndividualFailures.Count -gt 0) {
+                $StageFailures | Add-Member -MemberType NoteProperty -Name IndividualFailures -Value $IndividualFailures
+                $StageHadFailures = $true
+            }
+            if ($InterfaceFailures.Count -gt 0) {
+                $StageFailures | Add-Member -MemberType NoteProperty -Name InterfaceFailures -Value $InterfaceFailures
+                $StageHadFailures = $true
+            }
+            if ($MachineFailures.Count -gt 0) {
+                $StageFailures | Add-Member -MemberType NoteProperty -Name MachineFailures -Value $MachineFailures
+                $StageHadFailures = $true
+            }
+            if ($StageHadFailures) {
+                $Failures | Add-Member -MemberType NoteProperty -Name $_.Name -Value $StageFailures
+            }
+        } elseif ($_.Name -like 'Stage5') {
+            $StageResults = $_.Value
+
+            $InterfaceFailures = @()
+            $Interfaces | ForEach-Object {
+                $thisInterface = $_
+                $thisInterfaceResults = $StageResults | Where-Object Receiver -eq $thisInterface
+                if ($thisInterfaceResults.ReceiverStatus -notcontains "Pass") {
+                    $InterfaceFailures += $thisInterface
+                }
+            }
+
+            $MachineFailures = @()
+            $HostNames | ForEach-Object {
+                $thisHost = $_
+                $thisMachineResults = $StageResults | Where-Object ReceiverHostName -eq $thisHost
+                if ($thisMachineResults.ReceiverStatus -notcontains "Pass") {
+                    $MachineFailures += $thisHost
+                }
+            }
+
+            $StageFailures = New-Object -TypeName psobject
+            $StageHadFailures = $false
+            if ($InterfaceFailures.Count -gt 0) {
+                $StageFailures | Add-Member -MemberType NoteProperty -Name InterfaceFailures -Value $InterfaceFailures
+                $StageHadFailures = $true
+            }
+            if ($MachineFailures.Count -gt 0) {
+                $StageFailures | Add-Member -MemberType NoteProperty -Name MachineFailures -Value $MachineFailures
+                $StageHadFailures = $true
+            }
+            if ($StageHadFailures) {
+                $Failures | Add-Member -MemberType NoteProperty -Name $_.Name -Value $StageFailures
+            }
+        } elseif ($_.Name -like 'Stage6') {
+            $StageResults = $_.Value
+            
+            $NetworkFailures = @()
+            $AllFailures = $StageResults | Where-Object NetworkStatus -eq Fail
+            $AllFailures | ForEach-Object {
+                $NetworkFailures += "Subnet $($_.subnet) VLAN $($_.VLAN)"
+            }
+
+            $StageFailures = New-Object -TypeName psobject
+            $StageHadFailures = $false
+            if ($NetworkFailures.Count -gt 0) {
+                $StageFailures | Add-Member -MemberType NoteProperty -Name NetworkFailures -Value $NetworkFailures
+                $StageHadFailures = $true
+            }
+            if ($StageHadFailures) {
+                $Failures | Add-Member -MemberType NoteProperty -Name $_.Name -Value $StageFailures
+            }
+            
+        }
+    }
+    Return $Failures
+}
+
+
+Function Write-LogFile {
+    param ( $NetStackResults )
+    $NetStackResults.PSObject.Properties | ForEach-Object {
+        $_.Name | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+        if ($_.Name -like 'DisqualifiedNetworks') {
+            $DisqualifiedNetworks = $_
+            $DisqualifiedNetworks.Value.PSObject.Properties | ForEach-Object {
+                $DisqualificationCategory = $_
+                "`r`nDisqualification Category: $($DisqualificationCategory.Name)" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                $DisqualificationCategory.Value | ForEach-Object {
+                    $_.Name | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                    $_.Group | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                }
+            }
+            "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+        } elseif ($_.Name -like 'TestableNetworks') {
+            $TestableNetworks = $_
+            $TestableNetworks.Value | ForEach-Object {
+                $_.Values | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                $_.Group | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+            }
+            "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+        } elseif ($_.Name -like 'Stage*') {
+            $_.Value | Select-Object -Property * -ExcludeProperty RawData | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+            if ($NetStackResults.Failures.PSObject.Properties.Name -contains $_.Name) {
+                 "Failure Recommendations`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                 switch ($_.Name) {
+                    'Stage1' {
+                        if ($NetStackResults.Failures.Stage1.PSObject.Properties.Name -contains "IndividualFailures") {
+                            "Individual Failure Recommendations`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Connectivity and PMTUD failed across the following connections. Verify subnet, VLAN, and MTU settings for relevant NICs." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage1.IndividualFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                        if ($NetStackResults.Failures.Stage1.PSObject.Properties.Name -contains "InterfaceFailures") {
+                            "Interface Failure Recommendations`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Connectivity and PMTUD failed across all target NICs for the following source NICs. Verify subnet, VLAN, and MTU settings for relevant NICs. If the problem persists, consider checking NIC cabling or physical interlinks."  | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage1.InterfaceFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                        if ($NetStackResults.Failures.Stage1.PSObject.Properties.Name -contains "MachineFailures") {
+                            "Machine Failure Recommendations`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Connectivity and PMTUD failed across all target machines for the following source machines. Verify firewall and MTU settings for the erring machines. If the problem persists, consider checking the machine cabling, NIC cabling, or physical interlinks."  | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000 
+                            $NetStackResults.Failures.Stage1.MachineFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                    }
+                    'Stage2' {
+                        if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "IndividualFailures") {
+                            "Individual Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "TCP throughput failed to meet threshold across the following connections. Retry TCP transaction with repro commands. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Receiver Repro Command: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:<ReceivingNicIP> -consoleverbosity:1 -ServerExitLimit:64 -TimeLimit:20000 -pattern:duplex" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Sender Repro Command: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:<ReceivingNicIP> -bind:<SendingNicIP> -connections:64 -consoleverbosity:1 -pattern:duplex" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage2.IndividualFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                        if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "InterfaceFailures") {
+                            "`nInterface Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "TCP throughput failed to meet threshold across all source NICs for the following target NICs. Verify NIC provisioning. Inspect VMQ, VMMQ, and RSS settings. Verify firewall settings for the erring machine. If the problem persists, consider checking NIC cabling or physical interlinks."  | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage2.InterfaceFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                        if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "MachineFailures") {
+                            "`nMachine Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "TCP throughput failed to meet threshold across all source machines for the following target machines. Verify NIC provisioning. Inspect VMQ, VMMQ, and RSS settings. If the problem persists, consider checking NIC cabling or physical interlinks."  | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000 
+                            $NetStackResults.Failures.Stage2.MachineFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                    }
+                    'Stage3' {
+                        if ($NetStackResults.Failures.Stage3.PSObject.Properties.Name -contains "IndividualFailures") {
+                            "Individual Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "NDK Ping failed across the following connections. Retry NDK Ping with repro commands. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Receiver Repro Command: NdkPerfCmd.exe -S -ServerAddr <ReceivingNicIP>:9000  -ServerIf <ReceivingNicInterfaceIndex> -TestType rping -W 15 2>&1" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Sender Repro Command: NdkPerfCmd.exe -C -ServerAddr  <ReceivingNicIP>:9000 -ClientAddr <SendingNicIP> -ClientIf <SendingNicInterfaceIndex> -TestType rping 2>&1" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage3.IndividualFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                        if ($NetStackResults.Failures.Stage3.PSObject.Properties.Name -contains "InterfaceFailures") {
+                            "`nInterface Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "NDK Ping failed across all source NICs for the following target NICs. Verify NIC provisioning. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage3.InterfaceFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                        if ($NetStackResults.Failures.Stage3.PSObject.Properties.Name -contains "MachineFailures") {
+                            "`nMachine Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "NDK Ping failed across all source machines for the following target machines. Verify NIC provisioning. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage3.MachineFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                    }
+                    'Stage4' {
+                        if ($NetStackResults.Failures.Stage4.PSObject.Properties.Name -contains "IndividualFailures") {
+                            "Individual Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (1:1) failed across the following connections. Retry NDK Perf (1:1) with repro commands. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Receiver Repro Command: NDKPerfCmd.exe -S -ServerAddr <ReceivingNicIP>:9000  -ServerIf <ReceivingNicInterfaceIndex> -TestType rperf -W 20 2>&1" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Sender Repro Command: NDKPerfCmd.exe -C -ServerAddr <ReceivingNicIP>:9000 -ClientAddr <SendingNicIP> -ClientIf <SendingNicInterfaceIndex> -TestType rperf 2>&1" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage4.IndividualFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                        if ($NetStackResults.Failures.Stage4.PSObject.Properties.Name -contains "InterfaceFailures") {
+                            "`nInterface Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (1:1) failed across all source NICs for the following target NICs. Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage4.InterfaceFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                        if ($NetStackResults.Failures.Stage4.PSObject.Properties.Name -contains "MachineFailures") {
+                            "`nMachine Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (1:1) failed across all source machines for the following target machines. Verify NIC RDMA provisioning and traffic class settings. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage4.MachineFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                    }
+                    'Stage5' {
+                        if ($NetStackResults.Failures.Stage5.PSObject.Properties.Name -contains "InterfaceFailures") {
+                            "Interface Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (N:1) failed for the following target NICs. Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage5.InterfaceFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                        if ($NetStackResults.Failures.Stage5.PSObject.Properties.Name -contains "MachineFailures") {
+                            "`nMachine Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (N:1) failed across all source machines for the following target machines. Verify NIC RDMA provisioning and traffic class settings. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage5.MachineFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                    }
+                    'Stage6' {
+                        if ($NetStackResults.Failures.Stage6.PSObject.Properties.Name -contains "NetworkFailures") {
+                            "Network Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (N:N) failed for networks with the following subnet/VLAN. Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage6.NetworkFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                        }
+                    }
+                 }
+                "`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+            }
+        } elseif ($_.Name -like 'ResultsSummary') {
+            $_.Value | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+            break
+        }
+        "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+    }
 }
 #endregion Helper Functions
