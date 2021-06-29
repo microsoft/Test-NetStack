@@ -12,7 +12,7 @@
 RootModule = 'Test-NetStack.psm1'
 
 # Version number of this module.
-ModuleVersion = '20200110.1.1.1'
+ModuleVersion = '2021.1.1.1'
 
 # ID used to uniquely identify this module
 GUID = 'aad51a88-4b67-b840-4c35-d914d20be9b0'
