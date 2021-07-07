@@ -604,132 +604,134 @@ Function Get-Failures {
 
 Function Write-LogFile {
     param ( $NetStackResults )
+    $LogFile = "C:\Test-NetStack\Test-NetStack-Output-$(Get-Date -f yyyy-MM-dd-HHmmss).txt"
     $NetStackResults.PSObject.Properties | ForEach-Object {
-        $_.Name | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+        if ($_.Name -notlike 'Failures') {
+            $_.Name | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+        }
         if ($_.Name -like 'DisqualifiedNetworks') {
             $DisqualifiedNetworks = $_
             $DisqualifiedNetworks.Value.PSObject.Properties | ForEach-Object {
                 $DisqualificationCategory = $_
-                "`r`nDisqualification Category: $($DisqualificationCategory.Name)" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                "`r`nDisqualification Category: $($DisqualificationCategory.Name)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                 $DisqualificationCategory.Value | ForEach-Object {
-                    $_.Name | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                    $_.Group | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                    $_.Name | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                    $_.Group | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                 }
             }
-            "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+            "`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
         } elseif ($_.Name -like 'TestableNetworks') {
             $TestableNetworks = $_
             $TestableNetworks.Value | ForEach-Object {
-                $_.Values | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                $_.Group | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                $_.Values | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                $_.Group | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             }
-            "`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+            "`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
         } elseif ($_.Name -like 'Stage*') {
-            $_.Value | Select-Object -Property * -ExcludeProperty RawData | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+            $_.Value | Select-Object -Property * -ExcludeProperty RawData | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             if ($NetStackResults.Failures.PSObject.Properties.Name -contains $_.Name) {
-                 "Failure Recommendations`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                 "Failure Recommendations`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                  switch ($_.Name) {
                     'Stage1' {
                         if ($NetStackResults.Failures.Stage1.PSObject.Properties.Name -contains "IndividualFailures") {
-                            "Individual Failure Recommendations`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "Connectivity and PMTUD failed across the following connections. Verify subnet, VLAN, and MTU settings for relevant NICs." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage1.IndividualFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Individual Failure Recommendations`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Connectivity and PMTUD failed across the following connections. Verify subnet, VLAN, and MTU settings for relevant NICs." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage1.IndividualFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                         if ($NetStackResults.Failures.Stage1.PSObject.Properties.Name -contains "InterfaceFailures") {
-                            "Interface Failure Recommendations`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "Connectivity and PMTUD failed across all target NICs for the following source NICs. Verify subnet, VLAN, and MTU settings for relevant NICs. If the problem persists, consider checking NIC cabling or physical interlinks."  | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage1.InterfaceFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Interface Failure Recommendations`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Connectivity and PMTUD failed across all target NICs for the following source NICs. Verify subnet, VLAN, and MTU settings for relevant NICs. If the problem persists, consider checking NIC cabling or physical interlinks."  | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage1.InterfaceFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                         if ($NetStackResults.Failures.Stage1.PSObject.Properties.Name -contains "MachineFailures") {
-                            "Machine Failure Recommendations`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "Connectivity and PMTUD failed across all target machines for the following source machines. Verify firewall and MTU settings for the erring machines. If the problem persists, consider checking the machine cabling, NIC cabling, or physical interlinks."  | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000 
-                            $NetStackResults.Failures.Stage1.MachineFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Machine Failure Recommendations`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Connectivity and PMTUD failed across all target machines for the following source machines. Verify firewall and MTU settings for the erring machines. If the problem persists, consider checking the machine cabling, NIC cabling, or physical interlinks."  | Out-File $LogFile -Append -Encoding utf8 -Width 2000 
+                            $NetStackResults.Failures.Stage1.MachineFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                     }
                     'Stage2' {
                         if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "IndividualFailures") {
-                            "Individual Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "TCP throughput failed to meet threshold across the following connections. Retry TCP transaction with repro commands. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "Receiver Repro Command: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:<ReceivingNicIP> -consoleverbosity:1 -ServerExitLimit:64 -TimeLimit:20000 -pattern:duplex" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "Sender Repro Command: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:<ReceivingNicIP> -bind:<SendingNicIP> -connections:64 -consoleverbosity:1 -pattern:duplex" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage2.IndividualFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Individual Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "TCP throughput failed to meet threshold across the following connections. Retry TCP transaction with repro commands. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Receiver Repro Command: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:<ReceivingNicIP> -consoleverbosity:1 -ServerExitLimit:64 -TimeLimit:20000 -pattern:duplex" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Sender Repro Command: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:<ReceivingNicIP> -bind:<SendingNicIP> -connections:64 -consoleverbosity:1 -pattern:duplex" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage2.IndividualFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                         if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "InterfaceFailures") {
-                            "`nInterface Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "TCP throughput failed to meet threshold across all source NICs for the following target NICs. Verify NIC provisioning. Inspect VMQ, VMMQ, and RSS settings. Verify firewall settings for the erring machine. If the problem persists, consider checking NIC cabling or physical interlinks."  | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage2.InterfaceFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "`nInterface Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "TCP throughput failed to meet threshold across all source NICs for the following target NICs. Verify NIC provisioning. Inspect VMQ, VMMQ, and RSS settings. Verify firewall settings for the erring machine. If the problem persists, consider checking NIC cabling or physical interlinks."  | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage2.InterfaceFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                         if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "MachineFailures") {
-                            "`nMachine Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "TCP throughput failed to meet threshold across all source machines for the following target machines. Verify NIC provisioning. Inspect VMQ, VMMQ, and RSS settings. If the problem persists, consider checking NIC cabling or physical interlinks."  | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000 
-                            $NetStackResults.Failures.Stage2.MachineFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "`nMachine Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "TCP throughput failed to meet threshold across all source machines for the following target machines. Verify NIC provisioning. Inspect VMQ, VMMQ, and RSS settings. If the problem persists, consider checking NIC cabling or physical interlinks."  | Out-File $LogFile -Append -Encoding utf8 -Width 2000 
+                            $NetStackResults.Failures.Stage2.MachineFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                     }
                     'Stage3' {
                         if ($NetStackResults.Failures.Stage3.PSObject.Properties.Name -contains "IndividualFailures") {
-                            "Individual Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "NDK Ping failed across the following connections. Retry NDK Ping with repro commands. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "Receiver Repro Command: NdkPerfCmd.exe -S -ServerAddr <ReceivingNicIP>:9000  -ServerIf <ReceivingNicInterfaceIndex> -TestType rping -W 15 2>&1" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "Sender Repro Command: NdkPerfCmd.exe -C -ServerAddr  <ReceivingNicIP>:9000 -ClientAddr <SendingNicIP> -ClientIf <SendingNicInterfaceIndex> -TestType rping 2>&1" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage3.IndividualFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Individual Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "NDK Ping failed across the following connections. Retry NDK Ping with repro commands. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Receiver Repro Command: NdkPerfCmd.exe -S -ServerAddr <ReceivingNicIP>:9000  -ServerIf <ReceivingNicInterfaceIndex> -TestType rping -W 15 2>&1" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Sender Repro Command: NdkPerfCmd.exe -C -ServerAddr  <ReceivingNicIP>:9000 -ClientAddr <SendingNicIP> -ClientIf <SendingNicInterfaceIndex> -TestType rping 2>&1" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage3.IndividualFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                         if ($NetStackResults.Failures.Stage3.PSObject.Properties.Name -contains "InterfaceFailures") {
-                            "`nInterface Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "NDK Ping failed across all source NICs for the following target NICs. Verify NIC provisioning. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage3.InterfaceFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "`nInterface Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "NDK Ping failed across all source NICs for the following target NICs. Verify NIC provisioning. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage3.InterfaceFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                         if ($NetStackResults.Failures.Stage3.PSObject.Properties.Name -contains "MachineFailures") {
-                            "`nMachine Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "NDK Ping failed across all source machines for the following target machines. Verify NIC provisioning. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage3.MachineFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "`nMachine Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "NDK Ping failed across all source machines for the following target machines. Verify NIC provisioning. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage3.MachineFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                     }
                     'Stage4' {
                         if ($NetStackResults.Failures.Stage4.PSObject.Properties.Name -contains "IndividualFailures") {
-                            "Individual Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "NDK Perf (1:1) failed across the following connections. Retry NDK Perf (1:1) with repro commands. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "Receiver Repro Command: NDKPerfCmd.exe -S -ServerAddr <ReceivingNicIP>:9000  -ServerIf <ReceivingNicInterfaceIndex> -TestType rperf -W 20 2>&1" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "Sender Repro Command: NDKPerfCmd.exe -C -ServerAddr <ReceivingNicIP>:9000 -ClientAddr <SendingNicIP> -ClientIf <SendingNicInterfaceIndex> -TestType rperf 2>&1" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage4.IndividualFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Individual Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (1:1) failed across the following connections. Retry NDK Perf (1:1) with repro commands. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Receiver Repro Command: NDKPerfCmd.exe -S -ServerAddr <ReceivingNicIP>:9000  -ServerIf <ReceivingNicInterfaceIndex> -TestType rperf -W 20 2>&1" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Sender Repro Command: NDKPerfCmd.exe -C -ServerAddr <ReceivingNicIP>:9000 -ClientAddr <SendingNicIP> -ClientIf <SendingNicInterfaceIndex> -TestType rperf 2>&1" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage4.IndividualFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                         if ($NetStackResults.Failures.Stage4.PSObject.Properties.Name -contains "InterfaceFailures") {
-                            "`nInterface Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "NDK Perf (1:1) failed across all source NICs for the following target NICs. Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage4.InterfaceFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "`nInterface Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (1:1) failed across all source NICs for the following target NICs. Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage4.InterfaceFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                         if ($NetStackResults.Failures.Stage4.PSObject.Properties.Name -contains "MachineFailures") {
-                            "`nMachine Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "NDK Perf (1:1) failed across all source machines for the following target machines. Verify NIC RDMA provisioning and traffic class settings. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage4.MachineFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "`nMachine Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (1:1) failed across all source machines for the following target machines. Verify NIC RDMA provisioning and traffic class settings. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage4.MachineFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                     }
                     'Stage5' {
                         if ($NetStackResults.Failures.Stage5.PSObject.Properties.Name -contains "InterfaceFailures") {
-                            "Interface Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "NDK Perf (N:1) failed for the following target NICs. Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage5.InterfaceFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Interface Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (N:1) failed for the following target NICs. Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage5.InterfaceFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                         if ($NetStackResults.Failures.Stage5.PSObject.Properties.Name -contains "MachineFailures") {
-                            "`nMachine Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "NDK Perf (N:1) failed across all source machines for the following target machines. Verify NIC RDMA provisioning and traffic class settings. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage5.MachineFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "`nMachine Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (N:1) failed across all source machines for the following target machines. Verify NIC RDMA provisioning and traffic class settings. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage5.MachineFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                     }
                     'Stage6' {
                         if ($NetStackResults.Failures.Stage6.PSObject.Properties.Name -contains "NetworkFailures") {
-                            "Network Failure Recommendations" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            "NDK Perf (N:N) failed for networks with the following subnet/VLAN. Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-                            $NetStackResults.Failures.Stage6.NetworkFailures | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                            "Network Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "NDK Perf (N:N) failed for networks with the following subnet/VLAN. Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $NetStackResults.Failures.Stage6.NetworkFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                     }
                  }
-                "`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+                "`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             }
         } elseif ($_.Name -like 'ResultsSummary') {
-            $_.Value | ft * | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
-            break
+            $_.Value | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
         }
-        "####################################`r`n" | Out-File 'C:\Test-NetStack\Test-NetStack-Output.txt' -Append -Encoding utf8 -Width 2000
+        "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
     }
 }
 #endregion Helper Functions
