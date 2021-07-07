@@ -27,7 +27,7 @@ CompanyName = 'Microsoft'
 Copyright = '(c) 2019 Inc. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Test-NetStack is a module that can be used to exercise enterprise customer network infrastructure, and, in particular, their RDMA infrastructure. In particualr, Test-NetStack is a pester-integrated powershell tool that attempts to stress and strain the network fabric in order to isolate RDMA issues and failures.' 
+Description = 'Test-NetStack is a module that can be used to exercise enterprise customer network infrastructure, and, in particular, their RDMA infrastructure. In particualr, Test-NetStack is a pester-integrated powershell tool that attempts to stress and strain the network fabric in order to isolate RDMA issues and failures.'
 
 # Minimum version of the Windows PowerShell engine required by this module
 # PowerShellVersion = ''
