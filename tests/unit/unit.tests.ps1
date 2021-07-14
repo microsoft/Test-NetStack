@@ -20,20 +20,12 @@ Describe "$($env:APPVEYOR_BUILD_FOLDER)-Manifest" {
         'icmp.psm1', 'internal.psm1', 'ndk.psm1', 'tcp.psm1' | ForEach-Object {
             $thisModule = $_
             
-            Write-Host "------------$PWD------------"
+            It "[Test-Path] - helpers\$thisModule exists" { Test-Path ".\helpers\$thisModule" | Should Be True }
 
-            Write-Host "------------$(dir C:\projects\Test-NetStack\helpers)----"
-            
-            Write-Host "------------ $($thisModule) ----"
-            
-            Write-Host "------------ $(Test-Path .\helpers\$thisModule) ----"
-
-            It "[Test-Path] - $($env:repoName)\helpers\$thisModule exists" { Test-Path ".\helpers\$thisModule" | Should Be True }
-
-            Import-Module .\$($env:repoName)\helpers\$thisModule -Force
+            Import-Module .\helpers\$thisModule -Force
             $Module = Get-Module $thisModule
 
-            It "[Import-Module] - $($env:repoName)\helpers\$thisModule is a valid PowerShell Module" {
+            It "[Import-Module] - helpers\$thisModule is a valid PowerShell Module" {
                 $Module | Should Not BeNullOrEmpty
             }
 
