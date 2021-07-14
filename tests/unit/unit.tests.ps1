@@ -21,9 +21,11 @@ Describe "$($env:APPVEYOR_BUILD_FOLDER)-Manifest" {
             $thisModule = $_
             
             Write-Host "------------$PWD------------"
-            Write-Host "------------$(dir -recurse)----"
+            Write-Host "------------$(dir c:\test-netstack\helpers)----"
+            Write-Host "------------$($thisModule)----"
+            Write-Host "------------$($thisModule)----"
 
-            It "[Test-Path] - $($env:repoName)\helpers\$thisModule exists" { Test-Path "$($env:repoName)\helpers\$thisModule" | Should Be True }
+            It "[Test-Path] - $($env:repoName)\helpers\$thisModule exists" { Test-Path ".\$($env:repoName)\helpers\$thisModule" | Should Be True }
 
             Import-Module .\$($env:repoName)\helpers\$thisModule -Force
             $Module = Get-Module $thisModule
