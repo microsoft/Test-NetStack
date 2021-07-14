@@ -8,49 +8,55 @@ using module .\helpers\ndk.psm1
 Function Test-NetStack {
     <#
     .SYNOPSIS
-        <TODO>
+        Test-NetStack performs ICMP, TCP, and RDMA traffic testing of networks. Test-NetStack can help you identify misconfigured networks, hotspots, asymmetry across cluster nodes, and more.
 
     .DESCRIPTION
-        <TODO>
+        Test-NetStack performs ICMP, TCP, and RDMA traffic testing of networks. Test-NetStack can help you identify misconfigured networks, hotspots, asymmetry across cluster nodes, and more.
+        Specifically, Test-NetStack:
+        - Performs connectivity mapping across a cluster, specific nodes, or IP targets
+        - Stage1: ICMP Connectivity, Reliability, and PMTUD
+        - Stage2: TCP Stress 1:1
+        - Stage3: RDMA Connectivity
+        - Stage4: RDMA Stress 1:1
+        - Stage5: RDMA Stress N:1
+        - Stage6: RDMA Stress N:N
 
-    .PARAMETER Node
-        Specifies the machines to test
-        - The local machine is the source for non-congestion/stress tests
-        - Congestion/stress tests require a failover cluster to ensure common credentials - No credentials are stored/entered into Test-NetStack
-        - Minimum of 2 nodes required if specified
-        - Optional if a member of a failover cluster; required otherwise
+    .PARAMETER Nodes
+        - Specifies the machines by DNS Name to test.
+        - PowerShell remoting without credentials is required; no credentials are stored or entered into Test-NetStack.
+        - Minimum 2 nodes, maximum of 16 nodes.
 
-        If part of a failover cluster, and neither the IPTarget or Node parameters are specified, all paths will be tested
-        between this node and other nodes in the failover cluster
+        If part of a failover cluster, and neither the IPTarget or Node parameters are specified, get-clusternode will be run to attempt to gather nodenames.
 
     .PARAMETER Stage
         List of stages that specifies the tests to be run by Test-NetStack. By default, all stages will be run.
 
-        Tests will always occur in order of lowest stage first and it is highly recommended
-        that you run all preceeding tests as they are built upon one another.
+        Tests will always occur in order of lowest stage first. It is highly recommended that you always run the preceeding tests.
 
         Currently included stages for Test-NetStack:
-            Stage 1: Connectivity and PMTUD Verification (ICMP)
-            Stage 2: Reliability Calculation (ICMP)
-            Stage 3: TPUT Stress (TCP)
-            Stage 4: 1:1 RDMA Connectivity (NDK)
-            Stage 5: 1:1 RDMA Stress (NDK)
-            Stage 6: N:1 RDMA Congestion (NDK)
+        - Stage1: ICMP Connectivity, Reliability, and PMTUD
+        - Stage2: TCP Stress 1:1
+        - Stage3: RDMA Connectivity
+        - Stage4: RDMA Stress 1:1
+        - Stage5: RDMA Stress N:1
+        - Stage6: RDMA Stress N:N
 
-    .EXAMPLE 4-node test Synthetic and Hardware Data Path
-        Test-NetStack -MachineList 'AzStackHCI01', 'AzStackHCI02', 'AzStackHCI03', AzStackHCI04'
+    .EXAMPLE Run all tests in the local node's failover cluster
+        Test-NetStack
 
-    .EXAMPLE Synthetic Tests Only
-        Test-NetStack -MachineList 'AzStackHCI01', 'AzStackHCI02' -Stage 4
+    .EXAMPLE 4-domain joined nodes; all tests run
+        Test-NetStack -Nodes 'AzStackHCI01', 'AzStackHCI02', 'AzStackHCI03', AzStackHCI04'
+
+    .EXAMPLE 2-node tests; ICMP and TCP tests only
+        Test-NetStack -MachineList 'AzStackHCI01', 'AzStackHCI02' -Stage 1, 2
 
     .NOTES
         Author: Windows Core Networking team @ Microsoft
         Please file issues on GitHub @ GitHub.com/Microsoft/Test-NetStack
 
     .LINK
-        More projects               : https://github.com/microsoft/sdn
-        Windows Networking Blog     : https://blogs.technet.microsoft.com/networking/
-        RDMA Configuration Guidance : https://aka.ms/ConvergedNIC
+        Networking Blog   : https://aka.ms/MSFTNetworkBlog
+        HCI Host Guidance : https://docs.microsoft.com/en-us/azure-stack/hci/deploy/network-atc
     #>
 
     [CmdletBinding(DefaultParameterSetName = 'FullNodeMap')]
@@ -114,7 +120,7 @@ Function Test-NetStack {
     $StageFailures = 0
 
     Switch ( $Stage | Sort-Object ) {
-        '1' { # Connectivity and PMTUD
+        '1' { # ICMP Connectivity, Reliability, and PMTUD
 
             Write-Host "Beginning Stage 1 - Connectivity and PMTUD - $([System.DateTime]::Now)"
 
@@ -335,7 +341,7 @@ Function Test-NetStack {
             Write-Host "Completed Stage 1 - Connectivity and PMTUD - $([System.DateTime]::Now)"
         }
 
-        '2' { # TCP CTS Traffic
+        '2' { # TCP Stress 1:1
             Write-Host "Beginning Stage 2 - TCP - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
@@ -422,7 +428,7 @@ Function Test-NetStack {
             Write-Host "Completed Stage 2 - TCP - $([System.DateTime]::Now)"
         }
 
-        '3' {
+        '3' { # RDMA Connectivity
             Write-Host "Beginning Stage 3 - NDK Ping - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
@@ -508,7 +514,7 @@ Function Test-NetStack {
             Write-Host "Completed Stage 3 - NDK Ping - $([System.DateTime]::Now)"
         }
 
-        '4' {
+        '4' { # RDMA Stress 1:1
             Write-Host "Beginning Stage 4 - NDK Perf 1:1 - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
@@ -592,7 +598,7 @@ Function Test-NetStack {
             Write-Host "Completed Stage 4 - NDK Perf 1:1 - $([System.DateTime]::Now)"
         }
 
-        '5' {
+        '5' { # RDMA Stress N:1
             Write-Host "Beginning Stage 5 - NDK Perf N:1 - $([System.DateTime]::Now)"
             $StageResults = @()
             $TestableNetworks | ForEach-Object {
@@ -629,7 +635,7 @@ Function Test-NetStack {
             Write-Host "Completed Stage 5 - NDK Perf N:1 - $([System.DateTime]::Now)"
         }
 
-        '6' {
+        '6' { # RDMA Stress N:N
             Write-Host "Beginning Stage 6 - NDK Perf N:N - $([System.DateTime]::Now)"
             $StageResults = @()
             $TestableNetworks | ForEach-Object {
