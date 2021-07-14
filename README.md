@@ -1,9 +1,13 @@
+[![Build status](https://ci.appveyor.com/api/projects/status/7w8d0vkx55i4a9tt?svg=true)](https://ci.appveyor.com/project/MSFTCoreNet/test-netstack)
+[![downloads](https://img.shields.io/powershellgallery/dt/Test-NetStack.svg?label=downloads)](https://www.powershellgallery.com/packages/Test-NetStack)
 
 # Test-NetStack: A network integration testing tool
 
 ## Synopsis
 
-Test-NetStack is a powershell-based testing tool that leverages stress-testing utilities to identify potential network (fabric and host) instability.
+Test-NetStack is a PowerShell-based testing tool that performs ICMP, TCP, and RDMA traffic testing of networks.
+
+leverages stress-testing utilities to identify potential network (fabric and host) instability.
 
 Specifically, Test-NetStack can help you test native, synthetic, and hardware offloaded (RDMA) data paths for issues with:
 
@@ -12,81 +16,84 @@ Specifically, Test-NetStack can help you test native, synthetic, and hardware of
 - Low throughput
 - Congestion
 
-This tool will be updated over time to provide enhanced recommendations
-
-## Description
-
-Network diagnosis poses a challenge for Windows Administrators as there are a number of configuration points on (e.g. Windows) and off-box (e.g. physical network infrastructure). This can be compounded by separate data paths (e.g. RDMA vs synthetic) and the fact that Windows Administrators do not always control the physical network.
-
-In addition, traditional testing has relied on tools that leverage upper-layer protocols (e.g. DiskSpd and SMB) to test and validate functionality which adds additional complexity to testing as more variables are added to the test.
-
-Using this tool along with other Network testing and diagnosis tools such as PacketMon and Validate-DCB, Software-defined Data Center customers (e.g. Azure Stack HCI including SDN and S2D) can isolate complex network failure scenarios.
-
 ## Test Details
 
-Test-NetStack first runs networking tools (e.g. ping, CTSTraffic) with the intent of confirming upper-layer infrastructure for native or synthetic traffic. 
+Test-NetStack first performs connectivity mapping across a cluster, specific nodes, or IP targets then tests:
 
-Given a set or cluster of machines, Test-NetStack will identify the NICs that are on the same subnet and vlan. These networking tools are then run across every permutation of NIC pairs within each subnet and vlan in the following order by Test-NetStack: 
+    - Stage1: ICMP Connectivity, Reliability, and PMTUD
+    - Stage2: TCP Stress 1:1
+    - Stage3: RDMA Connectivity
+    - Stage4: RDMA Stress 1:1
+    - Stage5: RDMA Stress N:1
+    - Stage6: RDMA Stress N:N
 
-- ping (checking for connectivity)
-- ping -f -l (checking for fragmentation)
-- CTS Traffic (stressing 1:N and many:1)
+For more information, run:
 
-If the above tests pass, we will attempt to perform the same validation for RDMA. To do this, Test-NetStack runs the following network tools across every permutation of NIC pairs within each subnet and vlan: 
+```PowerShell
+help Test-NetStack
+```
 
-- NDK Ping (testing RDMA connectivity)
-- NDK Perf (stressing 1:1 and congesting with many:1)
+## Install the Tool
 
-## Run the tool
+```PowerShell
+Install-Module Test-NetStack
+```
 
-In order to run Test-NetStack, a few short steps are necessary to setup and enable each individual stage within the tool itself. A script has been provided that completes most of the setup, however, there are still a number of required manual steps. 
+### Run the Tool
 
-First and foremost, it is necessary to clone this repository to a domain-joined host's C:\ drive. Specifically, clone the repo to a new directory called "Test-NetStack." The setup script depends on the repository's location being in C:\Test-NetStack. 
+```PowerShell
+$NetStackResults = Test-NetStack
+```
 
-Once the repository is cloned, navigate to .\Test-NetStack\scripts and run setup.ps1. Specify which machines to run the setup script on using the -MachineList param. Specifically, edit specify a series of machine names in quotations ("") separated by commas. 
-`Ex. "Machine One", "Machine Two", "Machine Three" etc.` 
+```PowerShell
+$NetStackResults = Test-Netstack -Nodes 'Node1', 'Node2', 'NodeN'
+```
 
-You will need to specify domain credentials once the script starts. 
+```PowerShell
+$NetStackResults = Test-Netstack -IPTarget '192.168.1.1', '192.168.1.2', '192.168.1.3', '192.168.1.4'
+```
 
-The setup script does the following:
-- Creates a new parent directory on each machine called C:\Test-NetStack. It then creates subdirectories for NDK Perf and CTS-Traffic. These subdirectories are C:\Test-NetStack\tools\NDK-Perf and C:\Test-NetStack\tools\CTS-Traffic. 
-- Next, the script copies over the relevant .sys and .exe files for NDK Perf and CTS-Traffic to their respective directories. 
-- After copying over the files, setup.ps1 runs `sc create NDKPerf type=kernel binpath=C:\Test-NetStack\tools\NDKPerf.sys` to enable test signing and allow the new driver to be run on each remote system. 
-- Finally, a new Firewall rule is created to allow inbound CTS-Traffic communcication on each remote system. 
+### Reviewing Results
 
-After running setup.ps1, import the Test-NetStack module using `Import-Module C:\Test-NetStack\Test-NetStack.psd1`
+```PowerShell
+$NetStackResults.Stage1 | ft *
+```
 
-Finally, you may run the Test-NetStack module. 
-The following parameters are required:
-- MachineList -- Specifies the list of machines to run the test amongst. 
-- Credentials -- Specify the domain credentials for the test machines. Passing in `Get-Credential` is sufficient. 
+```PowerShell
+$NetStackResults.Stage2 | ft *
+```
 
-The following parameters are optional:
-- StageNumber -- Specify which stages of the test you'd like to run. Ex. Specifying -StageNumber 1, 4, 5 will run stages 1, 4, and 5. By default, all 5 stages are run. 
-- NetworkImage -- Setting this parameter to `$true` will force the test to only run the inital detail collection set up stage. 
+```PowerShell
+$NetStackResults.Stage3 | ft *
+```
 
-Example calls to Test-NetStack:
-- `Test-NetStack -MachineList "AzureHost01", "AzureHost02" -Credentials (Get-Credential)`
-- `Test-NetStack -MachineList "AzureHost01", "AzureHost02" -Credentials (Get-Credential) -StageNumber 2, 3`
-- `Test-NetStack -MachineList "AzureHost01", "AzureHost02" -Credentials (Get-Credential) -NetworkImage`
+```PowerShell
+$NetStackResults.Stage4 | ft *
+```
 
+```PowerShell
+$NetStackResults.Stage5 | ft *
+```
 
+```PowerShell
+$NetStackResults.Stage6 | ft *
+```
 
-## Test-NetStack Stage 0: Network Discovery
-Before testing the network infrastructure, Test-NetStack attempts to 'construct' a local image of the network by querying information about each machine's NICs. This process entails collecting information on each NICs subnet, VLAN, Ip Address, RDMA Capability, etc. A copy of this local image is output in the Test-NetStack-Network-Info text file during a run of Test-NetStack. This construct is used for the remainder of the script to construct networking tool queries and track success/failure information. 
+### Testable vs Disqualified Networks
 
-## Test-NetStack Stage 1 & 2: Ping
-Test-NetStack executes ping in two different stages amongst NIC pairs within the same Subnet and VLAN. The first stage's intent is to verify basic upper-layer connectivity. A simple ping is sent and then checked for success. 
-The second stage of Test-NetStack uses ping with the -l and -f commands enabled. The -l command dictates the size of the send buffer and -f represents the "Don't Fragment" flag. In short, the second stage attempts to find the Maximum Transmission Unit (MTU) via ping. 
+Test-NetStack will identify networks that can and cannot be tested. To review the Test-NetStack networks that will be tested, use:
 
-## Test-NetStack Stage 3: CTS Traffic
-Test-NetStack executes the network performance and reliability tool -- CTS Traffic -- to stress the synthetic connection amongst NIC pairs within the same Subnet and VLAN. This stage's intent is to verify that a TCP connection over, for example, two 40 Gbs NICs can reach a reasonable percentage (50%) of the configured throughput. 
+```PowerShell
+$NetStack.TestableNetworks
+```
 
-## Test-NetStack Stage 4: NDK Ping 
-Test-NetStack executes its first RDMA-based network tool -- NDK Ping -- to verify that a basic connection between NIC pairs within the same subnet and VLAN can be established and tested with RDMA traffic. Here, the Network Direct Kernel Provider Interface (NDKPI) is used to send a small message (analogous to a ping) via the RDMA protocol. NDK Ping is an in-box driver that can be natively run from the command line. 
+To review the Test-NetStack networks that cannot be tested.
 
-## Test-NetStack Stage 5 & 6: NDK Perf
-The final two stages of Test-NetStack invoke another RDMA-based network tool called NDK Perf. This driver attempts to establish a connection between NIC pairs within the same subnet and VLAN and consequently stress the connection to its limit with RDMA traffic. Stage 5 attempts to congest the connection between only two nodes -- one client and one server. Stage 6, however, attempts a many-to-one stress test, where multiple client NICs output maximum throughput to a single server NIC. The intent of these two stages is to isolate and identify software- or hardware-based rdma configuration issues. Physical wire bottle-necks, for example, can be better identified via RDMA stress than more traditional upper-layer stress. 
+```PowerShell
+$NetStack.DisqualifiedNetworks
+```
+
+###
 
 # Contributing
 
