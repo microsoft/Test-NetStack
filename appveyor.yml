@@ -1,0 +1,65 @@
+# YAML Reference Guide          : https://www.appveyor.com/docs/appveyor-yml/
+# Environmental Variables Guide : https://www.appveyor.com/docs/environment-variables/
+# YAML Validator                : https://ci.appveyor.com/tools/validate-yaml
+# AppVeyor Build Pipeline       : https://www.appveyor.com/docs/build-configuration/
+# GitHub push with tokens       : https://www.appveyor.com/docs/how-to/git-push/
+
+# Repo cloned into this folder on the build worker
+clone_folder: c:\projects\Test-NetStack
+
+# Date-based versioning.
+# Version will be of format: yyyy.MM.dd.Build Number
+
+init:
+  - ps: $Env:repoName     = $($env:APPVEYOR_REPO_NAME.Split('/')[1])
+  - ps: Update-AppveyorBuild -Version "$(Get-Date -format yyyy.MM.dd).$env:appveyor_build_number"
+  - ps: $Env:BuildVersion = "$(Get-Date -format yyyy.MM.dd).$env:appveyor_build_number"
+
+# Install script prior to running tests
+install:
+  - ps: . .\tests\setup\install.ps1
+
+# Initiate tests
+test_script:
+  - ps: . .\tests\setup\initiate-tests.ps1
+
+# finalize build
+deploy_script:
+  - ps: . .\tests\setup\deploy.ps1
+
+version: 0.0.0.{build}
+
+image:
+- Visual Studio 2017
+
+# Environment variables for PowerShell Gallery (NuGetAPIKey) and GitHub (GitHubKey) API key for publishing updates
+#    - The "secure:" value is the Appveyor encryption of the key
+#    - GitHub update occurs to ensure that the module version is incremented based on the build number
+
+#CoreNetBuilder
+environment:
+  NuGetApiKey:
+    secure: AAdhaP/N6f3sMBR2vaN7IS9Mzv4z0YcbqtD4MHxT0m2k4/sDKORYljLFs/BmOq1q
+  GitHubKey:
+    secure: 4VTkUGIAUqMtDSbrIrbn856kPmOLVYNSSy/NwsnQajL+7o+xpoqWZcTpYfEXco2/
+#  APPVEYOR_RDP_PASSWORD:
+#    secure: 7acrwNLLvCuP7Gw0r+rLvPxbtzr8yWmJCgaKndtKjmA=
+
+# Disable automatic builds; Without this, the following error shows up:
+# "Specify a project or solution file. The directory does not contain a project or solution file."
+build: "off"
+
+max_jobs: 1
+
+# Ignore testing a commit if specific strings used in commit message: updated readme, update readme, update docs, update version, update appveyor
+skip_commits:
+  message: /updated readme.*|update readme.*s|update docs.*|update version.*|update appveyor.*/
+  files:
+    - README.md
+
+# There's no need to alter the build number for a Pull Request (PR) since they don't modify anything
+pull_requests:
+  do_not_increment_build_number: true
+
+#on_finish:
+#  - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
