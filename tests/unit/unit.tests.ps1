@@ -20,12 +20,12 @@ Describe "$($env:APPVEYOR_BUILD_FOLDER)-Manifest" {
         'icmp.psm1', 'internal.psm1', 'ndk.psm1', 'tcp.psm1' | ForEach-Object {
             $thisModule = $_
 
-            It "[Test-Path] - $($env:repoName)\helpers\$thisModule.psm1 exists" { Test-Path "$($env:repoName)\helpers\$thisModule.psm1" | Should Be True }
+            It "[Test-Path] - $($env:repoName)\helpers\$thisModule exists" { Test-Path "$($env:repoName)\helpers\$thisModule" | Should Be True }
 
-            Import-Module .\$($env:repoName)\helpers\$thisModule.psm1 -Force
+            Import-Module .\$($env:repoName)\helpers\$thisModule -Force
             $Module = Get-Module $thisModule
 
-            It "[Import-Module] - $($env:repoName)\helpers\$thisModule.psm1 is a valid PowerShell Module" {
+            It "[Import-Module] - $($env:repoName)\helpers\$thisModule is a valid PowerShell Module" {
                 $Module | Should Not BeNullOrEmpty
             }
 
