@@ -683,6 +683,8 @@ Function Test-NetStack {
 
     $Failures = Get-Failures -NetStackResults $NetStackResults
     $NetStackResults | Add-Member -MemberType NoteProperty -Name Failures -Value $Failures
+
     Write-LogFile -NetStackResults $NetStackResults
+
     Return $NetStackResults
 }
