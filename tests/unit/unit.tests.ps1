@@ -19,6 +19,9 @@ Describe "$($env:APPVEYOR_BUILD_FOLDER)-Manifest" {
 
         'icmp.psm1', 'internal.psm1', 'ndk.psm1', 'tcp.psm1' | ForEach-Object {
             $thisModule = $_
+            
+            Write-Host "------------$PWD------------"
+            Write-Host "------------$(dir -recurse)----"
 
             It "[Test-Path] - $($env:repoName)\helpers\$thisModule exists" { Test-Path "$($env:repoName)\helpers\$thisModule" | Should Be True }
 
