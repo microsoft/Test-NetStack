@@ -82,16 +82,17 @@ Function Test-NetStack {
     )
 
     Clear-Host
-    <#
-    $here = Split-Path -Parent (Get-Module -Name Test-NetStack | Select-Object -First 1).Path
-    $global:Log = New-Item -Name 'Results.log' -Path "$here\Results" -ItemType File -Force
-    $startTime = Get-Date -format:'yyyyMMdd-HHmmss' | Out-File $log
 
-    $global:fail = 'FAIL'
-    $global:testsFailed = 0
-    #>
-
-    # Call Prerequisites
+    # Since FullNodeMap is the default, we can check if the customer entered Nodes or IPTarget. If neither, check for cluster membership, and use that for the nodes.
+    if ($PsCmdlet.ParameterSetName -eq 'FullNodeMap') {
+        if (-not($PSBoundParameters.ContainsKey('Nodes'))) {
+            try { $Nodes = (Get-ClusterNode -ErrorAction SilentlyContinue -WarningAction SilentlyContinue).Name }
+            catch {
+                Write-Host 'To run this cmdlet without parameters, join a cluster then try again. Otherwise, specify the Nodes or IPTarget parameters' -ForegroundColor Red
+                break
+            }
+        }
+    }
 
     # Each stages adds their results to this and is eventually returned by this function
     $NetStackResults = New-Object -TypeName psobject
@@ -120,17 +121,17 @@ Function Test-NetStack {
 
     # Defines the stage requirements - internal.psm1
     $Definitions = [Analyzer]::new()
-    
+
     $ResultsSummary = New-Object -TypeName psobject
     $StageFailures = 0
 
     Switch ( $Stage | Sort-Object ) {
-        '1' { # Connectivity and PMTUD
+        '1' { # ICMP Connectivity, Reliability, and PMTUD
 
             Write-Host "Beginning Stage 1 - Connectivity and PMTUD - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
-            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PWD -ChildPath 'Helpers\*') -Include '*.psm1'
+            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
             $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
             $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
@@ -346,11 +347,11 @@ Function Test-NetStack {
             Write-Host "Completed Stage 1 - Connectivity and PMTUD - $([System.DateTime]::Now)"
         }
 
-        '2' { # TCP CTS Traffic
+        '2' { # TCP Stress 1:1
             Write-Host "Beginning Stage 2 - TCP - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
-            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PWD -ChildPath 'Helpers\*') -Include '*.psm1'
+            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
             $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
             $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
@@ -372,14 +373,14 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
                         $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisTarget.IPaddress
                         $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
-                        
+
                         $thisSourceResult = Invoke-TCP -Receiver $thisSource -Sender $thisTarget
 
                         $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
                         $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.ReceivedGbps
                         $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
                         $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.TCPPerf.TPUT
-                        
+
                         $ThroughputPercentageDec = $Definitions.TCPPerf.TPUT / 100.0
                         $AcceptableThroughput = $thisSourceResult.RawData.MinLinkSpeedbps * $ThroughputPercentageDec
 
@@ -428,16 +429,16 @@ Function Test-NetStack {
 
             if ('Fail' -in $StageResults.PathStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage2 -Value 'Fail'; $StageFailures++ }
             else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage2 -Value 'Pass' }
-            
+
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage2 -Value $StageResults
             Write-Host "Completed Stage 2 - TCP - $([System.DateTime]::Now)"
         }
 
-        '3' { 
+        '3' { # RDMA Connectivity
             Write-Host "Beginning Stage 3 - NDK Ping - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
-            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PWD -ChildPath 'Helpers\*') -Include '*.psm1'
+            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
             $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
             $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
@@ -452,7 +453,7 @@ Function Test-NetStack {
                 $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
                     $thisSource = $_
                     $thisSourceResult = @()
-                    
+
                     $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
                         $thisTarget = $_
 
@@ -519,11 +520,11 @@ Function Test-NetStack {
             Write-Host "Completed Stage 3 - NDK Ping - $([System.DateTime]::Now)"
         }
 
-        '4' {  
+        '4' { # RDMA Stress 1:1
             Write-Host "Beginning Stage 4 - NDK Perf 1:1 - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
-            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PWD -ChildPath 'Helpers\*') -Include '*.psm1'
+            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
             $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
             $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
@@ -598,11 +599,12 @@ Function Test-NetStack {
 
             if ('Fail' -in $StageResults.PathStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage4 -Value 'Fail'; $StageFailures++ }
             else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage4 -Value 'Pass' }
-            
+
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage4 -Value $StageResults
             Write-Host "Completed Stage 4 - NDK Perf 1:1 - $([System.DateTime]::Now)"
         }
-        '5' { 
+
+        '5' { # RDMA Stress N:1
             Write-Host "Beginning Stage 5 - NDK Perf N:1 - $([System.DateTime]::Now)"
             $StageResults = @()
             $TestableNetworks | ForEach-Object {
@@ -611,7 +613,7 @@ Function Test-NetStack {
                 $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
                     $thisSource = $_
                     $ClientNetwork = @($thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object -FilterScript { $_.RDMAEnabled })
-                    
+
                     $thisSourceResult = Invoke-NDKPerfNto1 -Server $thisSource -ClientNetwork $ClientNetwork -ExpectedTPUT $Definitions.NDKPerf.TPUT
 
                     $Result = New-Object -TypeName psobject
@@ -623,7 +625,7 @@ Function Test-NetStack {
 
                     if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Pass' }
                     else { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail' }
-                    
+
                     $Result | Add-Member -MemberType NoteProperty -Name ClientNetworkTested -Value $thisSourceResult.ClientNetworkTested
                     $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
 
@@ -638,7 +640,8 @@ Function Test-NetStack {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage5 -Value $StageResults
             Write-Host "Completed Stage 5 - NDK Perf N:1 - $([System.DateTime]::Now)"
         }
-        '6' {  
+
+        '6' { # RDMA Stress N:N
             Write-Host "Beginning Stage 6 - NDK Perf N:N - $([System.DateTime]::Now)"
             $StageResults = @()
             $TestableNetworks | ForEach-Object {
@@ -658,7 +661,7 @@ Function Test-NetStack {
 
                 if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Pass' }
                 else { $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail' }
-                    
+
                 $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
 
                 $StageResults += $Result
@@ -672,7 +675,7 @@ Function Test-NetStack {
             Write-Host "Completed Stage 6 - NDK Perf N:N - $([System.DateTime]::Now)"
         }
     }
-    
+
     if ($StageFailures -gt 0) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name NetStack -Value 'Fail' }
     else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name NetStack -Value 'Pass' }
 
@@ -680,6 +683,8 @@ Function Test-NetStack {
 
     $Failures = Get-Failures -NetStackResults $NetStackResults
     $NetStackResults | Add-Member -MemberType NoteProperty -Name Failures -Value $Failures
+
     Write-LogFile -NetStackResults $NetStackResults
+
     Return $NetStackResults
 }
