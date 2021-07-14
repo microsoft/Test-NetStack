@@ -12,7 +12,7 @@
 RootModule = 'Test-NetStack.psm1'
 
 # Version number of this module.
-ModuleVersion = '20200110.1.1.1'
+ModuleVersion = '2021.1.1.1'
 
 # ID used to uniquely identify this module
 GUID = 'aad51a88-4b67-b840-4c35-d914d20be9b0'
@@ -27,7 +27,7 @@ CompanyName = 'Microsoft'
 Copyright = '(c) 2019 Inc. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Test-NetStack is a module that can be used to exercise enterprise customer network infrastructure, and, in particular, their RDMA infrastructure. In particualr, Test-NetStack is a pester-integrated powershell tool that attempts to stress and strain the network fabric in order to isolate RDMA issues and failures.' 
+Description = 'Test-NetStack is a module that can be used to exercise enterprise customer network infrastructure, and, in particular, their RDMA infrastructure. In particualr, Test-NetStack is a pester-integrated powershell tool that attempts to stress and strain the network fabric in order to isolate RDMA issues and failures.'
 
 # Minimum version of the Windows PowerShell engine required by this module
 # PowerShellVersion = ''
