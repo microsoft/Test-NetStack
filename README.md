@@ -1,4 +1,4 @@
-[![Build status](https://ci.appveyor.com/api/projects/status/28dr5irvwqc34ftf?svg=true)](https://ci.appveyor.com/project/MSFTCoreNet/Test-NetStack)
+[![Build status](https://ci.appveyor.com/api/projects/status/7w8d0vkx55i4a9tt?svg=true)](https://ci.appveyor.com/project/MSFTCoreNet/test-netstack)
 [![downloads](https://img.shields.io/powershellgallery/dt/Test-NetStack.svg?label=downloads)](https://www.powershellgallery.com/packages/Test-NetStack)
 
 # Test-NetStack: A network integration testing tool
