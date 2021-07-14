@@ -27,7 +27,11 @@ Test-NetStack first performs connectivity mapping across a cluster, specific nod
     - Stage5: RDMA Stress N:1
     - Stage6: RDMA Stress N:N
 
-For more information, run: ```help Test-NetStack
+For more information, run:
+
+```PowerShell
+help Test-NetStack
+```
 
 ## Install the Tool
 
