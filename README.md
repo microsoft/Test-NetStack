@@ -43,10 +43,40 @@ Install-Module Test-NetStack
 
 ```PowerShell
 $NetStackResults = Test-NetStack
+```
 
+```PowerShell
 $NetStackResults = Test-Netstack -Nodes 'Node1', 'Node2', 'NodeN'
+```
 
+```PowerShell
 $NetStackResults = Test-Netstack -IPTarget '192.168.1.1', '192.168.1.2', '192.168.1.3', '192.168.1.4'
+```
+
+### Reviewing Results
+
+```PowerShell
+$NetStackResults.Stage1 | ft *
+```
+
+```PowerShell
+$NetStackResults.Stage2 | ft *
+```
+
+```PowerShell
+$NetStackResults.Stage3 | ft *
+```
+
+```PowerShell
+$NetStackResults.Stage4 | ft *
+```
+
+```PowerShell
+$NetStackResults.Stage5 | ft *
+```
+
+```PowerShell
+$NetStackResults.Stage6 | ft *
 ```
 
 ### Testable vs Disqualified Networks
