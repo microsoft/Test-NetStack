@@ -21,9 +21,11 @@ Describe "$($env:APPVEYOR_BUILD_FOLDER)-Manifest" {
             $thisModule = $_
             
             Write-Host "------------$PWD------------"
-            Write-Host "------------$(dir c:\test-netstack\helpers)----"
+            Write-Host "------------$(dir C:\projects\Test-NetStack\helpers)----"
+            
+            Write-Host "------------$(dir ".\$($env:repoName)\helpers\$thisModule")----"
             Write-Host "------------$($thisModule)----"
-            Write-Host "------------$($thisModule)----"
+            Write-Host "------------Test-Path ".\$($env:repoName)\helpers\$thisModule"----"
 
             It "[Test-Path] - $($env:repoName)\helpers\$thisModule exists" { Test-Path ".\$($env:repoName)\helpers\$thisModule" | Should Be True }
 
