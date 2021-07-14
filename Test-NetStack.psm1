@@ -41,14 +41,20 @@ Function Test-NetStack {
         - Stage5: RDMA Stress N:1
         - Stage6: RDMA Stress N:N
 
-    .EXAMPLE Run all tests in the local node's failover cluster
-        Test-NetStack
+    .EXAMPLE Run all tests in the local node's failover cluster. Review results from Stage2 and Stage6
+        $Results = Test-NetStack
+
+        $Results.Stage2
+        $Results.Stage6
 
     .EXAMPLE 4-domain joined nodes; all tests run
-        Test-NetStack -Nodes 'AzStackHCI01', 'AzStackHCI02', 'AzStackHCI03', AzStackHCI04'
+        $Results = Test-NetStack -Nodes 'AzStackHCI01', 'AzStackHCI02', 'AzStackHCI03', AzStackHCI04'
 
-    .EXAMPLE 2-node tests; ICMP and TCP tests only
-        Test-NetStack -MachineList 'AzStackHCI01', 'AzStackHCI02' -Stage 1, 2
+    .EXAMPLE 2-node tests; ICMP and TCP tests only. Review results from Stage1 and Stage2
+        $Results = Test-NetStack -MachineList 'AzStackHCI01', 'AzStackHCI02' -Stage 1, 2
+
+        $Results.Stage1
+        $Results.Stage2
 
     .NOTES
         Author: Windows Core Networking team @ Microsoft
