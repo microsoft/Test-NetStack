@@ -23,7 +23,7 @@ Describe "$($env:APPVEYOR_BUILD_FOLDER)-Manifest" {
             It "[Test-Path] - helpers\$thisModule exists" { Test-Path ".\helpers\$thisModule" | Should Be True }
 
             Import-Module .\helpers\$thisModule -Force
-            $Module = Get-Module $thisModule
+            $Module = Get-Module $thisModule.Split('.')[0]
 
             It "[Import-Module] - helpers\$thisModule is a valid PowerShell Module" {
                 $Module | Should Not BeNullOrEmpty
