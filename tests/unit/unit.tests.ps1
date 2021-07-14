@@ -25,7 +25,7 @@ Describe "$($env:APPVEYOR_BUILD_FOLDER)-Manifest" {
             
             Write-Host "------------$(dir ".\$($env:repoName)\helpers\$thisModule")----"
             Write-Host "------------$($thisModule)----"
-            Write-Host "------------Test-Path ".\$($env:repoName)\helpers\$thisModule"----"
+            Write-Host "------------Test-Path .\helpers\$thisModule"----"
 
             It "[Test-Path] - $($env:repoName)\helpers\$thisModule exists" { Test-Path ".\$($env:repoName)\helpers\$thisModule" | Should Be True }
 
