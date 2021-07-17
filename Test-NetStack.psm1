@@ -72,7 +72,7 @@ Function Test-NetStack {
         [ValidateCount(2, 16)]
         [String[]] $Nodes,
 
-        [Parameter(Mandatory=$false, ParameterSetName='IPAddress', position = 1)]
+        [Parameter(Mandatory=$true, ParameterSetName='IPAddress', position = 0)]
         [ValidateCount(2, 16)]
         [IPAddress[]] $IPTarget,
 
@@ -84,7 +84,10 @@ Function Test-NetStack {
         [Switch] $EnableFirewallRules = $false,
 
         [Parameter(Mandatory=$false)]
-        [Switch] $PrerequisitesOnly = $false
+        [Switch] $PrerequisitesOnly = $false,
+
+        [Parameter(Mandatory=$false)]
+        [String] $LogPath = "$(Join-Path -Path $PSScriptRoot -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt")"
     )
 
     Clear-Host
@@ -705,7 +708,8 @@ Function Test-NetStack {
     $Failures = Get-Failures -NetStackResults $NetStackResults
     $NetStackResults | Add-Member -MemberType NoteProperty -Name Failures -Value $Failures
 
-    Write-LogFile -NetStackResults $NetStackResults
+    Write-LogFile -NetStackResults $NetStackResults -LogPath $LogPath
+    Write-Verbose "Log file stored at: $LogFile"
 
     Return $NetStackResults
 }
