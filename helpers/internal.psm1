@@ -608,10 +608,11 @@ Function Write-LogFile {
         $LogPath
     )
 
-    $ParentPath = Split-Path -Path $LogPath -Parent -ErrorAction SilentlyContinue
+    $ModuleBase = (Get-Module Test-NetStack -ListAvailable | Select-Object -First 1).ModuleBase
+    $LogFileParentPath = Split-Path -Path $LogPath -Parent -ErrorAction SilentlyContinue
 
-    if ( Test-Path $ParentPath -ErrorAction SilentlyContinue ) {
-        New-Item -Path $ParentPath -ItemType Directory -Force -ErrorAction SilentlyContinue
+    if ( Test-Path $LogFileParentPath -ErrorAction SilentlyContinue ) {
+        New-Item -Path $LogFileParentPath -ItemType Directory -Force -ErrorAction SilentlyContinue
     }
 
     $LogFile = New-Item -Path $LogPath -ItemType File -Force -ErrorAction SilentlyContinue
@@ -664,8 +665,8 @@ Function Write-LogFile {
                         if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "IndividualFailures") {
                             "Individual Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                             "TCP throughput failed to meet threshold across the following connections. Retry TCP transaction with repro commands. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                            "Receiver Repro Command: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:<ReceivingNicIP> -consoleverbosity:1 -ServerExitLimit:64 -TimeLimit:20000 -pattern:duplex" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                            "Sender Repro Command: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:<ReceivingNicIP> -bind:<SendingNicIP> -connections:64 -consoleverbosity:1 -pattern:duplex" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Receiver Repro Command: $ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -listen:<ReceivingNicIP> -consoleverbosity:1 -ServerExitLimit:64 -TimeLimit:20000 -pattern:duplex" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Sender Repro Command: $ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -target:<ReceivingNicIP> -bind:<SendingNicIP> -connections:64 -consoleverbosity:1 -pattern:duplex" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                             $NetStackResults.Failures.Stage2.IndividualFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                         if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "InterfaceFailures") {

@@ -8,10 +8,10 @@ function Invoke-TCP {
         [PSObject] $Sender
     )
 
-    $TCPResults = New-Object -TypeName psobject
+    $ModuleBase = (Get-Module Test-NetStack -ListAvailable | Select-Object -First 1).ModuleBase
 
     if ($EnableFirewallRules) {
-        Invoke-Command -ComputerName $Receiver.NodeName, $Sender.NodeName -ScriptBlock { New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow | Out-Null }
+        Invoke-Command -ComputerName $Receiver.NodeName, $Sender.NodeName -ScriptBlock { New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow | Out-Null }
     }
 
     # CTS Traffic Rate Limit is specified in bytes/second
@@ -63,7 +63,7 @@ function Invoke-TCP {
         Invoke-Command -ComputerName $ServerName `
         -ScriptBlock {
             param([string]$ServerIP)
-            cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:$ServerIP -consoleverbosity:1 -ServerExitLimit:64 -TimeLimit:20000 -pattern:duplex"
+            cmd /c "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -listen:$ServerIP -consoleverbosity:1 -ServerExitLimit:64 -TimeLimit:20000 -pattern:duplex"
          } `
          -ArgumentList $ServerIP
     } `
@@ -101,7 +101,7 @@ function Invoke-TCP {
         Invoke-Command -ComputerName $ClientName `
         -ScriptBlock {
             param([string]$ServerIP,[string]$ClientIP,[string]$ClientLinkSpeed)
-            cmd /c "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:$ServerIP -bind:$ClientIP -connections:64 -consoleverbosity:1 -pattern:duplex"
+            cmd /c "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -target:$ServerIP -bind:$ClientIP -connections:64 -consoleverbosity:1 -pattern:duplex"
          } `
          -ArgumentList $ServerIP,$ClientIP,$ClientLinkSpeed
     } `
@@ -158,6 +158,7 @@ function Invoke-TCP {
     $ReceivedGbps = [Math]::Round($ServerRecvBitsPerSecond * [Math]::Pow(10, -9), 2)
     $ReceivedPercentageOfLinkSpeed = [Math]::Round(($ReceivedGbps / $ReceiverLinkSpeedGbps) * 100, 2)
 
+    $TCPResults = New-Object -TypeName psobject
     $TCPResults | Add-Member -MemberType NoteProperty -Name ReceiverLinkSpeedGbps -Value $ReceiverLinkSpeedGbps
     $TCPResults | Add-Member -MemberType NoteProperty -Name ReceivedGbps -Value $ReceivedGbps
     $TCPResults | Add-Member -MemberType NoteProperty -Name ReceivedPctgOfLinkSpeed -Value $ReceivedPercentageOfLinkSpeed
