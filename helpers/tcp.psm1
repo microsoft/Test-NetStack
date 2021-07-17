@@ -10,17 +10,6 @@ function Invoke-TCP {
 
     $TCPResults = New-Object -TypeName psobject
 
-    if (!($Receiver.IPAddress -in $global:localIPs) -and !(Invoke-Command -ComputerName $Receiver.NodeName -ScriptBlock { Test-Path -Path "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" })) {
-        $DestinationSession = New-PSSession -ComputerName $Receiver.NodeName
-        Invoke-Command -ComputerName $Receiver.NodeName -ScriptBlock {cmd /c "mkdir C:\Test-NetStack\tools\CTS-Traffic"} -ErrorAction SilentlyContinue
-        Copy-Item C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\Test-NetStack\tools\CTS-Traffic -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
-    }
-    if (!($Sender.IPAddress -in $global:localIPs) -and !(Invoke-Command -ComputerName $Sender.NodeName -ScriptBlock { Test-Path -Path "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" })) {
-        $DestinationSession = New-PSSession -ComputerName $Sender.NodeName
-        Invoke-Command -ComputerName $Sender.NodeName -ScriptBlock {cmd /c "mkdir C:\Test-NetStack\tools\CTS-Traffic"} -ErrorAction SilentlyContinue
-        Copy-Item C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -Destination C:\Test-NetStack\tools\CTS-Traffic -Force -ToSession $DestinationSession -ErrorAction SilentlyContinue
-    }
-
     if ($EnableFirewallRules) {
         Invoke-Command -ComputerName $Receiver.NodeName, $Sender.NodeName -ScriptBlock { New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow | Out-Null }
     }
