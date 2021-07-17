@@ -87,7 +87,7 @@ Function Test-NetStack {
         [Switch] $PrerequisitesOnly = $false,
 
         [Parameter(Mandatory=$false)]
-        [String] $LogPath = "$(Join-Path -Path $PSScriptRoot -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt")"
+        [String] $LogPath = "$(Join-Path -Path $(Get-Module -Name Test-Netstack -ListAvailable | Select -First 1) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt"))"
     )
 
     Clear-Host
@@ -709,7 +709,7 @@ Function Test-NetStack {
     $NetStackResults | Add-Member -MemberType NoteProperty -Name Failures -Value $Failures
 
     Write-LogFile -NetStackResults $NetStackResults -LogPath $LogPath
-    Write-Verbose "Log file stored at: $LogFile"
+    Write-Output "Log file stored at: $LogFile"
 
     Return $NetStackResults
 }
