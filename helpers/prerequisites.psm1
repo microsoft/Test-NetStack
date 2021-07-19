@@ -35,8 +35,6 @@ Function Test-NetStackPrerequisites {
         [Int32[]] $Stage
     )
 
-    #TODO: Stage2: Check that Test-NetStack exists on all targets
-    #TODO: Stage2: Check that Test-NetStack is same version on all targets
     #TODO: Test that CTSTraffic rule is in firewall
 
     if ($IPTarget) { $Targets = $IPTarget }

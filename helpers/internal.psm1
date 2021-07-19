@@ -665,8 +665,8 @@ Function Write-LogFile {
                         if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "IndividualFailures") {
                             "Individual Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                             "TCP throughput failed to meet threshold across the following connections. Retry TCP transaction with repro commands. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                            "Receiver Repro Command: $ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -listen:<ReceivingNicIP> -consoleverbosity:1 -ServerExitLimit:64 -TimeLimit:20000 -pattern:duplex" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                            "Sender Repro Command: $ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -target:<ReceivingNicIP> -bind:<SendingNicIP> -connections:64 -consoleverbosity:1 -pattern:duplex" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Receiver Repro Command: $ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -listen:<ReceivingNicIP> -Protocol:tcp -buffer:262144 -transfer:21474836480 -Pattern:push -TimeLimit:30000" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Sender Repro Command: $ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -target:<ReceivingNicIP> -bind:<SenderIP> -Connections:64 -Iterations:1 -Protocol:tcp -buffer:262144 -transfer:21474836480 -Pattern:push" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                             $NetStackResults.Failures.Stage2.IndividualFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                         if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "InterfaceFailures") {
