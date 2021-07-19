@@ -108,7 +108,7 @@ function Invoke-TCP {
 
     } -ArgumentList $Sender.NodeName, $Receiver.IPAddress, $Sender.IPAddress, $ModuleBase
 
-    # This is not the right way to do this...
+    #TODO: We should track the job state or listen for an event rather than a simplistic timer like this.
     Start-Sleep 30
 
     $ServerRecv = Receive-Job $ServerRecvCounter
