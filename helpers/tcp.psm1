@@ -57,58 +57,59 @@ function Invoke-TCP {
     } `
     -ArgumentList $Receiver.NodeName,$Receiver.InterfaceDescription
 
-    $ServerOutput = Start-Job `
-    -ScriptBlock {
-        param([string]$ServerName,[string]$ServerIP,[string]$ServerLinkSpeed)
-        Invoke-Command -ComputerName $ServerName `
-        -ScriptBlock {
-            param([string]$ServerIP)
-            cmd /c "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -listen:$ServerIP -consoleverbosity:1 -ServerExitLimit:64 -TimeLimit:20000 -pattern:duplex"
-         } `
-         -ArgumentList $ServerIP
-    } `
-    -ArgumentList $Receiver.NodeName,$Receiver.IPAddress,$Receiver.LinkSpeed
+    $ServerOutput = Start-Job -ScriptBlock {
+        param([string] $ServerName, [string] $ServerIP, $ModuleBase)
 
-    $ClientRecvCounter = Start-Job `
-    -ScriptBlock {
-        param([string]$ClientName,[string]$ClientInterfaceDescription)
+        Invoke-Command -ComputerName $ServerName -ScriptBlock {
+            param(
+                [string] $ServerIP,
+                [string] $ModuleBase
+            )
+
+            & "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -listen:$ServerIP -Protocol:tcp -buffer:262144 -transfer:21474836480 -Pattern:push -TimeLimit:30000"
+         } -ArgumentList $ServerIP, $ModuleBase
+
+    } -ArgumentList $Receiver.NodeName, $Receiver.IPAddress, $ModuleBase
+
+    $ClientRecvCounter = Start-Job -ScriptBlock {
+        param([string] $ClientName, [string] $ClientInterfaceDescription)
+
         $ClientInterfaceDescription = (((($ClientInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
-        Invoke-Command -ComputerName $ClientName `
-        -ScriptBlock {
+
+        Invoke-Command -ComputerName $ClientName -ScriptBlock {
             param([string]$ClientInterfaceDescription)
+
             Get-Counter -Counter "\Network Adapter($ClientInterfaceDescription)\Bytes Received/sec" -MaxSamples 20
-         } `
-         -ArgumentList $ClientInterfaceDescription
-    } `
-    -ArgumentList $Sender.NodeName,$Sender.InterfaceDescription
+         } -ArgumentList $ClientInterfaceDescription
 
-    $ClientSendCounter = Start-Job `
-    -ScriptBlock {
-        param([string]$ClientName,[string]$ClientInterfaceDescription)
+    } -ArgumentList $Sender.NodeName, $Sender.InterfaceDescription
+
+    $ClientSendCounter = Start-Job -ScriptBlock {
+        param([string] $ClientName, [string] $ClientInterfaceDescription)
+
         $ClientInterfaceDescription = (((($ClientInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
-        Invoke-Command -ComputerName $ClientName `
-        -ScriptBlock {
-            param([string]$ClientInterfaceDescription)
+
+        Invoke-Command -ComputerName $ClientName -ScriptBlock {
+            param([string] $ClientInterfaceDescription)
+
             Get-Counter -Counter "\Network Adapter($ClientInterfaceDescription)\Bytes Sent/sec" -MaxSamples 20
-         } `
-         -ArgumentList $ClientInterfaceDescription
-    } `
-    -ArgumentList $Sender.NodeName,$Sender.InterfaceDescription
+         } -ArgumentList $ClientInterfaceDescription
 
-    $ClientOutput = Start-Job `
-    -ScriptBlock {
-        param([string]$ClientName,[string]$ServerIP,[string]$ClientIP,[string]$ClientLinkSpeed)
-        Invoke-Command -ComputerName $ClientName `
-        -ScriptBlock {
-            param([string]$ServerIP,[string]$ClientIP,[string]$ClientLinkSpeed)
-            cmd /c "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -target:$ServerIP -bind:$ClientIP -connections:64 -consoleverbosity:1 -pattern:duplex"
-         } `
-         -ArgumentList $ServerIP,$ClientIP,$ClientLinkSpeed
-    } `
-    -ArgumentList $Sender.NodeName,$Receiver.IPAddress,$Sender.IPAddress,$ClientLinkSpeedBps
+    } -ArgumentList $Sender.NodeName,$Sender.InterfaceDescription
 
+    $ClientOutput = Start-Job -ScriptBlock {
+        param([string] $ClientName, [string] $ServerIP, [string] $ClientIP, [string] $ModuleBase)
 
-    Start-Sleep 20
+        Invoke-Command -ComputerName $ClientName -ScriptBlock {
+            param( [string] $ServerIP, [string] $ClientIP, $ModuleBase )
+
+            & "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -target:$ServerIP -bind:$ClientIP -Connections:64 -Iterations:1 -Protocol:tcp -buffer:262144 -transfer:21474836480 -Pattern:push"
+         } -ArgumentList $ServerIP, $ClientIP, $ModuleBase
+
+    } -ArgumentList $Sender.NodeName, $Receiver.IPAddress, $Sender.IPAddress, $ModuleBase
+
+    # This is not the right way to do this...
+    Start-Sleep 30
 
     $ServerRecv = Receive-Job $ServerRecvCounter
     $ServerSend = Receive-Job $ServerSendCounter
