@@ -611,7 +611,7 @@ Function Write-LogFile {
     $ModuleBase = (Get-Module Test-NetStack -ListAvailable | Select-Object -First 1).ModuleBase
     $LogFileParentPath = Split-Path -Path $LogPath -Parent -ErrorAction SilentlyContinue
 
-    if ( Test-Path $LogFileParentPath -ErrorAction SilentlyContinue ) {
+    if (-not (Test-Path $LogFileParentPath -ErrorAction SilentlyContinue)) {
         New-Item -Path $LogFileParentPath -ItemType Directory -Force -ErrorAction SilentlyContinue
     }
 
