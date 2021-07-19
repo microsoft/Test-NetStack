@@ -709,7 +709,7 @@ Function Test-NetStack {
     $NetStackResults | Add-Member -MemberType NoteProperty -Name Failures -Value $Failures
 
     Write-LogFile -NetStackResults $NetStackResults -LogPath $LogPath
-    Write-Output "Log file stored at: $LogFile"
+    Write-Verbose "Log file stored at: $LogPath"
 
     Return $NetStackResults
 }
