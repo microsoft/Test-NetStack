@@ -72,16 +72,28 @@ Function Test-NetStack {
         [ValidateCount(2, 16)]
         [String[]] $Nodes,
 
-        [Parameter(Mandatory=$false, ParameterSetName='IPAddress', position = 1)]
+        [Parameter(Mandatory=$true, ParameterSetName='IPAddress', position = 0)]
         [ValidateCount(2, 16)]
         [IPAddress[]] $IPTarget,
 
         [Parameter(Mandatory=$false)]
         [ValidateSet('1', '2', '3', '4', '5', '6')]
-        [Int32[]] $Stage = @('1', '2', '3', '4', '5', '6')
+        [Int32[]] $Stage = @('1', '2', '3', '4', '5', '6'),
+
+        [Parameter(Mandatory=$false)]
+        [Switch] $EnableFirewallRules = $false,
+
+        [Parameter(Mandatory=$false)]
+        [Switch] $PrerequisitesOnly = $false,
+
+        [Parameter(Mandatory=$false)]
+        [String] $LogPath = "$(Join-Path -Path $(Get-Module -Name Test-Netstack -ListAvailable | Select -First 1) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt"))"
     )
 
     Clear-Host
+
+    # Each stages adds their results to this and is eventually returned by this function
+    $NetStackResults = New-Object -TypeName psobject
 
     # Since FullNodeMap is the default, we can check if the customer entered Nodes or IPTarget. If neither, check for cluster membership, and use that for the nodes.
     if ($PsCmdlet.ParameterSetName -eq 'FullNodeMap') {
@@ -92,10 +104,25 @@ Function Test-NetStack {
                 break
             }
         }
+
+        if ($PrerequisitesOnly) { $Stage = @('1', '2', '3', '4', '5', '6') }
+
+	    # Function returns both the target information and the results of the prerequisite testing
+        $TargetInfo, $PrereqStatus = Test-NetStackPrerequisites -Nodes $Nodes -Stage $Stage
+    }
+    else { # Function returns both the target information and the results of the prerequisite testing
+        if ($PrerequisitesOnly) { $Stage = @('1', '2', '3', '4', '5', '6') }
+
+        $TargetInfo, $PrereqStatus = Test-NetStackPrerequisites -IPTarget $IPTarget -Stage $Stage
     }
 
-    # Each stages adds their results to this and is eventually returned by this function
-    $NetStackResults = New-Object -TypeName psobject
+    $NetStackResults | Add-Member -MemberType NoteProperty -Name Prerequisites -Value $TargetInfo
+    Remove-Variable TargetInfo -ErrorAction SilentlyContinue
+
+    if ($PrerequisitesOnly) { return $NetStackResults }
+    elseif ($false -in $PrereqStatus) {
+        throw "Prerequsite tests have failed. Review the NetStack results for more details."
+    }
 
     #region Connectivity Maps
     if ($Nodes) { $Mapping = Get-ConnectivityMapping -Nodes $Nodes }
@@ -115,9 +142,6 @@ Function Test-NetStack {
     #endregion Connectivity Maps
 
     $runspaceGroups = Get-RunspaceGroups -TestableNetworks $TestableNetworks
-
-    # Get the IPs on the local system so you can avoid invoke-command
-    #$localIPs = (Get-NetIPAddress -AddressFamily IPv4 -Type Unicast).IPAddress
 
     # Defines the stage requirements - internal.psm1
     $Definitions = [Analyzer]::new()
@@ -684,7 +708,8 @@ Function Test-NetStack {
     $Failures = Get-Failures -NetStackResults $NetStackResults
     $NetStackResults | Add-Member -MemberType NoteProperty -Name Failures -Value $Failures
 
-    Write-LogFile -NetStackResults $NetStackResults
+    Write-LogFile -NetStackResults $NetStackResults -LogPath $LogPath
+    Write-Output "Log file stored at: $LogFile"
 
     Return $NetStackResults
 }

@@ -144,7 +144,7 @@ Function Get-ConnectivityMapping {
 
                 # Remove APIPA
                 $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
-                
+
                 $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
 
                 $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
@@ -155,7 +155,7 @@ Function Get-ConnectivityMapping {
                 # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
                 $AdapterIP = Get-NetIPAddress -IPAddress $IP -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
                                 Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
-                
+
                 # Remove APIPA
                 $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
 
@@ -256,7 +256,7 @@ Function Get-ConnectivityMapping {
 
             # Remove APIPA
             $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
-            
+
             $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
             $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
             $RDMAAdapter = Get-NetAdapterRdma -CimSession $thisNode -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
@@ -458,7 +458,7 @@ Function Get-Failures {
     $NetStackResults.PSObject.Properties | ForEach-Object {
         if ($_.Name -like 'Stage1') {
             $Stage1Results = $_.Value
-            
+
             $IndividualFailures = @()
             $AllFailures = $Stage1Results | Where-Object PathStatus -eq Fail
             $AllFailures | ForEach-Object {
@@ -579,7 +579,7 @@ Function Get-Failures {
             }
         } elseif ($_.Name -like 'Stage6') {
             $StageResults = $_.Value
-            
+
             $NetworkFailures = @()
             $AllFailures = $StageResults | Where-Object NetworkStatus -eq Fail
             $AllFailures | ForEach-Object {
@@ -595,7 +595,7 @@ Function Get-Failures {
             if ($StageHadFailures) {
                 $Failures | Add-Member -MemberType NoteProperty -Name $_.Name -Value $StageFailures
             }
-            
+
         }
     }
     Return $Failures
@@ -603,8 +603,20 @@ Function Get-Failures {
 
 
 Function Write-LogFile {
-    param ( $NetStackResults )
-    $LogFile = "C:\Test-NetStack\Test-NetStack-Output-$(Get-Date -f yyyy-MM-dd-HHmmss).txt"
+    param (
+        $NetStackResults,
+        $LogPath
+    )
+
+    $ModuleBase = (Get-Module Test-NetStack -ListAvailable | Select-Object -First 1).ModuleBase
+    $LogFileParentPath = Split-Path -Path $LogPath -Parent -ErrorAction SilentlyContinue
+
+    if (-not (Test-Path $LogFileParentPath -ErrorAction SilentlyContinue)) {
+        New-Item -Path $LogFileParentPath -ItemType Directory -Force -ErrorAction SilentlyContinue
+    }
+
+    $LogFile = New-Item -Path $LogPath -ItemType File -Force -ErrorAction SilentlyContinue
+
     $NetStackResults.PSObject.Properties | ForEach-Object {
         if ($_.Name -notlike 'Failures') {
             $_.Name | Out-File $LogFile -Append -Encoding utf8 -Width 2000
@@ -645,7 +657,7 @@ Function Write-LogFile {
                         }
                         if ($NetStackResults.Failures.Stage1.PSObject.Properties.Name -contains "MachineFailures") {
                             "Machine Failure Recommendations`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                            "Connectivity and PMTUD failed across all target machines for the following source machines. Verify firewall and MTU settings for the erring machines. If the problem persists, consider checking the machine cabling, NIC cabling, or physical interlinks."  | Out-File $LogFile -Append -Encoding utf8 -Width 2000 
+                            "Connectivity and PMTUD failed across all target machines for the following source machines. Verify firewall and MTU settings for the erring machines. If the problem persists, consider checking the machine cabling, NIC cabling, or physical interlinks."  | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                             $NetStackResults.Failures.Stage1.MachineFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                     }
@@ -653,8 +665,8 @@ Function Write-LogFile {
                         if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "IndividualFailures") {
                             "Individual Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                             "TCP throughput failed to meet threshold across the following connections. Retry TCP transaction with repro commands. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                            "Receiver Repro Command: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -listen:<ReceivingNicIP> -consoleverbosity:1 -ServerExitLimit:64 -TimeLimit:20000 -pattern:duplex" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                            "Sender Repro Command: C:\Test-NetStack\tools\CTS-Traffic\ctsTraffic.exe -target:<ReceivingNicIP> -bind:<SendingNicIP> -connections:64 -consoleverbosity:1 -pattern:duplex" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Receiver Repro Command: $ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -listen:<ReceivingNicIP> -Protocol:tcp -buffer:262144 -transfer:21474836480 -Pattern:push -TimeLimit:30000" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            "Sender Repro Command: $ModuleBase\tools\CTS-Traffic\ctsTraffic.exe -target:<ReceivingNicIP> -bind:<SenderIP> -Connections:64 -Iterations:1 -Protocol:tcp -buffer:262144 -transfer:21474836480 -Pattern:push" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                             $NetStackResults.Failures.Stage2.IndividualFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                         if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "InterfaceFailures") {
@@ -664,7 +676,7 @@ Function Write-LogFile {
                         }
                         if ($NetStackResults.Failures.Stage2.PSObject.Properties.Name -contains "MachineFailures") {
                             "`nMachine Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                            "TCP throughput failed to meet threshold across all source machines for the following target machines. Verify NIC provisioning. Inspect VMQ, VMMQ, and RSS settings. If the problem persists, consider checking NIC cabling or physical interlinks."  | Out-File $LogFile -Append -Encoding utf8 -Width 2000 
+                            "TCP throughput failed to meet threshold across all source machines for the following target machines. Verify NIC provisioning. Inspect VMQ, VMMQ, and RSS settings. If the problem persists, consider checking NIC cabling or physical interlinks."  | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                             $NetStackResults.Failures.Stage2.MachineFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         }
                     }
