@@ -706,8 +706,9 @@ Function Test-NetStack {
     $NetStackResults | Add-Member -MemberType NoteProperty -Name ResultsSummary -Value $ResultsSummary
 
     $Failures = Get-Failures -NetStackResults $NetStackResults
-    $NetStackResults | Add-Member -MemberType NoteProperty -Name Failures -Value $Failures
-
+    if (@($Failures.PSObject.Properties).Count -gt 0) {
+        $NetStackResults | Add-Member -MemberType NoteProperty -Name Failures -Value $Failures
+    }
     Write-LogFile -NetStackResults $NetStackResults -LogPath $LogPath
     Write-Verbose "Log file stored at: $LogPath"
 
