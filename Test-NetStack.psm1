@@ -95,6 +95,7 @@ Function Test-NetStack {
     # Each stages adds their results to this and is eventually returned by this function
     $NetStackResults = New-Object -TypeName psobject
 
+    <#
     # Since FullNodeMap is the default, we can check if the customer entered Nodes or IPTarget. If neither, check for cluster membership, and use that for the nodes.
     if ($PsCmdlet.ParameterSetName -eq 'FullNodeMap') {
         if (-not($PSBoundParameters.ContainsKey('Nodes'))) {
@@ -123,6 +124,7 @@ Function Test-NetStack {
     elseif ($false -in $PrereqStatus) {
         throw "Prerequsite tests have failed. Review the NetStack results for more details."
     }
+    #>
 
     #region Connectivity Maps
     if ($Nodes) { $Mapping = Get-ConnectivityMapping -Nodes $Nodes }
@@ -394,15 +396,15 @@ Function Test-NetStack {
                         param ( $thisComputerName, $thisSource, $thisTarget, $localIPs, $Definitions )
 
                         $Result = New-Object -TypeName psobject
-                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
-                        $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisTarget.IPaddress
-                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
+                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
+                        $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
+                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                        $thisSourceResult = Invoke-TCP -Receiver $thisSource -Sender $thisTarget
+                        $thisTargetResult = Invoke-TCP -Receiver $thisTarget -Sender $thisSource
 
-                        $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
-                        $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.ReceivedGbps
-                        $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
+                        $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisTargetResult.ReceiverLinkSpeedGbps
+                        $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisTargetResult.ReceivedGbps
+                        $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisTargetResult.ReceivedPctgOfLinkSpeed
                         $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.TCPPerf.TPUT
 
                         $ThroughputPercentageDec = $Definitions.TCPPerf.TPUT / 100.0
@@ -411,7 +413,7 @@ Function Test-NetStack {
                         if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
                         else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
 
-                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
+                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisTargetResult.RawData
 
                         Return $Result
                     })
