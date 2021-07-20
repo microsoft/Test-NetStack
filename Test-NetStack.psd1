@@ -12,7 +12,7 @@
 RootModule = 'Test-NetStack.psm1'
 
 # Version number of this module.
-ModuleVersion = '2021.7.14.20'
+ModuleVersion = '2021.7.14.21'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
