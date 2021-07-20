@@ -52,10 +52,12 @@ ForEach ($Module in $PowerShellModules) {
         }
     }
     ElseIf ($Module -eq 'Pester') {
+        Write-Output "Installing Pester version 4.9.0"
         Install-Module $Module -Scope AllUsers -Force -Repository PSGallery -AllowClobber -SkipPublisherCheck -RequiredVersion 4.9.0
         Import-Module $Module -RequiredVersion 4.9.0
     }
     else {
+        Write-Output "Installing $Module"
         Install-Module $Module -Scope AllUsers -Force -Repository PSGallery -AllowClobber
         Import-Module $Module
     }
