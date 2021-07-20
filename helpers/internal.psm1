@@ -612,7 +612,7 @@ Function Write-LogFile {
     $LogFileParentPath = Split-Path -Path $LogPath -Parent -ErrorAction SilentlyContinue
 
     if (-not (Test-Path $LogFileParentPath -ErrorAction SilentlyContinue)) {
-        New-Item -Path $LogFileParentPath -ItemType Directory -Force -ErrorAction SilentlyContinue
+        $null = New-Item -Path $LogFileParentPath -ItemType Directory -Force -ErrorAction SilentlyContinue
     }
 
     $LogFile = New-Item -Path $LogPath -ItemType File -Force -ErrorAction SilentlyContinue
