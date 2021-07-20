@@ -95,7 +95,6 @@ Function Test-NetStack {
     # Each stages adds their results to this and is eventually returned by this function
     $NetStackResults = New-Object -TypeName psobject
 
-    <#
     # Since FullNodeMap is the default, we can check if the customer entered Nodes or IPTarget. If neither, check for cluster membership, and use that for the nodes.
     if ($PsCmdlet.ParameterSetName -eq 'FullNodeMap') {
         if (-not($PSBoundParameters.ContainsKey('Nodes'))) {
@@ -124,7 +123,6 @@ Function Test-NetStack {
     elseif ($false -in $PrereqStatus) {
         throw "Prerequsite tests have failed. Review the NetStack results for more details."
     }
-    #>
 
     #region Connectivity Maps
     if ($Nodes) { $Mapping = Get-ConnectivityMapping -Nodes $Nodes }
