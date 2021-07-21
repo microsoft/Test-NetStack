@@ -26,7 +26,7 @@ Class Reliability {
 
 Class TCPPerf {
         # Min TPUT by % of link speed
-        [int] $TPUT = '90'
+        [int] $TPUT = '80'
 
     TCPPerf () {}
 }
