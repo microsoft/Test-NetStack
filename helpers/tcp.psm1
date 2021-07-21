@@ -44,19 +44,6 @@ function Invoke-TCP {
     } `
     -ArgumentList $Receiver.NodeName,$Receiver.InterfaceDescription
 
-    $ServerSendCounter = Start-Job `
-    -ScriptBlock {
-        param([string]$ServerName,[string]$ServerInterfaceDescription)
-        $ServerInterfaceDescription = (((($ServerInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
-        Invoke-Command -ComputerName $ServerName `
-        -ScriptBlock {
-            param([string]$ServerInterfaceDescription)
-            Get-Counter -Counter "\Network Adapter($ServerInterfaceDescription)\Bytes Sent/sec" -MaxSamples 20 -ErrorAction Ignore
-         } `
-         -ArgumentList $ServerInterfaceDescription
-    } `
-    -ArgumentList $Receiver.NodeName,$Receiver.InterfaceDescription
-
     $ServerOutput = Start-Job -ScriptBlock {
         param([string] $ServerName, [string] $ServerIP, $ModuleBase)
 
@@ -70,19 +57,6 @@ function Invoke-TCP {
          } -ArgumentList $ServerIP, $ModuleBase
 
     } -ArgumentList $Receiver.NodeName, $Receiver.IPAddress, $ModuleBase
-
-    $ClientRecvCounter = Start-Job -ScriptBlock {
-        param([string] $ClientName, [string] $ClientInterfaceDescription)
-
-        $ClientInterfaceDescription = (((($ClientInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
-
-        Invoke-Command -ComputerName $ClientName -ScriptBlock {
-            param([string]$ClientInterfaceDescription)
-
-            Get-Counter -Counter "\Network Adapter($ClientInterfaceDescription)\Bytes Received/sec" -MaxSamples 20
-         } -ArgumentList $ClientInterfaceDescription
-
-    } -ArgumentList $Sender.NodeName, $Sender.InterfaceDescription
 
     $ClientSendCounter = Start-Job -ScriptBlock {
         param([string] $ClientName, [string] $ClientInterfaceDescription)
@@ -112,17 +86,9 @@ function Invoke-TCP {
     Start-Sleep 30
 
     $ServerRecv = Receive-Job $ServerRecvCounter
-    $ServerSend = Receive-Job $ServerSendCounter
-    $ClientRecv = Receive-Job $ClientRecvCounter
     $ClientSend = Receive-Job $ClientSendCounter
 
     $FlatServerRecvOutput = $ServerRecv.Readings.split(":") | ForEach-Object {
-        try {[uint64]($_) * 8} catch{}
-    }
-    $FlatServerSendOutput = $ServerSend.Readings.split(":") | ForEach-Object {
-        try {[uint64]($_) * 8} catch{}
-    }
-    $FlatClientRecvOutput = $ClientRecv.Readings.split(":") | ForEach-Object {
         try {[uint64]($_) * 8} catch{}
     }
     $FlatClientSendOutput = $ClientSend.Readings.split(":") | ForEach-Object {
@@ -130,13 +96,9 @@ function Invoke-TCP {
     }
 
     $ServerRecvBitsPerSecond = [Math]::Round(($FlatServerRecvOutput | Measure-Object -Maximum).Maximum, 2)
-    $ServerSendBitsPerSecond = [Math]::Round(($FlatServerSendOutput | Measure-Object -Maximum).Maximum, 2)
-    $ClientRecvBitsPerSecond = [Math]::Round(($FlatClientRecvOutput | Measure-Object -Maximum).Maximum, 2)
     $ClientSendBitsPerSecond = [Math]::Round(($FlatClientSendOutput | Measure-Object -Maximum).Maximum, 2)
 
     Write-Verbose "Server Recv bps: $ServerRecvBitsPerSecond"
-    Write-Verbose "Server Send bps: $ServerSendBitsPerSecond"
-    Write-Verbose "Client Recv bps: $ClientRecvBitsPerSecond"
     Write-Verbose "Client Send bps: $ClientSendBitsPerSecond"
 
     $ServerOutput = Receive-Job $ServerOutput
@@ -150,8 +112,6 @@ function Invoke-TCP {
 
     $RawData = New-Object -TypeName psobject
     $RawData | Add-Member -MemberType NoteProperty -Name ServerRxbps -Value $ServerRecvBitsPerSecond
-    $RawData | Add-Member -MemberType NoteProperty -Name ServerTxbps -Value $ServerSendBitsPerSecond
-    $RawData | Add-Member -MemberType NoteProperty -Name ClientRxbps -Value $ClientRecvBitsPerSecond
     $RawData | Add-Member -MemberType NoteProperty -Name ClientTxbps -Value $ClientSendBitsPerSecond
     $RawData | Add-Member -MemberType NoteProperty -Name MinLinkSpeedbps -Value $MinLinkSpeedBitsPerSecond
 

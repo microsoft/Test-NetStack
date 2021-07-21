@@ -394,15 +394,15 @@ Function Test-NetStack {
                         param ( $thisComputerName, $thisSource, $thisTarget, $localIPs, $Definitions )
 
                         $Result = New-Object -TypeName psobject
-                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
-                        $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisTarget.IPaddress
-                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
+                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
+                        $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
+                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                        $thisSourceResult = Invoke-TCP -Receiver $thisSource -Sender $thisTarget
+                        $thisTargetResult = Invoke-TCP -Receiver $thisTarget -Sender $thisSource
 
-                        $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
-                        $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.ReceivedGbps
-                        $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
+                        $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisTargetResult.ReceiverLinkSpeedGbps
+                        $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisTargetResult.ReceivedGbps
+                        $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisTargetResult.ReceivedPctgOfLinkSpeed
                         $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.TCPPerf.TPUT
 
                         $ThroughputPercentageDec = $Definitions.TCPPerf.TPUT / 100.0
@@ -411,7 +411,7 @@ Function Test-NetStack {
                         if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
                         else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
 
-                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
+                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisTargetResult.RawData
 
                         Return $Result
                     })
@@ -706,8 +706,9 @@ Function Test-NetStack {
     $NetStackResults | Add-Member -MemberType NoteProperty -Name ResultsSummary -Value $ResultsSummary
 
     $Failures = Get-Failures -NetStackResults $NetStackResults
-    $NetStackResults | Add-Member -MemberType NoteProperty -Name Failures -Value $Failures
-
+    if (@($Failures.PSObject.Properties).Count -gt 0) {
+        $NetStackResults | Add-Member -MemberType NoteProperty -Name Failures -Value $Failures
+    }
     Write-LogFile -NetStackResults $NetStackResults -LogPath $LogPath
     Write-Verbose "Log file stored at: $LogPath"
 
