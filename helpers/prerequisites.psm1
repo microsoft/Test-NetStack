@@ -70,7 +70,9 @@ Function Test-NetStackPrerequisites {
                 $thisTarget = $_
 
                 if ($thisTarget -ne $Env:ComputerName) {
-                    $Module = Get-Module Test-NetStack -CimSession $thisTarget -ListAvailable -ErrorAction SilentlyContinue | Select-Object -First 1
+                    $Module = Invoke-Command -ComputerName $thisTarget -ScriptBlock {
+                        Get-Module Test-NetStack -ListAvailable -ErrorAction SilentlyContinue | Select-Object -First 1
+                    }
 
                     if ($Module) {
                         ($TargetInfo | Where-Object Name -eq $thisTarget).Module = $true
