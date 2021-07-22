@@ -408,7 +408,7 @@ Function Test-NetStack {
                         $ThroughputPercentageDec = $Definitions.TCPPerf.TPUT / 100.0
                         $AcceptableThroughput = $thisSourceResult.RawData.MinLinkSpeedbps * $ThroughputPercentageDec
 
-                        if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                        if ($thisTargetResult.ReceivedPctgOfLinkSpeed -ge $Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
                         else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
 
                         $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisTargetResult.RawData
