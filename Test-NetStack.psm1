@@ -1,7 +1,6 @@
 using module .\helpers\prerequisites.psm1
 using module .\helpers\internal.psm1
 using module .\helpers\icmp.psm1
-using module .\helpers\udp.psm1
 using module .\helpers\tcp.psm1
 using module .\helpers\ndk.psm1
 
