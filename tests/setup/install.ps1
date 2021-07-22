@@ -5,7 +5,7 @@ Invoke-AppveyorInstallTask
 
 Remove-Item .\DscResource.Tests\ -Force -Confirm:$false -Recurse
 
-[string[]]$PowerShellModules = @("Pester", 'posh-git', 'PSScriptAnalyzer')
+[string[]]$PowerShellModules = @("Pester")
 
 $ModuleManifest = Test-ModuleManifest .\$($env:RepoName).psd1 -ErrorAction SilentlyContinue
 $repoRequiredModules = $ModuleManifest.RequiredModules.Name
@@ -13,18 +13,7 @@ $repoRequiredModules += $ModuleManifest.PrivateData.PSData.ExternalModuleDepende
 
 If ($repoRequiredModules) { $PowerShellModules += $repoRequiredModules }
 
-# This section is taken care of by Invoke-AppVeyorInstallTask
-<#[string[]]$PackageProviders = @('NuGet', 'PowerShellGet')
-
-# Install package providers for PowerShell Modules
-ForEach ($Provider in $PackageProviders) {
-    If (!(Get-PackageProvider $Provider -ErrorAction SilentlyContinue)) {
-        Install-PackageProvider $Provider -Force -ForceBootstrap -Scope CurrentUser
-    }
-}#>
-
 # Feature Installation
-
 $serverFeatureList = @('Hyper-V')
 
 If ($PowerShellModules -contains 'FailoverClusters') {
@@ -57,7 +46,6 @@ ForEach ($Module in $PowerShellModules) {
         Import-Module $Module -RequiredVersion 4.9.0
     }
     else {
-        Write-Output "Installing $Module"
         Install-Module $Module -Scope AllUsers -Force -Repository PSGallery -AllowClobber
         Import-Module $Module
     }
