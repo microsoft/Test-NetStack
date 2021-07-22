@@ -5,7 +5,7 @@ Invoke-AppveyorInstallTask
 
 Remove-Item .\DscResource.Tests\ -Force -Confirm:$false -Recurse
 
-[string[]]$PowerShellModules = @("Pester")
+[string[]]$PowerShellModules = @("Pester", 'posh-git')
 
 $ModuleManifest = Test-ModuleManifest .\$($env:RepoName).psd1 -ErrorAction SilentlyContinue
 $repoRequiredModules = $ModuleManifest.RequiredModules.Name
