@@ -458,7 +458,7 @@ Function Test-NetStack {
         }
 
         '3' { # RDMA Connectivity
-            Write-Host "Beginning Stage 3 - NDK Ping - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage 3 - RDMA Ping - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
@@ -540,11 +540,11 @@ Function Test-NetStack {
             else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage3 -Value 'Pass' }
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage3 -Value $StageResults
-            Write-Host "Completed Stage 3 - NDK Ping - $([System.DateTime]::Now)"
+            Write-Host "Completed Stage 3 - RDMA Ping - $([System.DateTime]::Now)"
         }
 
         '4' { # RDMA Stress 1:1
-            Write-Host "Beginning Stage 4 - NDK Perf 1:1 - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage 4 - RDMA Perf 1:1 - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
@@ -624,11 +624,11 @@ Function Test-NetStack {
             else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage4 -Value 'Pass' }
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage4 -Value $StageResults
-            Write-Host "Completed Stage 4 - NDK Perf 1:1 - $([System.DateTime]::Now)"
+            Write-Host "Completed Stage 4 - RDMA Perf 1:1 - $([System.DateTime]::Now)"
         }
 
         '5' { # RDMA Stress N:1
-            Write-Host "Beginning Stage 5 - NDK Perf N:1 - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage 5 - RDMA Perf N:1 - $([System.DateTime]::Now)"
             $StageResults = @()
             $TestableNetworks | ForEach-Object {
                 $thisTestableNet = $_
@@ -661,11 +661,11 @@ Function Test-NetStack {
             else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage5 -Value 'Pass' }
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage5 -Value $StageResults
-            Write-Host "Completed Stage 5 - NDK Perf N:1 - $([System.DateTime]::Now)"
+            Write-Host "Completed Stage 5 - RDMA Perf N:1 - $([System.DateTime]::Now)"
         }
 
         '6' { # RDMA Stress N:N
-            Write-Host "Beginning Stage 6 - NDK Perf N:N - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage 6 - RDMA Perf N:N - $([System.DateTime]::Now)"
             $StageResults = @()
             $TestableNetworks | ForEach-Object {
                 $thisTestableNet = $_
@@ -695,7 +695,7 @@ Function Test-NetStack {
             else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage6 -Value 'Pass' }
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage6 -Value $StageResults
-            Write-Host "Completed Stage 6 - NDK Perf N:N - $([System.DateTime]::Now)"
+            Write-Host "Completed Stage 6 - RDMA Perf N:N - $([System.DateTime]::Now)"
         }
     }
 
