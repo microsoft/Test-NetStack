@@ -66,29 +66,39 @@ Function Test-NetStack {
 
     [CmdletBinding(DefaultParameterSetName = 'FullNodeMap')]
     param (
-        [Parameter(Mandatory=$false, ParameterSetName='FullNodeMap', position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'     , position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes' , position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapNodes' , position = 0)]
         [ValidateScript({[System.Uri]::CheckHostName($_) -eq 'DNS'})]
         [ValidateCount(2, 16)]
         [String[]] $Nodes,
 
-        [Parameter(Mandatory=$true, ParameterSetName='IPAddress', position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'         , position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget', position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapIPTarget', position = 0)]
         [ValidateCount(2, 16)]
         [IPAddress[]] $IPTarget,
 
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap', position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'  , position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes' , position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget' , position = 1)]
         [ValidateSet('1', '2', '3', '4', '5', '6')]
         [Int32[]] $Stage = @('1', '2', '3', '4', '5', '6'),
 
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap', position = 2)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'  , position = 2)]
         [Switch] $EnableFirewallRules = $false,
 
-        [Parameter(Mandatory=$false)]
-        [Switch] $PrerequisitesOnly = $false,
+        [Parameter(Mandatory = $false, ParameterSetName='OnlyPrereqNodes'   , position = 2)]
+        [Parameter(Mandatory = $false, ParameterSetName='OnlyPrereqIPTarget', position = 2)]
+        [Switch] $OnlyPrerequisites = $false,
 
-        [Parameter(Mandatory=$false)]
-        [Switch] $ConnectivityMapOnly = $false,
+        [Parameter(Mandatory = $true, ParameterSetName='OnlyConMapNodes'   , position = 2)]
+        [Parameter(Mandatory = $true, ParameterSetName='OnlyConMapIPTarget', position = 2)]
+        [Switch] $OnlyConnectivityMap = $false,
 
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [String] $LogPath = "$(Join-Path -Path $(Get-Module -Name Test-Netstack -ListAvailable | Select -First 1) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt"))"
     )
 
@@ -107,13 +117,13 @@ Function Test-NetStack {
             }
         }
 
-        if ($PrerequisitesOnly) { $Stage = @('1', '2', '3', '4', '5', '6') }
+        if ($OnlyPrerequisites) { $Stage = @('1', '2', '3', '4', '5', '6') }
 
 	    # Function returns both the target information and the results of the prerequisite testing
         $TargetInfo, $PrereqStatus = Test-NetStackPrerequisites -Nodes $Nodes -Stage $Stage
     }
     else { # Function returns both the target information and the results of the prerequisite testing
-        if ($PrerequisitesOnly) { $Stage = @('1', '2', '3', '4', '5', '6') }
+        if ($OnlyPrerequisites) { $Stage = @('1', '2', '3', '4', '5', '6') }
 
         $TargetInfo, $PrereqStatus = Test-NetStackPrerequisites -IPTarget $IPTarget -Stage $Stage
     }
@@ -121,7 +131,7 @@ Function Test-NetStack {
     $NetStackResults | Add-Member -MemberType NoteProperty -Name Prerequisites -Value $TargetInfo
     Remove-Variable TargetInfo -ErrorAction SilentlyContinue
 
-    if ($PrerequisitesOnly) { return $NetStackResults }
+    if ($OnlyPrerequisites) { return $NetStackResults }
     elseif ($false -in $PrereqStatus) {
         throw "Prerequsite tests have failed. Review the NetStack results for more details."
     }
@@ -141,12 +151,12 @@ Function Test-NetStack {
 
     if ($TestableNetworks) { $NetStackResults | Add-Member -MemberType NoteProperty -Name TestableNetworks -Value $TestableNetworks }
     else {
-        if (-not($ConnectivityMapOnly)) {
+        if (-not($OnlyConnectivityMap)) {
             throw 'No Testable Networks Found'
         }
     }
 
-    if ($ConnectivityMapOnly) { return $NetStackResults }
+    if ($OnlyConnectivityMap) { return $NetStackResults }
     #endregion Connectivity Maps
 
     $runspaceGroups = Get-RunspaceGroups -TestableNetworks $TestableNetworks
