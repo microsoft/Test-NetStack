@@ -170,7 +170,7 @@ Function Test-NetStack {
     Switch ( $Stage | Sort-Object ) {
         '1' { # ICMP Connectivity, Reliability, and PMTUD
             $thisStage = $_
-            Write-Host "Beginning $thisStage - Connectivity and PMTUD - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage: $thisStage- Connectivity and PMTUD - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
@@ -386,12 +386,12 @@ Function Test-NetStack {
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage1 -Value $StageResults
 
-            Write-Host "Completed $thisStage - Connectivity and PMTUD - $([System.DateTime]::Now)"
+            Write-Host "Completed Stage: $thisStage - Connectivity and PMTUD - $([System.DateTime]::Now)"
         }
 
         '2' { # TCP Stress 1:1
             $thisStage = $_
-            Write-Host "Beginning $thisStage - TCP - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage: $thisStage- TCP - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
@@ -474,13 +474,13 @@ Function Test-NetStack {
             else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage2 -Value 'Pass' }
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage2 -Value $StageResults
-            Write-Host "Completed $thisStage - TCP - $([System.DateTime]::Now)"
+            Write-Host "Completed Stage: $thisStage - TCP - $([System.DateTime]::Now)"
         }
 
         '3' { # RDMA Connectivity
 
             $thisStage = $_
-            Write-Host "Beginning $thisStage - RDMA Ping - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage: $thisStage- RDMA Ping - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
@@ -563,12 +563,12 @@ Function Test-NetStack {
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage3 -Value $StageResults
 
-            Write-Host "Completed $thisStage - RDMA Ping - $([System.DateTime]::Now)"
+            Write-Host "Completed Stage: $thisStage - RDMA Ping - $([System.DateTime]::Now)"
         }
 
         '4' { # RDMA Stress 1:1
             $thisStage = $_
-            Write-Host "Beginning $thisStage - RDMA Perf 1:1 - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage: $thisStage- RDMA Perf 1:1 - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
@@ -649,12 +649,12 @@ Function Test-NetStack {
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage4 -Value $StageResults
 
-            Write-Host "Completed $thisStage - RDMA Perf 1:1 - $([System.DateTime]::Now)"
+            Write-Host "Completed Stage: $thisStage - RDMA Perf 1:1 - $([System.DateTime]::Now)"
         }
 
         '5' { # RDMA Stress N:1
             $Stage = $_
-            Write-Host "Beginning $thisStage - RDMA Perf N:1 - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage: $thisStage- RDMA Perf N:1 - $([System.DateTime]::Now)"
 
             $StageResults = @()
             $TestableNetworks | ForEach-Object {
@@ -689,12 +689,12 @@ Function Test-NetStack {
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage5 -Value $StageResults
 
-            Write-Host "Completed $thisStage - RDMA Perf N:1 - $([System.DateTime]::Now)"
+            Write-Host "Completed Stage: $thisStage - RDMA Perf N:1 - $([System.DateTime]::Now)"
         }
 
         '6' { # RDMA Stress N:N
             $thisStage = $_
-            Write-Host "Beginning $thisStage - RDMA Perf N:N - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage: $thisStage- RDMA Perf N:N - $([System.DateTime]::Now)"
 
             $StageResults = @()
             $TestableNetworks | ForEach-Object {
@@ -726,7 +726,7 @@ Function Test-NetStack {
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage6 -Value $StageResults
 
-            Write-Host "Completed $thisStage - RDMA Perf N:N - $([System.DateTime]::Now)"
+            Write-Host "Completed Stage: $thisStage - RDMA Perf N:N - $([System.DateTime]::Now)"
         }
     }
 
