@@ -66,23 +66,25 @@ Function Test-NetStack {
 
     [CmdletBinding(DefaultParameterSetName = 'FullNodeMap')]
     param (
-        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'     , position = 0)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes' , position = 0)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapNodes' , position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'    , position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes', position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapNodes', position = 0)]
         [ValidateScript({[System.Uri]::CheckHostName($_) -eq 'DNS'})]
         [ValidateCount(2, 16)]
         [String[]] $Nodes,
 
-        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'         , position = 0)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget', position = 0)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapIPTarget', position = 0)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'IPAddress'         , position = 0)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'OnlyPrereqIPTarget', position = 0)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapIPTarget', position = 0)]
         [ValidateCount(2, 16)]
         [IPAddress[]] $IPTarget,
 
-        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap', position = 1)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'  , position = 1)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes' , position = 1)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget' , position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'       , position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'         , position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes'   , position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget', position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapNodes'   , position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapIPTarget', position = 1)]
         [ValidateSet('1', '2', '3', '4', '5', '6')]
         [Int32[]] $Stage = @('1', '2', '3', '4', '5', '6'),
 
@@ -90,12 +92,14 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'  , position = 2)]
         [Switch] $EnableFirewallRules = $false,
 
-        [Parameter(Mandatory = $false, ParameterSetName='OnlyPrereqNodes'   , position = 2)]
-        [Parameter(Mandatory = $false, ParameterSetName='OnlyPrereqIPTarget', position = 2)]
+
+        [Parameter(Mandatory = $true, ParameterSetName = 'OnlyPrereqNodes'   , position = 2)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'OnlyPrereqIPTarget', position = 2)]
         [Switch] $OnlyPrerequisites = $false,
 
-        [Parameter(Mandatory = $true, ParameterSetName='OnlyConMapNodes'   , position = 2)]
-        [Parameter(Mandatory = $true, ParameterSetName='OnlyConMapIPTarget', position = 2)]
+
+        [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapNodes'   , position = 2)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapIPTarget', position = 2)]
         [Switch] $OnlyConnectivityMap = $false,
 
         [Parameter(Mandatory = $false)]
@@ -108,7 +112,10 @@ Function Test-NetStack {
     $NetStackResults = New-Object -TypeName psobject
 
     # Since FullNodeMap is the default, we can check if the customer entered Nodes or IPTarget. If neither, check for cluster membership, and use that for the nodes.
-    if ($PsCmdlet.ParameterSetName -eq 'FullNodeMap') {
+    if ( $PsCmdlet.ParameterSetName -eq 'FullNodeMap' -or
+         $PsCmdlet.ParameterSetName -eq 'OnlyPrereqNodes' -or
+         $PsCmdlet.ParameterSetName -eq 'OnlyConMapNodes' ) {
+             
         if (-not($PSBoundParameters.ContainsKey('Nodes'))) {
             try { $Nodes = (Get-ClusterNode -ErrorAction SilentlyContinue -WarningAction SilentlyContinue).Name }
             catch {
