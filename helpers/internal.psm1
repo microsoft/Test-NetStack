@@ -346,16 +346,25 @@ Function Get-DisqualifiedNetworksFromMapping {
     param ( $Mapping )
 
     $VLANSupportedNets = $Mapping | Where-Object VLAN -ne 'Unsupported' | Group-Object Subnet, VLAN
+
     $DisqualifiedByInterfaceCount = $VLANSupportedNets | Where-Object Count -eq 1
+
+    $DisqualifiedByNetworkAsymmetry = $VLANSupportedNets | Where-Object { $_.Count -ge 1 -and
+        (($_.Group.NodeName | Select -Unique).Count) -ne $($Mapping.NodeName | Select -Unique).Count }
+
     $DisqualifiedByVLANSupport    = $Mapping | Where-Object VLAN -eq 'Unsupported' | Group-Object Subnet, VLAN
 
     $Disqualified = New-Object -TypeName psobject
     if ($DisqualifiedByVLANSupport) {
-        $Disqualified | Add-Member -MemberType NoteProperty -Name VLANNotSupported -Value $DisqualifiedByVLANSupport
+        $Disqualified | Add-Member -MemberType NoteProperty -Name NoVLANOnInterface -Value $DisqualifiedByVLANSupport
     }
 
     if ($DisqualifiedByInterfaceCount) {
         $Disqualified | Add-Member -MemberType NoteProperty -Name OneInterfaceInSubnet -Value $DisqualifiedByInterfaceCount
+    }
+
+    if ($DisqualifiedByNetworkAsymmetry) {
+        $Disqualified | Add-Member -MemberType NoteProperty -Name AsymmetricNetwork -Value $DisqualifiedByNetworkAsymmetry
     }
 
     Return $Disqualified
