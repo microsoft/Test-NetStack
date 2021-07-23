@@ -86,6 +86,9 @@ Function Test-NetStack {
         [Switch] $PrerequisitesOnly = $false,
 
         [Parameter(Mandatory=$false)]
+        [Switch] $ConnectivityMapOnly = $false,
+
+        [Parameter(Mandatory=$false)]
         [String] $LogPath = "$(Join-Path -Path $(Get-Module -Name Test-Netstack -ListAvailable | Select -First 1) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt"))"
     )
 
@@ -137,7 +140,13 @@ Function Test-NetStack {
     else { Remove-Variable -Name DisqualifiedNetworks -ErrorAction SilentlyContinue }
 
     if ($TestableNetworks) { $NetStackResults | Add-Member -MemberType NoteProperty -Name TestableNetworks -Value $TestableNetworks }
-    else { throw 'No Testable Networks Found' }
+    else {
+        if (-not($ConnectivityMapOnly)) {
+            throw 'No Testable Networks Found'
+        }
+    }
+
+    if ($ConnectivityMapOnly) { return $NetStackResults }
     #endregion Connectivity Maps
 
     $runspaceGroups = Get-RunspaceGroups -TestableNetworks $TestableNetworks
