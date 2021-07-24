@@ -10,10 +10,6 @@ function Invoke-TCP {
 
     $ModuleBase = (Get-Module Test-NetStack -ListAvailable | Select-Object -First 1).ModuleBase
 
-    if ($EnableFirewallRules) {
-        Invoke-Command -ComputerName $Receiver.NodeName, $Sender.NodeName -ScriptBlock { New-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" -Direction Inbound -Program "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow | Out-Null }
-    }
-
     # CTS Traffic Rate Limit is specified in bytes/second
     $ServerLinkSpeed = $Receiver.LinkSpeed.split(" ")
     Switch($ServerLinkSpeed[1]) {
@@ -124,10 +120,6 @@ function Invoke-TCP {
     $TCPResults | Add-Member -MemberType NoteProperty -Name ReceivedGbps -Value $ReceivedGbps
     $TCPResults | Add-Member -MemberType NoteProperty -Name ReceivedPctgOfLinkSpeed -Value $ReceivedPercentageOfLinkSpeed
     $TCPResults | Add-Member -MemberType NoteProperty -Name RawData -Value $RawData
-
-    if ($EnableFirewallRules) {
-        Invoke-Command -ComputerName $Receiver.NodeName, $Sender.NodeName -ScriptBlock { Remove-NetFirewallRule -DisplayName "Client-To-Server Network Test Tool" | Out-Null }
-    }
 
     Return $TCPResults
 }
