@@ -4,11 +4,12 @@ Function Test-NetStackPrerequisites {
 
         [IPAddress[]] $IPTarget,
 
-        [Int32[]] $Stage
+        [Int32[]] $Stage,
+
+        [Switch] $EnableFirewallRules
     )
 
-    #TODO: Test that CTSTraffic rule is in firewall
-
+#region Targets
     if ($IPTarget) { $Targets = $IPTarget }
     else { $Targets = $Nodes }
 
@@ -25,6 +26,7 @@ Function Test-NetStackPrerequisites {
     }
 
     $PrereqStatus = @()
+#endregion Targets
 
 #region WinRM and OS
     $TargetInfo | Add-Member -MemberType NoteProperty -Name 'WinRM' -Value '' -Force
@@ -33,23 +35,30 @@ Function Test-NetStackPrerequisites {
     $Targets | ForEach-Object {
         $thisTarget = $_
 
-        if ($thisTarget -ne $Env:ComputerName) {
-            $WinRMResult = Test-NetConnection -CommonTCPPort WINRM -ComputerName $thisTarget -InformationLevel Quiet
-            ($TargetInfo | Where-Object Name -eq $thisTarget).WinRM = $WinRMResult
-
-            if (($TargetInfo | Where-Object Name -eq $thisTarget).WinRM -eq $true) {
-                $NodeOS = Invoke-Command -ComputerName $thisTarget -ScriptBlock {
-                    #$ProgressPreference = 'SilentlyContinue'
-                    return $([System.Environment]::OSVersion.Version.Build -ge 20279)
-                }
+        if ($EnableFirewallRules) {
+            if ($thisTarget -ne $Env:ComputerName) {
+                $null = Enable-NetFirewallRule -DisplayName 'Windows Remote Management (HTTP-In)' -CimSession $thisTarget -ErrorAction SilentlyContinue
             }
+            else {
+                $null = Enable-NetFirewallRule -DisplayName 'Windows Remote Management (HTTP-In)' -ErrorAction SilentlyContinue
+            }
+        }
+
+        if ($thisTarget -ne $Env:ComputerName) {
+            # Try to remote first with silent failure so we can eliminate the Test-NetConnection blue bar with $ProgressPreference otherwise this sits on screen forever
+            # If $NodeOS -ne $null then we can assume WinRM is successful
+            $NodeOS = Invoke-Command -ComputerName $thisTarget -ErrorAction SilentlyContinue -ScriptBlock {
+                $ProgressPreference = 'SilentlyContinue'
+                return $([System.Environment]::OSVersion.Version.Build -ge 20279)
+            }
+
+            if ($NodeOS) { ($TargetInfo | Where-Object Name -eq $thisTarget).WinRM = $true }
         }
         else { # Machine is local; no need to test WinRM
             $ProgressPreference = 'SilentlyContinue'
 
-            ($TargetInfo | Where-Object Name -eq $thisTarget).WinRM = $true
-
             $NodeOS = [System.Environment]::OSVersion.Version.Build -ge 20279
+            ($TargetInfo | Where-Object Name -eq $thisTarget).WinRM = $true
         }
 
         ($TargetInfo | Where-Object Name -eq $thisTarget).OSVersion = $NodeOS
@@ -60,7 +69,40 @@ Function Test-NetStackPrerequisites {
 #endregion WinRM and OS
 
     Switch ( $Stage | Sort-Object ) {
-        1 { }
+        1 {
+            $TargetInfo | Add-Member -MemberType NoteProperty -Name 'ICMP' -Value '' -Force
+
+            $Targets | ForEach-Object {
+                if ($EnableFirewallRules) {
+                    if ($thisTarget -ne $Env:ComputerName) {
+                        $null = Enable-NetFirewallRule -Name 'FPS-ICMP4-ERQ-In' -CimSession $thisTarget -ErrorAction SilentlyContinue
+                        $null = Enable-NetFirewallRule -Name 'FPS-ICMP6-ERQ-In' -CimSession $thisTarget -ErrorAction SilentlyContinue
+
+                        $null = Enable-NetFirewallRule -Name 'FPS-ICMP4-ERQ-In-NoScope' -CimSession $thisTarget -ErrorAction SilentlyContinue
+                        $null = Enable-NetFirewallRule -Name 'FPS-ICMP6-ERQ-In-NoScope' -CimSession $thisTarget -ErrorAction SilentlyContinue
+                    }
+                    else {
+                        $null = Enable-NetFirewallRule -Name 'FPS-ICMP4-ERQ-In' -ErrorAction SilentlyContinue
+                        $null = Enable-NetFirewallRule -Name 'FPS-ICMP6-ERQ-In' -ErrorAction SilentlyContinue
+
+                        $null = Enable-NetFirewallRule -Name 'FPS-ICMP4-ERQ-In-NoScope' -ErrorAction SilentlyContinue
+                        $null = Enable-NetFirewallRule -Name 'FPS-ICMP6-ERQ-In-NoScope' -ErrorAction SilentlyContinue
+                    }
+                }
+
+                $thisTarget = $_
+
+                if ($thisTarget -ne $Env:ComputerName) {
+                    $ICMPResult = Test-NetConnection -ComputerName $thisTarget -InformationLevel Quiet
+                    ($TargetInfo | Where-Object Name -eq $thisTarget).ICMP = $ICMPResult
+                }
+                else { # Machine is local; no need to test
+                    ($TargetInfo | Where-Object Name -eq $thisTarget).ICMP = $true
+                }
+
+                $PrereqStatus += $false -notin $TargetInfo.ICMP
+            }
+        }
 
         2 {
             $TargetInfo | Add-Member -MemberType NoteProperty -Name 'Module' -Value '' -Force
@@ -79,6 +121,11 @@ Function Test-NetStackPrerequisites {
                         ($TargetInfo | Where-Object Name -eq $thisTarget).Version = $Module.Version
                     }
                     else { ($TargetInfo | Where-Object Name -eq $thisTarget).Module = $false }
+
+                    if ($EnableFirewallRules) {
+                        $ModuleBase = (Get-Module Test-NetStack -CimSession $thisTarget -ListAvailable | Select-Object -First 1).ModuleBase
+                        $null = New-NetFirewallRule -CimSession $thisTarget -DisplayName 'Test-NetStack - CTSTraffic' -Direction Inbound -Program "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow -ErrorAction SilentlyContinue
+                    }
                 }
                 else { # Machine is local; no need to test
                     $Module = Get-Module Test-NetStack -ListAvailable -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -88,6 +135,11 @@ Function Test-NetStackPrerequisites {
                         ($TargetInfo | Where-Object Name -eq $thisTarget).Version = $Module.Version
                     }
                     else { ($TargetInfo | Where-Object Name -eq $thisTarget).Module = $false }
+
+                    if ($EnableFirewallRules) {
+                        $ModuleBase = (Get-Module Test-NetStack -ListAvailable | Select-Object -First 1).ModuleBase
+                        $null = New-NetFirewallRule -DisplayName 'Test-NetStack - CTSTraffic' -Direction Inbound -Program "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow -ErrorAction SilentlyContinue
+                    }
                 }
             }
 
@@ -95,11 +147,90 @@ Function Test-NetStackPrerequisites {
             $PrereqStatus += ($TargetInfo.Version | Select-Object -Unique).Count -eq 1
         }
 
-        3 { }
+        { $_ -eq 3 -or $_ -eq 4 -or $_ -eq 5 -or $_ -eq 6 } {
+            $Targets | ForEach-Object {
+                $thisTarget = $_
+
+                if ($thisTarget -ne $Env:ComputerName) {
+                    if ($EnableFirewallRules) {
+                        $null = Enable-NetFirewallRule 'FPSSMBD-iWARP-In-TCP' -CimSession $thisTarget -ErrorAction SilentlyContinue
+                    }
+                }
+                else { # Machine is local; no need to test
+                    if ($EnableFirewallRules) {
+                        $null = Enable-NetFirewallRule 'FPSSMBD-iWARP-In-TCP' -ErrorAction SilentlyContinue
+                    }
+                }
+            }
+        }
+
         4 { }
         5 { }
         6 { }
     }
 
     return $TargetInfo, $PrereqStatus
+}
+
+Function Revoke-FirewallRules {
+    param (
+        $Targets,
+        [Int32[]] $Stage
+    )
+
+    Write-Warning 'WinRM rules with DisplayName "Windows Remote Management (HTTP-In)" will not be disabled'
+
+    Switch ( $Stage | Sort-Object ) {
+        1 {
+            $Targets | ForEach-Object {
+                $thisTarget = $_
+
+                if ($thisTarget -ne $Env:ComputerName) {
+                    $null = Disable-NetFirewallRule -Name 'FPS-ICMP4-ERQ-In' -CimSession $thisTarget -ErrorAction SilentlyContinue
+                    $null = Disable-NetFirewallRule -Name 'FPS-ICMP6-ERQ-In' -CimSession $thisTarget -ErrorAction SilentlyContinue
+
+                    $null = Disable-NetFirewallRule -Name 'FPS-ICMP4-ERQ-In-NoScope' -CimSession $thisTarget -ErrorAction SilentlyContinue
+                    $null = Disable-NetFirewallRule -Name 'FPS-ICMP6-ERQ-In-NoScope' -CimSession $thisTarget -ErrorAction SilentlyContinue
+                }
+                else {
+                    $null = Disable-NetFirewallRule -Name 'FPS-ICMP4-ERQ-In' -ErrorAction SilentlyContinue
+                    $null = Disable-NetFirewallRule -Name 'FPS-ICMP6-ERQ-In' -ErrorAction SilentlyContinue
+
+                    $null = Disable-NetFirewallRule -Name 'FPS-ICMP4-ERQ-In-NoScope' -ErrorAction SilentlyContinue
+                    $null = Disable-NetFirewallRule -Name 'FPS-ICMP6-ERQ-In-NoScope' -ErrorAction SilentlyContinue
+                }
+            }
+        }
+
+        2 {
+            $Targets | ForEach-Object {
+                $thisTarget = $_
+
+                if ($thisTarget -ne $Env:ComputerName) {
+                    $null = Remove-NetFirewallRule -DisplayName 'Test-NetStack - CTSTraffic' -CimSession $thisTarget -ErrorAction SilentlyContinue
+                }
+                else {
+                    $null = Remove-NetFirewallRule -DisplayName 'Test-NetStack - CTSTraffic' -ErrorAction SilentlyContinue
+                }
+            }
+        }
+
+        { $_ -eq 3 -or $_ -eq 4 -or $_ -eq 5 -or $_ -eq 6 } {
+            $Targets | ForEach-Object {
+                $thisTarget = $_
+
+                if ($thisTarget -ne $Env:ComputerName) {
+                    $null = Disable-NetFirewallRule -Name 'FPSSMBD-iWARP-In-TCP' -CimSession $thisTarget -ErrorAction SilentlyContinue
+                }
+                else {
+                    $null = Disable-NetFirewallRule -Name 'FPSSMBD-iWARP-In-TCP' -ErrorAction SilentlyContinue
+                }
+            }
+        }
+
+        3 { }
+        4 { }
+        5 { }
+        6 { }
+    }
 }

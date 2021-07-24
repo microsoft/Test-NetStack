@@ -336,7 +336,9 @@ Function Get-TestableNetworksFromMapping {
     param ( $Mapping )
 
     $VLANSupportedNets = $Mapping | Where-Object VLAN -ne 'Unsupported' | Group-Object Subnet, VLAN
-    $UsableNetworks  = $VLANSupportedNets | Where-Object Count -ne 1
+    $UsableNetworks    = $VLANSupportedNets | Where-Object {
+        $_.Count -ge 1 -and
+        (($_.Group.NodeName | Select-Object -Unique).Count) -eq $($Mapping.NodeName | Select-Object -Unique).Count }
 
     if ($UsableNetworks) { Return $UsableNetworks }
     else { Return 'None Available' }
