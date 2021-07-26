@@ -40,16 +40,47 @@ Function Test-NetStack {
         - Stage5: RDMA Stress N:1
         - Stage6: RDMA Stress N:N
 
-    .EXAMPLE Run all tests in the local node's failover cluster. Review results from Stage2 and Stage6
+    .PARAMETER EnableFirewallRules
+    * This command is best-effort and may fail for a variety of reasons *
+
+    Works with:
+    - The Windows Firewall
+    - The built-in firewall rules for ICMP, WinRM, and iWARP
+    - CTSTraffic rules (by application path) needed for Stage 2
+
+    Note: if you upgrade the module version, firewall rules should be revoked, then re-enabled.
+
+    .PARAMETER RevokeFirewallRules
+    * This command is best-effort and may fail for a variety of reasons *
+
+    Works with:
+    - The Windows Firewall
+    - The built-in firewall rules for ICMP and iWARP
+    - CTSTraffic rules defined by the EnableFirewallRules parameter
+    - Will not disable WinRM
+
+    .PARAMETER OnlyPrerequisites
+    Use if you want to review the connectivity map detection. This is useful if you're troubleshooting why some networks are or are not included in testing.
+
+    .PARAMETER OnlyConnectivityMap
+    Use if you want to review the connectivity map detection. This is useful if you're troubleshooting why some networks are or are not included in testing.
+
+    .PARAMETER LogPath
+    Defines the path for the logfile. By default, this will be in the path of the module under the results folder
+
+    .EXAMPLE
+    Run all tests in the local node's failover cluster. Review results from Stage2 and Stage6
         $Results = Test-NetStack
 
         $Results.Stage2
         $Results.Stage6
 
-    .EXAMPLE 4-domain joined nodes; all tests run
+    .EXAMPLE
+    4-domain joined nodes; all tests run
         $Results = Test-NetStack -Nodes 'AzStackHCI01', 'AzStackHCI02', 'AzStackHCI03', AzStackHCI04'
 
-    .EXAMPLE 2-node tests; ICMP and TCP tests only. Review results from Stage1 and Stage2
+    .EXAMPLE
+    2-node tests; ICMP and TCP tests only. Review results from Stage1 and Stage2
         $Results = Test-NetStack -MachineList 'AzStackHCI01', 'AzStackHCI02' -Stage 1, 2
 
         $Results.Stage1
@@ -66,25 +97,27 @@ Function Test-NetStack {
 
     [CmdletBinding(DefaultParameterSetName = 'FullNodeMap')]
     param (
-        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'    , position = 0)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes', position = 0)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapNodes', position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'       , position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes'   , position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapNodes'   , position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesNodes', position = 0)]
         [ValidateScript({[System.Uri]::CheckHostName($_) -eq 'DNS'})]
         [ValidateCount(2, 16)]
         [String[]] $Nodes,
 
-        [Parameter(Mandatory = $true, ParameterSetName = 'IPAddress'         , position = 0)]
-        [Parameter(Mandatory = $true, ParameterSetName = 'OnlyPrereqIPTarget', position = 0)]
-        [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapIPTarget', position = 0)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'IPAddress'            , position = 0)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'OnlyPrereqIPTarget'   , position = 0)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapIPTarget'   , position = 0)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'RevokeFWRulesIPTarget', position = 0)]
         [ValidateCount(2, 16)]
         [IPAddress[]] $IPTarget,
 
-        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'       , position = 1)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'         , position = 1)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes'   , position = 1)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget', position = 1)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapNodes'   , position = 1)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapIPTarget', position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'          , position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'            , position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes'      , position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget'   , position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesNodes'   , position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesIPTarget', position = 1)]
         [ValidateSet('1', '2', '3', '4', '5', '6')]
         [Int32[]] $Stage = @('1', '2', '3', '4', '5', '6'),
 
@@ -92,18 +125,20 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'  , position = 2)]
         [Switch] $EnableFirewallRules = $false,
 
+        [Parameter(Mandatory = $true, ParameterSetName = 'RevokeFWRulesNodes'   , position = 2)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'RevokeFWRulesIPTarget', position = 2)]
+        [Switch] $RevokeFirewallRules = $false,
 
         [Parameter(Mandatory = $true, ParameterSetName = 'OnlyPrereqNodes'   , position = 2)]
         [Parameter(Mandatory = $true, ParameterSetName = 'OnlyPrereqIPTarget', position = 2)]
         [Switch] $OnlyPrerequisites = $false,
-
 
         [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapNodes'   , position = 2)]
         [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapIPTarget', position = 2)]
         [Switch] $OnlyConnectivityMap = $false,
 
         [Parameter(Mandatory = $false)]
-        [String] $LogPath = "$(Join-Path -Path $(Get-Module -Name Test-Netstack -ListAvailable | Select -First 1) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt"))"
+        [String] $LogPath = "$(Join-Path -Path $(Get-Module -Name Test-Netstack -ListAvailable | Select-Object -First 1) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt"))"
     )
 
     Clear-Host
@@ -112,10 +147,7 @@ Function Test-NetStack {
     $NetStackResults = New-Object -TypeName psobject
 
     # Since FullNodeMap is the default, we can check if the customer entered Nodes or IPTarget. If neither, check for cluster membership, and use that for the nodes.
-    if ( $PsCmdlet.ParameterSetName -eq 'FullNodeMap' -or
-         $PsCmdlet.ParameterSetName -eq 'OnlyPrereqNodes' -or
-         $PsCmdlet.ParameterSetName -eq 'OnlyConMapNodes' ) {
-             
+    if ( $PsCmdlet.ParameterSetName -eq 'FullNodeMap' -or $PsCmdlet.ParameterSetName -eq 'OnlyPrereqNodes' -or $PsCmdlet.ParameterSetName -eq 'OnlyConMapNodes' -or $PsCmdlet.ParameterSetName -eq 'RevokeFWRulesNodes' ) {
         if (-not($PSBoundParameters.ContainsKey('Nodes'))) {
             try { $Nodes = (Get-ClusterNode -ErrorAction SilentlyContinue -WarningAction SilentlyContinue).Name }
             catch {
@@ -124,15 +156,21 @@ Function Test-NetStack {
             }
         }
 
-        if ($OnlyPrerequisites) { $Stage = @('1', '2', '3', '4', '5', '6') }
-
-	    # Function returns both the target information and the results of the prerequisite testing
-        $TargetInfo, $PrereqStatus = Test-NetStackPrerequisites -Nodes $Nodes -Stage $Stage
+        If ($EnableFirewallRules) { $TargetInfo, $PrereqStatus = Test-NetStackPrerequisites -Nodes $Nodes -Stage $Stage -EnableFirewallRules }
+        else { $TargetInfo, $PrereqStatus = Test-NetStackPrerequisites -Nodes $Nodes -Stage $Stage }
     }
     else { # Function returns both the target information and the results of the prerequisite testing
-        if ($OnlyPrerequisites) { $Stage = @('1', '2', '3', '4', '5', '6') }
+        If ($EnableFirewallRules) { $TargetInfo, $PrereqStatus = Test-NetStackPrerequisites -IPTarget $IPTarget -Stage $Stage -EnableFirewallRules }
+        else { $TargetInfo, $PrereqStatus = Test-NetStackPrerequisites -IPTarget $IPTarget -Stage $Stage }
+    }
 
-        $TargetInfo, $PrereqStatus = Test-NetStackPrerequisites -IPTarget $IPTarget -Stage $Stage
+    if ( $RevokeFirewallRules ) {
+        if ($IPTarget) { $Targets = $IPTarget }
+        else { $Targets = $Nodes }
+
+        Revoke-FirewallRules -Stage $Stage -Targets $Targets
+
+        Return
     }
 
     $NetStackResults | Add-Member -MemberType NoteProperty -Name Prerequisites -Value $TargetInfo
@@ -177,7 +215,7 @@ Function Test-NetStack {
     Switch ( $Stage | Sort-Object ) {
         '1' { # ICMP Connectivity, Reliability, and PMTUD
             $thisStage = $_
-            Write-Host "Beginning Stage: $thisStage- Connectivity and PMTUD - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage: $thisStage - Connectivity and PMTUD - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
@@ -269,7 +307,7 @@ Function Test-NetStack {
 
                         [void] $PowerShell.AddParameters($param)
 
-                        Write-Host ":: $thisStage : $([System.DateTime]::Now) :: [Started] $thisSource -> $thisTarget"
+                        Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $thisSource -> $thisTarget"
                         $asyncJobObj = @{ JobHandle   = $PowerShell
                                           AsyncHandle = $PowerShell.BeginInvoke() }
 
@@ -360,7 +398,7 @@ Function Test-NetStack {
 
                             [void] $PowerShell.AddParameters($param)
 
-                            Write-Host ":: $thisStage : $([System.DateTime]::Now) :: [Started] ($($thisSource.NodeName)) $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
+                            Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] ($($thisSource.NodeName)) $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
                             $asyncJobObj = @{ JobHandle   = $PowerShell
                                               AsyncHandle = $PowerShell.BeginInvoke() }
 
@@ -381,7 +419,7 @@ Function Test-NetStack {
 
                     $AllJobs = $AllJobs -ne $thisJob
 
-                    Write-Host ":: $thisStage : $([System.DateTime]::Now) :: [Completed] ($thisSourceHostName) $($thisSource) -> $($thisTarget)"
+                    Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] ($thisSourceHostName) $($thisSource) -> $($thisTarget)"
                 }
             }
 
@@ -398,7 +436,7 @@ Function Test-NetStack {
 
         '2' { # TCP Stress 1:1
             $thisStage = $_
-            Write-Host "Beginning Stage: $thisStage- TCP - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage: $thisStage - TCP - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
@@ -452,7 +490,7 @@ Function Test-NetStack {
 
                     [void] $PowerShell.AddParameters($param)
 
-                    Write-Host ":: $thisStage : $([System.DateTime]::Now) :: [Started] $($pair.Source.IPAddress) -> ($($pair.Target.NodeName)) $($pair.Target.IPAddress)"
+                    Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($pair.Source.IPAddress) -> ($($pair.Target.NodeName)) $($pair.Target.IPAddress)"
                     $asyncJobObj = @{ JobHandle   = $PowerShell
                                         AsyncHandle = $PowerShell.BeginInvoke() }
 
@@ -469,7 +507,7 @@ Function Test-NetStack {
 
                         $GroupedJobs = $GroupedJobs -ne $thisJob
 
-                        Write-Host ":: $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)"
+                        Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)"
                     }
                 }
             }
@@ -487,7 +525,7 @@ Function Test-NetStack {
         '3' { # RDMA Connectivity
 
             $thisStage = $_
-            Write-Host "Beginning Stage: $thisStage- RDMA Ping - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage: $thisStage - RDMA Ping - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
@@ -538,7 +576,7 @@ Function Test-NetStack {
 
                         [void] $PowerShell.AddParameters($param)
 
-                        Write-Host ":: $thisStage : $([System.DateTime]::Now) :: [Started] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
+                        Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
                         $asyncJobObj = @{ JobHandle   = $PowerShell
                                           AsyncHandle = $PowerShell.BeginInvoke() }
 
@@ -546,7 +584,6 @@ Function Test-NetStack {
                     }
                 }
             }
-
 
             While ($AllJobs -ne $null) {
                 $AllJobs | Where-Object { $_.AsyncHandle.IsCompleted } | ForEach-Object {
@@ -558,7 +595,7 @@ Function Test-NetStack {
 
                     $AllJobs = $AllJobs -ne $thisJob
 
-                    Write-Host ":: $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)"
+                    Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)"
                 }
             }
 
@@ -575,7 +612,7 @@ Function Test-NetStack {
 
         '4' { # RDMA Stress 1:1
             $thisStage = $_
-            Write-Host "Beginning Stage: $thisStage- RDMA Perf 1:1 - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage: $thisStage - RDMA Perf 1:1 - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
@@ -626,7 +663,7 @@ Function Test-NetStack {
 
                     [void] $PowerShell.AddParameters($param)
 
-                    Write-Host ":: $thisStage : $([System.DateTime]::Now) :: [Started] $($pair.Source.IPAddress) -> ($($pair.Target.NodeName)) $($pair.Target.IPAddress)"
+                    Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($pair.Source.IPAddress) -> ($($pair.Target.NodeName)) $($pair.Target.IPAddress)"
                     $asyncJobObj = @{ JobHandle   = $PowerShell
                                         AsyncHandle = $PowerShell.BeginInvoke() }
 
@@ -643,7 +680,7 @@ Function Test-NetStack {
 
                         $GroupedJobs = $GroupedJobs -ne $thisJob
 
-                        Write-Host ":: $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)"
+                        Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)"
                     }
                 }
             }
@@ -661,7 +698,7 @@ Function Test-NetStack {
 
         '5' { # RDMA Stress N:1
             $Stage = $_
-            Write-Host "Beginning Stage: $thisStage- RDMA Perf N:1 - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage: $thisStage - RDMA Perf N:1 - $([System.DateTime]::Now)"
 
             $StageResults = @()
             $TestableNetworks | ForEach-Object {
@@ -701,7 +738,7 @@ Function Test-NetStack {
 
         '6' { # RDMA Stress N:N
             $thisStage = $_
-            Write-Host "Beginning Stage: $thisStage- RDMA Perf N:N - $([System.DateTime]::Now)"
+            Write-Host "Beginning Stage: $thisStage - RDMA Perf N:N - $([System.DateTime]::Now)"
 
             $StageResults = @()
             $TestableNetworks | ForEach-Object {
