@@ -68,6 +68,13 @@ Function Test-NetStack {
     .PARAMETER LogPath
     Defines the path for the logfile. By default, this will be in the path of the module under the results folder
 
+    .PARAMETER ContinueOnFailure
+    By default, Test-NetStack will stop processing later stages if a failure is incurred during an earlier stage. This switch will continue testing later stages.
+
+    The following lists the dependent stages:
+    - Stage 1 -> Stage 2
+    - Stage 3 -> Stage 4 -> Stage 5 -> Stage 6
+
     .EXAMPLE
     Run all tests in the local node's failover cluster. Review results from Stage2 and Stage6
         $Results = Test-NetStack
@@ -136,6 +143,11 @@ Function Test-NetStack {
         [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapNodes'   , position = 2)]
         [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapIPTarget', position = 2)]
         [Switch] $OnlyConnectivityMap = $false,
+
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap', position = 3)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'  , position = 3)]
+        [Parameter(Mandatory = $false)]
+        [switch] $ContinueOnFailure = $false,
 
         [Parameter(Mandatory = $false)]
         [String] $LogPath = "$(Join-Path -Path $(Get-Module -Name Test-Netstack -ListAvailable | Select-Object -First 1) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt"))"
@@ -435,6 +447,19 @@ Function Test-NetStack {
         }
 
         '2' { # TCP Stress 1:1
+            if ( $ContinueOnFailure -eq $false ) {
+                if ('fail' -in $NetStackResults.Stage1.PathStatus) {
+
+                    $Stage -gt 1 | ForEach-Object {
+                        $AbortedStage = $_
+                        $NetStackResults | Add-Member -MemberType NoteProperty -Name "Stage$AbortedStage" -Value 'Aborted'; $StageFailures++
+                    }
+
+                    Write-Warning 'Aborted due to failures in earlier stage(s). To continue despite failures, use the ContinueOnFailure parameter.'
+                    return $NetStackResults
+                }
+            }
+
             $thisStage = $_
             Write-Host "Beginning Stage: $thisStage - TCP - $([System.DateTime]::Now)"
 
@@ -523,7 +548,6 @@ Function Test-NetStack {
         }
 
         '3' { # RDMA Connectivity
-
             $thisStage = $_
             Write-Host "Beginning Stage: $thisStage - RDMA Ping - $([System.DateTime]::Now)"
 
@@ -611,6 +635,19 @@ Function Test-NetStack {
         }
 
         '4' { # RDMA Stress 1:1
+            if ( $ContinueOnFailure -eq $false ) {
+                if ('fail' -in $NetStackResults.Stage3.PathStatus) {
+
+                    $Stage -ge 4 | ForEach-Object {
+                        $AbortedStage = $_
+                        $NetStackResults | Add-Member -MemberType NoteProperty -Name "Stage$AbortedStage" -Value 'Aborted'; $StageFailures++
+                    }
+
+                    Write-Warning 'Aborted due to failures in earlier stage(s). To continue despite failures, use the ContinueOnFailure parameter.'
+                    return $NetStackResults
+                }
+            }
+
             $thisStage = $_
             Write-Host "Beginning Stage: $thisStage - RDMA Perf 1:1 - $([System.DateTime]::Now)"
 
@@ -697,7 +734,20 @@ Function Test-NetStack {
         }
 
         '5' { # RDMA Stress N:1
-            $Stage = $_
+            if ( $ContinueOnFailure -eq $false ) {
+                if ('fail' -in $NetStackResults.Stage3.PathStatus -or 'fail' -in $NetStackResults.Stage4.PathStatus) {
+
+                    $Stage -ge 5 | ForEach-Object {
+                        $AbortedStage = $_
+                        $NetStackResults | Add-Member -MemberType NoteProperty -Name "Stage$AbortedStage" -Value 'Aborted'; $StageFailures++
+                    }
+
+                    Write-Warning 'Aborted due to failures in earlier stage(s). To continue despite failures, use the ContinueOnFailure parameter.'
+                    return $NetStackResults
+                }
+            }
+
+            $thisStage = $_
             Write-Host "Beginning Stage: $thisStage - RDMA Perf N:1 - $([System.DateTime]::Now)"
 
             $StageResults = @()
@@ -737,6 +787,19 @@ Function Test-NetStack {
         }
 
         '6' { # RDMA Stress N:N
+            if ( $ContinueOnFailure -eq $false ) {
+                if ('fail' -in $NetStackResults.Stage3.PathStatus -or 'fail' -in $NetStackResults.Stage4.PathStatus -or 'fail' -in $NetStackResults.Stage5.PathStatus) {
+
+                    $Stage -ge 6 | ForEach-Object {
+                        $AbortedStage = $_
+                        $ResultsSummary | Add-Member -MemberType NoteProperty -Name "Stage$AbortedStage" -Value 'Aborted'; $StageFailures++
+                    }
+
+                    Write-Warning 'Aborted due to failures in earlier stage(s). To continue despite failures, use the ContinueOnFailure parameter.'
+                    return $NetStackResults
+                }
+            }
+
             $thisStage = $_
             Write-Host "Beginning Stage: $thisStage - RDMA Perf N:N - $([System.DateTime]::Now)"
 
