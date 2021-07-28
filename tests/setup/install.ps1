@@ -19,6 +19,9 @@ if ($ExistingVersion -ne $Releases) {
 
     Write-Output "Updated CTSTraffic from $ExistingVersion to $Releases"
 }
+else {
+    Write-Output "Existing CTSTraffic version ($ExistingVersion) matches the current CTSTraffic version ($Releases)"
+}
 
 Remove-Item C:\projects\CTSTraffic -Force -Confirm:$false -Recurse
 
