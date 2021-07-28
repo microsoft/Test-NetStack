@@ -10,7 +10,7 @@ Write-Output 'Checking version of CTSTraffic...'
 git.exe clone -q https://github.com/microsoft/ctsTraffic c:\projects\CTSTraffic
 $Releases = (Get-ChildItem c:\projects\CTSTraffic\Releases).Name | Sort-Object -Descending | Select-Object -First 1
 
-$ExistingVersion = (Get-ItemProperty c:\projects\test-netstack\ctsTraffic.exe).versioninfo.fileversion
+$ExistingVersion = (Get-ItemProperty 'C:\projects\Test-NetStack\tools\CTS-Traffic\ctstraffic.exe').versioninfo.fileversion
 
 if ($ExistingVersion -ne $Releases) {
     Write-Output "Updating CTSTraffic from $ExistingVersion to $Releases"
