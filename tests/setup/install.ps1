@@ -5,6 +5,28 @@ Invoke-AppveyorInstallTask
 
 Remove-Item .\DscResource.Tests\ -Force -Confirm:$false -Recurse
 
+Write-Output 'Checking version of CTSTraffic...'
+
+git.exe clone -q https://github.com/microsoft/ctsTraffic c:\projects\CTSTraffic
+$Releases = (Get-ChildItem c:\projects\CTSTraffic\Releases).Name | Sort-Object -Descending | Select-Object -First 1
+
+$ExistingVersion = (Get-ItemProperty 'C:\projects\Test-NetStack\tools\CTS-Traffic\ctstraffic.exe').versioninfo.fileversion
+
+if ($ExistingVersion -ne $Releases) {
+    Write-Output "Updating CTSTraffic from $ExistingVersion to $Releases"
+
+    Copy-Item "C:\projects\CTSTraffic\Releases\$Releases\x64\ctstraffic.exe" 'C:\projects\Test-NetStack\tools\CTS-Traffic\ctstraffic.exe' -force
+
+    Write-Output "Updated CTSTraffic from $ExistingVersion to $Releases"
+}
+else {
+    Write-Output "Existing CTSTraffic version ($ExistingVersion) matches the current CTSTraffic version ($Releases)"
+}
+
+Remove-Item C:\projects\CTSTraffic -Force -Confirm:$false -Recurse
+
+Write-Output '...Ending CTSTraffic version check'
+
 [string[]]$PowerShellModules = @("Pester", 'posh-git')
 
 $ModuleManifest = Test-ModuleManifest .\$($env:RepoName).psd1 -ErrorAction SilentlyContinue
