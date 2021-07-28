@@ -206,11 +206,11 @@ Function Test-NetStack {
     }
     else { Remove-Variable -Name DisqualifiedNetworks -ErrorAction SilentlyContinue }
 
-    if ($TestableNetworks) { $NetStackResults | Add-Member -MemberType NoteProperty -Name TestableNetworks -Value $TestableNetworks }
-    else {
-        if (-not($OnlyConnectivityMap)) {
-            throw 'No Testable Networks Found'
-        }
+    $NetStackResults | Add-Member -MemberType NoteProperty -Name TestableNetworks -Value $TestableNetworks
+
+    if ($TestableNetworks -eq 'None Available' -and (-not($OnlyConnectivityMap))) {
+        Write-Error 'No Testable Networks Found. Aborting Test-NetStack.'
+        return $NetStackResults
     }
 
     if ($OnlyConnectivityMap) { return $NetStackResults }
