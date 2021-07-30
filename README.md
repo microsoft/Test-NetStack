@@ -5,11 +5,9 @@
 
 ## Synopsis
 
-Test-NetStack is a PowerShell-based testing tool that performs ICMP, TCP, and RDMA traffic testing of networks.
+Test-NetStack is a PowerShell-based testing tool that performs ICMP, TCP, and RDMA traffic testing of networks. Test-NetStack can help identify potential network (fabric and host) misconfiguration or operational instability.
 
-leverages stress-testing utilities to identify potential network (fabric and host) instability.
-
-Specifically, Test-NetStack can help you test native, synthetic, and hardware offloaded (RDMA) data paths for issues with:
+Test-NetStack can validate the various network data paths on Windows, testing native, synthetic, and hardware offloaded (RDMA) data paths for issues with:
 
 - Connectivity
 - Packet fragmention
