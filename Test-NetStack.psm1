@@ -150,7 +150,7 @@ Function Test-NetStack {
         [switch] $ContinueOnFailure = $false,
 
         [Parameter(Mandatory = $false)]
-        [String] $LogPath = "$(Join-Path -Path $(Get-Module -Name Test-Netstack -ListAvailable | Select-Object -First 1) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt"))"
+        [String] $LogPath = "$(Join-Path -Path $((Get-Module -Name Test-Netstack -ListAvailable | Select-Object -First 1).ModuleBase) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt")"
     )
 
     Clear-Host
