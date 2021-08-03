@@ -629,7 +629,7 @@ Function Write-LogFile {
     $LogFile = New-Item -Path $LogPath -ItemType File -Force -ErrorAction SilentlyContinue
 
     $NetStackResults.PSObject.Properties | ForEach-Object {
-        if ($_.Name -notlike 'Failures') {
+        if ($_.Name -notlike 'Failures' -and $_.Name -notlike 'Prerequisites') {
             $_.Name | Out-File $LogFile -Append -Encoding utf8 -Width 2000
         }
         if ($_.Name -like 'DisqualifiedNetworks') {
