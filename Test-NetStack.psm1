@@ -224,6 +224,8 @@ Function Test-NetStack {
     $ResultsSummary = New-Object -TypeName psobject
     $StageFailures = 0
 
+    $MaxRunspaces = [int]$env:NUMBER_OF_PROCESSORS * 2
+
     Switch ( $Stage | Sort-Object ) {
         '1' { # ICMP Connectivity, Reliability, and PMTUD
             $thisStage = $_
@@ -233,11 +235,10 @@ Function Test-NetStack {
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
             $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
-            $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
-            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
+            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $MaxRunspaces, $ISS, $host)
             $RunspacePool.Open()
 
-            $AllJobs = @()
+            #$AllJobs = @()
             $StageResults = @()
 
             if ($IPTarget) {
@@ -467,8 +468,7 @@ Function Test-NetStack {
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
             $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
-            $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
-            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
+            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $MaxRunspaces, $ISS, $host)
             $RunspacePool.Open()
 
             $StageResults = @()
@@ -555,8 +555,7 @@ Function Test-NetStack {
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
             $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
-            $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
-            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
+            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $MaxRunspaces, $ISS, $host)
             $RunspacePool.Open()
 
             $AllJobs = @()
@@ -655,8 +654,7 @@ Function Test-NetStack {
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
             $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
-            $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
-            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
+            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $MaxRunspaces, $ISS, $host)
             $RunspacePool.Open()
 
             $StageResults = @()
