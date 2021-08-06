@@ -132,8 +132,6 @@ Function Get-ConnectivityMapping {
     #TODO: Add IP Target disqualification if the addressState not eq not preferred
 
     $Mapping = @()
-    $localIPs = (Get-NetIPAddress -AddressFamily IPv4 -Type Unicast).IPAddress
-
     foreach ($IP in $IPTarget) {
         $thisNode = (Resolve-DnsName -Name $IP -DnsOnly).NameHost.Split('.')[0]
 
