@@ -24,30 +24,26 @@ function Invoke-TCP {
         ("Gbps") {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) * [Math]::Pow(10, 9) / 8}
         ("Mbps") {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) * [Math]::Pow(10, 6) / 8}
         ("Kbps") {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) * [Math]::Pow(10, 3) / 8}
-        ("bps") {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) / 8}
+        ("bps")  {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) / 8}
     }
 
-    $ServerRecvCounter = Start-Job `
-    -ScriptBlock {
-        param([string]$ServerName,[string]$ServerInterfaceDescription)
-        $ServerInterfaceDescription = (((($ServerInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
-        Invoke-Command -ComputerName $ServerName `
-        -ScriptBlock {
-            param([string]$ServerInterfaceDescription)
-            Get-Counter -Counter "\Network Adapter($ServerInterfaceDescription)\Bytes Received/sec" -MaxSamples 20 -ErrorAction Ignore
-         } `
-         -ArgumentList $ServerInterfaceDescription
-    } `
-    -ArgumentList $Receiver.NodeName,$Receiver.InterfaceDescription
+    $ServerRecvCounter = Start-Job -ScriptBlock {
+        param ([string] $ServerName , [string] $ServerInterfaceDescription)
 
-    $ServerOutput = Start-Job -ScriptBlock {
-        param([string] $ServerName, [string] $ServerIP, $ModuleBase)
+        $ServerInterfaceDescription = (((($ServerInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
 
         Invoke-Command -ComputerName $ServerName -ScriptBlock {
-            param(
-                [string] $ServerIP,
-                [string] $ModuleBase
-            )
+            param([string]$ServerInterfaceDescription)
+            Get-Counter -Counter "\Network Adapter($ServerInterfaceDescription)\Bytes Received/sec" -MaxSamples 20 -ErrorAction Ignore
+         } -ArgumentList $ServerInterfaceDescription
+
+    } -ArgumentList $Receiver.NodeName,$Receiver.InterfaceDescription
+
+    $ServerOutput = Start-Job -ScriptBlock {
+        param ([string] $ServerName, [string] $ServerIP, $ModuleBase)
+
+        Invoke-Command -ComputerName $ServerName -ScriptBlock {
+            param ([string] $ServerIP, [string] $ModuleBase)
 
             & "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -listen:$ServerIP -consoleverbosity:1 -verify:connection -buffer:4194304 -transfer:0xffffffffffffffff -msgwaitall:on -io:rioiocp -TimeLimit:30000
          } -ArgumentList $ServerIP, $ModuleBase
@@ -56,11 +52,10 @@ function Invoke-TCP {
 
     $ClientSendCounter = Start-Job -ScriptBlock {
         param([string] $ClientName, [string] $ClientInterfaceDescription)
-
         $ClientInterfaceDescription = (((($ClientInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
 
         Invoke-Command -ComputerName $ClientName -ScriptBlock {
-            param([string] $ClientInterfaceDescription)
+            param ([string] $ClientInterfaceDescription)
 
             Get-Counter -Counter "\Network Adapter($ClientInterfaceDescription)\Bytes Sent/sec" -MaxSamples 20
          } -ArgumentList $ClientInterfaceDescription
@@ -68,10 +63,10 @@ function Invoke-TCP {
     } -ArgumentList $Sender.NodeName,$Sender.InterfaceDescription
 
     $ClientOutput = Start-Job -ScriptBlock {
-        param([string] $ClientName, [string] $ServerIP, [string] $ClientIP, [string] $ModuleBase)
+        param ([string] $ClientName, [string] $ServerIP, [string] $ClientIP, [string] $ModuleBase)
 
         Invoke-Command -ComputerName $ClientName -ScriptBlock {
-            param( [string] $ServerIP, [string] $ClientIP, $ModuleBase )
+            param ([string] $ServerIP, [string] $ClientIP, $ModuleBase)
 
             & "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -bind:$ClientIP -target:$ServerIP -consoleverbosity:1 -verify:connection -buffer:4194304 -transfer:0xffffffffffffffff -msgwaitall:on -io:rioiocp -connections:32
          } -ArgumentList $ServerIP, $ClientIP, $ModuleBase
@@ -85,10 +80,10 @@ function Invoke-TCP {
     $ClientSend = Receive-Job $ClientSendCounter
 
     $FlatServerRecvOutput = $ServerRecv.Readings.split(":") | ForEach-Object {
-        try {[uint64]($_) * 8} catch{}
+        try {[uint64]($_) * 8} catch {}
     }
     $FlatClientSendOutput = $ClientSend.Readings.split(":") | ForEach-Object {
-        try {[uint64]($_) * 8} catch{}
+        try {[uint64]($_) * 8} catch {}
     }
 
     $ServerRecvBitsPerSecond = [Math]::Round(($FlatServerRecvOutput | Measure-Object -Maximum).Maximum, 2)
