@@ -16,10 +16,8 @@ function Invoke-NDKPing {
         Invoke-Command -ComputerName $ServerName -ScriptBlock {
             param([string] $ServerIP, [string] $ServerIF)
             cmd /c "NdkPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rping -W 15 2>&1"
-        } -ArgumentList $ServerIP,$ServerIF
+        } -ArgumentList $ServerIP, $ServerIF
     } -ArgumentList $Server.NodeName, $Server.IPAddress, $Server.InterfaceIndex
-
-    Start-Sleep -Seconds 1
 
     $ClientOutput = Invoke-Command -ComputerName $Client.NodeName -ScriptBlock {
         param ([string] $ServerIP, [string] $ClientIP, [string] $ClientIF)
@@ -27,9 +25,7 @@ function Invoke-NDKPing {
         cmd /c "NdkPerfCmd.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping 2>&1"
     } -ArgumentList $Server.IPAddress, $Client.IPAddress, $Client.InterfaceIndex
 
-    Start-Sleep -Seconds 5
-
-    $ServerOutput = Receive-Job $ServerOutput
+    $ServerOutput = Receive-Job $ServerOutput -Wait -AutoRemoveJob
 
     Write-Verbose "NDK Ping Server Output: "
     $ServerOutput | ForEach-Object {
@@ -81,7 +77,6 @@ function Invoke-NDKPerf1to1 {
         $Success = $False
         $ServerSuccess = $False
         $ClientSuccess = $False
-        Start-Sleep -Seconds 1
 
         $ServerCounter = Start-Job -ScriptBlock {
             param ([string] $ServerName, [string] $ServerInterfaceDescription )
@@ -93,8 +88,6 @@ function Invoke-NDKPerf1to1 {
             } -ArgumentList $ServerInterfaceDescription
         } -ArgumentList $Server.NodeName, $Server.InterfaceDescription
 
-        Start-Sleep -Seconds 1
-
         $ServerOutput = Start-Job -ScriptBlock {
             param ([string] $ServerName, [string] $ServerIP, [string] $ServerIF)
 
@@ -104,8 +97,6 @@ function Invoke-NDKPerf1to1 {
                 cmd /c "NDKPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rperf -W 20 2>&1"
             } -ArgumentList $ServerIP,$ServerIF
         } -ArgumentList $Server.NodeName, $Server.IPAddress, $Server.InterfaceIndex
-
-        Start-Sleep -Seconds 1
 
         $ClientCounter = Start-Job -ScriptBlock {
             param ([string] $ClientName, [string] $ClientInterfaceDescription)
@@ -123,8 +114,8 @@ function Invoke-NDKPerf1to1 {
             cmd /c "NDKPerfCmd.exe -C -ServerAddr $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rperf 2>&1"
         } -ArgumentList $Server.IPAddress,$Client.IPAddress,$Client.InterfaceIndex
 
-        $read = Receive-Job $ServerCounter
-        $written = Receive-Job $ClientCounter
+        $read = Receive-Job $ServerCounter -Wait -AutoRemoveJob
+        $written = Receive-Job $ClientCounter -Wait -AutoRemoveJob
 
         $FlatServerOutput = $read.Readings.split(":") | ForEach-Object {
             try {[uint64]($_)} catch{}
@@ -135,9 +126,7 @@ function Invoke-NDKPerf1to1 {
         $ServerBytesPerSecond = ($FlatServerOutput | Measure-Object -Maximum).Maximum
         $ClientBytesPerSecond = ($FlatClientOutput | Measure-Object -Maximum).Maximum
 
-        Start-Sleep -Seconds 5
-
-        $ServerOutput = Receive-Job $ServerOutput
+        $ServerOutput = Receive-Job $ServerOutput -Wait -AutoRemoveJob
 
         $MinLinkSpeedBps = ($ServerLinkSpeedBps, $ClientLinkSpeedBps | Measure-Object -Minimum).Minimum
         $Success = ($ServerBytesPerSecond -gt $MinLinkSpeedBps * $ExpectedTPUTDec) -and ($ClientBytesPerSecond -gt $MinLinkSpeedBps * $ExpectedTPUTDec)
@@ -192,8 +181,6 @@ function Invoke-NDKPerfNto1 {
     $MultiClientSuccess = $True
 
     $ClientNetwork | ForEach-Object {
-        Start-Sleep -Seconds 1
-
         $ClientName = $_.NodeName
         $ClientIP = $_.IPAddress
         $ClientIF = $_.InterfaceIndex
@@ -230,18 +217,15 @@ function Invoke-NDKPerfNto1 {
             } -ArgumentList $ServerIP,$ClientIP,$ClientIF,$j
         } -ArgumentList $ClientName,$Server.IPAddress,$ClientIP,$ClientIF,$j
 
-        Start-Sleep -Seconds 1
         $j++
     }
-
-    Start-Sleep -Seconds 20
 
     $ServerBytesPerSecond = 0
     $ServerBpsArray = @()
     $ServerGbpsArray = @()
     $MinAcceptableLinkSpeedBps = ($ServerLinkSpeedBps, $ClientLinkSpeedBps | Measure-Object -Minimum).Minimum * $ExpectedTPUTDec
     $ServerCounter | ForEach-Object {
-        $read = Receive-Job $_
+        $read = Receive-Job $_ -Wait -AutoRemoveJob
 
         if ($read.Readings) {
             $FlatServerOutput = $read.Readings.split(":") | ForEach-Object {
@@ -303,8 +287,6 @@ function Invoke-NDKPerfNtoN {
         $ClientNetwork = $ServerList | Where-Object NodeName -ne $Server.NodeName
 
         $ClientNetwork | ForEach-Object {
-            Start-Sleep -Seconds 1
-
             $ClientName = $_.NodeName
             $ClientIP = $_.IPAddress
             $ClientIF = $_.InterfaceIndex
@@ -341,11 +323,8 @@ function Invoke-NDKPerfNtoN {
                 } -ArgumentList $ServerIP,$ClientIP,$ClientIF,$j
             } -ArgumentList $ClientName,$Server.IPAddress,$ClientIP,$ClientIF,$j
 
-            Start-Sleep -Seconds 1
             $j++
         }
-
-        Start-Sleep -Seconds 20
     }
 
 
@@ -355,7 +334,7 @@ function Invoke-NDKPerfNtoN {
     $MinAcceptableLinkSpeedBps = ($ServerLinkSpeedBps, $ClientLinkSpeedBps | Measure-Object -Minimum).Minimum * $ExpectedTPUTDec
     $ServerCounter | ForEach-Object {
 
-        $read = Receive-Job $_
+        $read = Receive-Job $_ -Wait -AutoRemoveJob
 
         $FlatServerOutput = $read.Readings.split(":") | ForEach-Object {
             try {[uint64]($_)} catch{}

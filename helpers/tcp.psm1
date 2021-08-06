@@ -28,7 +28,7 @@ function Invoke-TCP {
     }
 
     $ServerRecvCounter = Start-Job -ScriptBlock {
-        param ([string] $ServerName , [string] $ServerInterfaceDescription)
+        param ([string] $ServerName, [string] $ServerInterfaceDescription)
 
         $ServerInterfaceDescription = (((($ServerInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
 
@@ -37,7 +37,7 @@ function Invoke-TCP {
             Get-Counter -Counter "\Network Adapter($ServerInterfaceDescription)\Bytes Received/sec" -MaxSamples 20 -ErrorAction Ignore
          } -ArgumentList $ServerInterfaceDescription
 
-    } -ArgumentList $Receiver.NodeName,$Receiver.InterfaceDescription
+    } -ArgumentList $Receiver.NodeName, $Receiver.InterfaceDescription
 
     $ServerOutput = Start-Job -ScriptBlock {
         param ([string] $ServerName, [string] $ServerIP, $ModuleBase)
@@ -73,11 +73,8 @@ function Invoke-TCP {
 
     } -ArgumentList $Sender.NodeName, $Receiver.IPAddress, $Sender.IPAddress, $ModuleBase
 
-    #TODO: We should track the job state or listen for an event rather than a simplistic timer like this.
-    Start-Sleep 30
-
-    $ServerRecv = Receive-Job $ServerRecvCounter
-    $ClientSend = Receive-Job $ClientSendCounter
+    $ServerRecv = Receive-Job $ServerRecvCounter -Wait -AutoRemoveJob
+    $ClientSend = Receive-Job $ClientSendCounter -Wait -AutoRemoveJob
 
     $FlatServerRecvOutput = $ServerRecv.Readings.split(":") | ForEach-Object {
         try {[uint64]($_) * 8} catch {}
@@ -92,8 +89,8 @@ function Invoke-TCP {
     Write-Verbose "Server Recv bps: $ServerRecvBitsPerSecond"
     Write-Verbose "Client Send bps: $ClientSendBitsPerSecond"
 
-    $ServerOutput = Receive-Job $ServerOutput
-    $ClientOutput = Receive-Job $ClientOutput
+    $ServerOutput = Receive-Job $ServerOutput -Wait -AutoRemoveJob
+    $ClientOutput = Receive-Job $ClientOutput -Wait -AutoRemoveJob
 
     $ServerLinkSpeedBitsPerSecond = $ServerLinkSpeedBps * 8
     $ClientLinkSpeedBitsPerSecond = $ClientLinkSpeedBps * 8
