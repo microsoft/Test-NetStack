@@ -153,6 +153,7 @@ Function Test-NetStack {
         [String] $LogPath = "$(Join-Path -Path $((Get-Module -Name Test-Netstack -ListAvailable | Select-Object -First 1).ModuleBase) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt")"
     )
 
+    $Global:ProgressPreference = 'SilentlyContinue'
     Clear-Host
 
     # Each stages adds their results to this and is eventually returned by this function
@@ -224,6 +225,8 @@ Function Test-NetStack {
     $ResultsSummary = New-Object -TypeName psobject
     $StageFailures = 0
 
+    $MaxRunspaces = [int]$env:NUMBER_OF_PROCESSORS * 2
+
     Switch ( $Stage | Sort-Object ) {
         '1' { # ICMP Connectivity, Reliability, and PMTUD
             $thisStage = $_
@@ -233,52 +236,52 @@ Function Test-NetStack {
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
             $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
-            $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
-            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
+            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $MaxRunspaces, $ISS, $host)
             $RunspacePool.Open()
 
             $AllJobs = @()
             $StageResults = @()
 
-            if ($IPTarget) {
-                foreach ($thisSource in $Mapping) {
-                    $targets = $Mapping -ne $thisSource
-                    $thisComputerName = (Resolve-DnsName -Name $thisSource -DnsOnly).NameHost.Split('.')[0]
+            $TestableNetworks | ForEach-Object {
+                $thisTestableNet = $_
 
+                $thisTestableNet.Group | ForEach-Object {
+                    $thisSource = $_
                     $thisSourceResult = @()
-                    $targets | ForEach-Object {
+
+                    $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
                         $thisTarget = $_
 
                         $PowerShell = [powershell]::Create()
                         $PowerShell.RunspacePool = $RunspacePool
 
                         [void] $PowerShell.AddScript({
-                            param ( $thisComputerName, $thisSource, $thisTarget, $localIPs, $Definitions )
+                            param ( $thisComputerName, $thisSource, $thisTarget, $Definitions )
 
-                            if ($thisSource -in $localIPs) {
-                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget
+                            if ($thisSource.NodeName -eq $Env:COMPUTERNAME) {
+                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress
                             }
                             else {
                                 $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
-                                                                   -ArgumentList $thisSource, $thisTarget `
-                                                                   -ScriptBlock  ${Function:\Invoke-ICMPPMTUD}
+                                                                    -ArgumentList $thisSource.IPAddress, $thisTarget.IPAddress `
+                                                                    -ScriptBlock  ${Function:\Invoke-ICMPPMTUD}
                             }
 
                             $Result = New-Object -TypeName psobject
                             $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisComputerName
-                            $Result | Add-Member -MemberType NoteProperty -Name Source         -Value $thisSource
-                            $Result | Add-Member -MemberType NoteProperty -Name Destination    -Value $thisTarget
-                            $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $thisSourceResult.Connectivity
+                            $Result | Add-Member -MemberType NoteProperty -Name Source         -Value $thisSource.IPAddress
+                            $Result | Add-Member -MemberType NoteProperty -Name Destination    -Value $thisTarget.IPAddress
+                            $Result | Add-Member -MemberType NoteProperty -Name Connectivity   -Value $thisSourceResult.Connectivity
                             $Result | Add-Member -MemberType NoteProperty -Name MTU -Value $thisSourceResult.MTU
                             $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
 
-                            if ($thisSource -in $localIPs) {
-                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget -StartBytes $thisSourceMSS -Reliability
+                            if ($thisSource.NodeName -eq $Env:COMPUTERNAME) {
+                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress -StartBytes $thisSourceMSS -Reliability
                             }
                             else {
                                 $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
-                                                                   -ArgumentList $thisSource, $thisTarget, $thisSourceResult.MSS , $null, $true `
-                                                                   -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
+                                                                    -ArgumentList $thisSource.IPAddress, $thisTarget.IPAddress, $thisSourceResult.MSS , $null, $true `
+                                                                    -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
                             }
 
                             $TotalSent   = $thisSourceResult.Count
@@ -296,127 +299,38 @@ Function Test-NetStack {
                             $Result | Add-Member -MemberType NoteProperty -Name Latency -Value $Latency
                             $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $Jitter
 
-                            #TODO: Check if stage value is passed into the runspace; otherwise this section may be broken
-                            if ($TotalSent         -ge $Definitions.Reliability.ICMPSent        -and
-                                $SuccessPercentage -ge $Definitions.Reliability.ICMPReliability -and
-                                $PacketLoss        -le $Definitions.Reliability.ICMPPacketLoss  -and
-                                $Latency           -le $Definitions.Reliability.ICMPLatency  -and
-                                $Jitter            -le $Definitions.Reliability.ICMPJitter) {
-                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass'
+                            if ($TotalSent -and $SuccessPercentage -and $Latency -and $Jitter -and
+                                $Definitions.Reliability.ICMPSent  -and $Definitions.Reliability.ICMPReliability  -and
+                                $Definitions.Reliability.ICMPLatency -and $Definitions.Reliability.ICMPJitter) {
+
+                                    if ($TotalSent         -ge $Definitions.Reliability.ICMPSent        -and
+                                        $SuccessPercentage -ge $Definitions.Reliability.ICMPReliability -and
+                                        $Latency           -le $Definitions.Reliability.ICMPLatency     -and
+                                        $Jitter            -le $Definitions.Reliability.ICMPJitter ) {
+
+                                        $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass'
+                                    }
+                                    else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
                             }
-                            else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' } #TODO: Update this with specific failure reasons
+                            else { throw 'Internal Error: Test-NetStack Data Integrity Issue in Stage1' }
 
                             return $Result
                         })
 
                         $param = @{
-                            thisComputerName = $thisComputerName
+                            thisComputerName = $thisSource.NodeName
                             thisSource  = $thisSource
                             thisTarget  = $thisTarget
-                            localIPs    = $localIPs
                             Definitions = $Definitions
                         }
 
                         [void] $PowerShell.AddParameters($param)
 
-                        Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $thisSource -> $thisTarget"
-                        $asyncJobObj = @{ JobHandle   = $PowerShell
-                                          AsyncHandle = $PowerShell.BeginInvoke() }
+                        Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] ($($thisSource.NodeName)) $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
+                        $asyncJobObj = @{ JobHandle = $PowerShell; AsyncHandle = $PowerShell.BeginInvoke() }
 
                         $AllJobs += $asyncJobObj
-                        #Remove-Variable Result -ErrorAction SilentlyContinue
-                    }
-                }
-            }
-            elseif ($Nodes) {
-                $TestableNetworks | ForEach-Object {
-                    $thisTestableNet = $_
-
-                    $thisTestableNet.Group | ForEach-Object {
-                        $thisSource = $_
-                        $thisSourceResult = @()
-
-                        $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
-                            $thisTarget = $_
-
-                            $PowerShell = [powershell]::Create()
-                            $PowerShell.RunspacePool = $RunspacePool
-
-                            [void] $PowerShell.AddScript({
-                                param ( $thisComputerName, $thisSource, $thisTarget, $localIPs, $Definitions )
-
-                                if ($thisSource -in $localIPs) {
-                                    $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget
-                                }
-                                else {
-                                    $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
-                                                                       -ArgumentList $thisSource, $thisTarget `
-                                                                       -ScriptBlock  ${Function:\Invoke-ICMPPMTUD}
-                                }
-
-                                $Result = New-Object -TypeName psobject
-                                $Result | Add-Member -MemberType NoteProperty -Name SourceHostName -Value $thisComputerName
-                                $Result | Add-Member -MemberType NoteProperty -Name Source         -Value $thisSource
-                                $Result | Add-Member -MemberType NoteProperty -Name Destination    -Value $thisTarget
-                                $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $thisSourceResult.Connectivity
-                                $Result | Add-Member -MemberType NoteProperty -Name MTU -Value $thisSourceResult.MTU
-                                $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
-
-                                if ($thisSource -in $localIPs) {
-                                    $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource -Destination $thisTarget -StartBytes $thisSourceMSS -Reliability
-                                }
-                                else {
-                                    $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
-                                                                       -ArgumentList $thisSource, $thisTarget, $thisSourceResult.MSS , $null, $true `
-                                                                       -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
-                                }
-
-                                $TotalSent   = $thisSourceResult.Count
-                                $TotalFailed = ($thisSourceResult -eq '-1').Count
-                                $SuccessPercentage = ([Math]::Round((100 - (($TotalFailed / $TotalSent) * 100)), 2))
-
-                                $Result | Add-Member -MemberType NoteProperty -Name TotalSent   -Value $TotalSent
-                                $Result | Add-Member -MemberType NoteProperty -Name TotalFailed -Value $TotalFailed
-                                $Result | Add-Member -MemberType NoteProperty -Name Reliability -Value $SuccessPercentage
-
-                                # -1 (no response) will be ignored for LAT and JIT
-                                $Latency = Get-Latency -RoundTripTime ($thisSourceResult -ne -1)
-                                $Jitter  = Get-Jitter  -RoundTripTime ($thisSourceResult -ne -1)
-
-                                $Result | Add-Member -MemberType NoteProperty -Name Latency -Value $Latency
-                                $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $Jitter
-
-                                #TODO: Check if stage value is passed into the runspace; otherwise this section may be broken
-                                if ($TotalSent         -ge $Definitions.Reliability.ICMPSent        -and
-                                    $SuccessPercentage -ge $Definitions.Reliability.ICMPReliability -and
-                                    $PacketLoss        -le $Definitions.Reliability.ICMPPacketLoss  -and
-                                    $Latency           -le $Definitions.Reliability.ICMPLatency  -and
-                                    $Jitter            -le $Definitions.Reliability.ICMPJitter) {
-                                    $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass'
-                                }
-                                else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' } #TODO: Update this with specific failure reasons
-
-
-                                return $Result
-                            })
-
-                            $param = @{
-                                thisComputerName = $thisSource.NodeName
-                                thisSource  = $thisSource.IPAddress
-                                thisTarget  = $thisTarget.IPaddress
-                                localIPs    = $localIPs
-                                Definitions = $Definitions
-                            }
-
-                            [void] $PowerShell.AddParameters($param)
-
-                            Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] ($($thisSource.NodeName)) $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
-                            $asyncJobObj = @{ JobHandle   = $PowerShell
-                                              AsyncHandle = $PowerShell.BeginInvoke() }
-
-                            $AllJobs += $asyncJobObj
-                            Remove-Variable Result -ErrorAction SilentlyContinue
-                        }
+                        Remove-Variable Result -ErrorAction SilentlyContinue
                     }
                 }
             }
@@ -467,20 +381,18 @@ Function Test-NetStack {
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
             $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
-            $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
-            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
+            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $MaxRunspaces, $ISS, $host)
             $RunspacePool.Open()
 
             $StageResults = @()
             foreach ($group in $runspaceGroups) {
                 $GroupedJobs = @()
                 foreach ($pair in $group) {
-
                     $PowerShell = [powershell]::Create()
                     $PowerShell.RunspacePool = $RunspacePool
 
                     [void] $PowerShell.AddScript({
-                        param ( $thisComputerName, $thisSource, $thisTarget, $localIPs, $Definitions )
+                        param ( $thisComputerName, $thisSource, $thisTarget, $Definitions )
 
                         $Result = New-Object -TypeName psobject
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
@@ -494,11 +406,14 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisTargetResult.ReceivedPctgOfLinkSpeed
                         $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.TCPPerf.TPUT
 
-                        $ThroughputPercentageDec = $Definitions.TCPPerf.TPUT / 100.0
-                        $AcceptableThroughput = $thisSourceResult.RawData.MinLinkSpeedbps * $ThroughputPercentageDec
+                        #$ThroughputPercentageDec = $Definitions.TCPPerf.TPUT / 100.0
+                        #$AcceptableThroughput = $thisSourceResult.RawData.MinLinkSpeedbps * $ThroughputPercentageDec
 
-                        if ($thisTargetResult.ReceivedPctgOfLinkSpeed -ge $Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
-                        else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                        if ($thisTargetResult.ReceivedPctgOfLinkSpeed -and $Definitions.TCPPerf.TPUT) {
+                            if ($thisTargetResult.ReceivedPctgOfLinkSpeed -ge $Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                            else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                        }
+                        else { throw 'Internal Error: Test-NetStack Data Integrity Issue in Stage2' }
 
                         $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisTargetResult.RawData
 
@@ -509,7 +424,6 @@ Function Test-NetStack {
                         thisComputerName = $pair.Source.NodeName
                         thisSource  = $pair.Source
                         thisTarget  = $pair.Target
-                        localIPs    = $localIPs
                         Definitions = $Definitions
                     }
 
@@ -555,8 +469,7 @@ Function Test-NetStack {
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
             $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
-            $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
-            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
+            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $MaxRunspaces, $ISS, $host)
             $RunspacePool.Open()
 
             $AllJobs = @()
@@ -575,7 +488,7 @@ Function Test-NetStack {
                         $PowerShell.RunspacePool = $RunspacePool
 
                         [void] $PowerShell.AddScript({
-                            param ( $thisComputerName, $thisSource, $thisTarget, $localIPs, $Definitions )
+                            param ( $thisComputerName, $thisSource, $thisTarget, $Definitions )
 
                             $Result = New-Object -TypeName psobject
                             $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
@@ -584,8 +497,14 @@ Function Test-NetStack {
 
                             $thisSourceResult = Invoke-NDKPing -Server $thisSource -Client $thisTarget
 
-                            if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
-                            else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                            if ($thisSourceResult.ServerSuccess) {
+                                $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $true
+                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus   -Value 'Pass'
+                            }
+                            else {
+                                $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $false
+                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                            }
 
                             Return $Result
                         })
@@ -594,7 +513,6 @@ Function Test-NetStack {
                             thisComputerName = $thisSource.NodeName
                             thisSource  = $thisSource
                             thisTarget  = $thisTarget
-                            localIPs    = $localIPs
                             Definitions = $Definitions
                         }
 
@@ -655,8 +573,7 @@ Function Test-NetStack {
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
             $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
-            $Max = [int]$env:NUMBER_OF_PROCESSORS * 2
-            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $Max, $ISS, $host)
+            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $MaxRunspaces, $ISS, $host)
             $RunspacePool.Open()
 
             $StageResults = @()
@@ -668,7 +585,7 @@ Function Test-NetStack {
                     $PowerShell.RunspacePool = $RunspacePool
 
                     [void] $PowerShell.AddScript({
-                        param ( $thisComputerName, $thisSource, $thisTarget, $localIPs, $Definitions )
+                        param ( $thisComputerName, $thisSource, $thisTarget, $Definitions )
 
                         $Result = New-Object -TypeName psobject
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
@@ -682,8 +599,11 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
                         $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.NDKPerf.TPUT
 
-                        if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.NDKPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
-                        else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                        if ($thisSourceResult.ReceivedPctgOfLinkSpeed -and $Definitions.NDKPerf.TPUT) {
+                            if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.NDKPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                            else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                        }
+                        else { throw 'Internal Error: Test-NetStack Data Integrity Issue in Stage4' }
 
                         $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
 
@@ -694,7 +614,6 @@ Function Test-NetStack {
                         thisComputerName = $pair.Source.NodeName
                         thisSource  = $pair.Source
                         thisTarget  = $pair.Target
-                        localIPs    = $localIPs
                         Definitions = $Definitions
                     }
 

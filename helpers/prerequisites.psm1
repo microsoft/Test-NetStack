@@ -45,18 +45,14 @@ Function Test-NetStackPrerequisites {
         }
 
         if ($thisTarget -ne $Env:ComputerName) {
-            # Try to remote first with silent failure so we can eliminate the Test-NetConnection blue bar with $ProgressPreference otherwise this sits on screen forever
             # If $NodeOS -ne $null then we can assume WinRM is successful
             $NodeOS = Invoke-Command -ComputerName $thisTarget -ErrorAction SilentlyContinue -ScriptBlock {
-                $ProgressPreference = 'SilentlyContinue'
                 return $([System.Environment]::OSVersion.Version.Build -ge 20279)
             }
 
             if ($NodeOS) { ($TargetInfo | Where-Object Name -eq $thisTarget).WinRM = $true }
         }
         else { # Machine is local; no need to test WinRM
-            $ProgressPreference = 'SilentlyContinue'
-
             $NodeOS = [System.Environment]::OSVersion.Version.Build -ge 20279
             ($TargetInfo | Where-Object Name -eq $thisTarget).WinRM = $true
         }

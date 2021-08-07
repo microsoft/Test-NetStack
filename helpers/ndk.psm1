@@ -10,31 +10,23 @@ function Invoke-NDKPing {
 
     $NDKPingResults = New-Object -TypeName psobject
 
-    $ServerOutput = Start-Job `
-    -ScriptBlock {
-        param([string]$ServerName,[string]$ServerIP,[string]$ServerIF)
-        Invoke-Command -ComputerName $ServerName `
-        -ScriptBlock {
-            param([string]$ServerIP,[string]$ServerIF)
+    $ServerOutput = Start-Job -ScriptBlock {
+        param ([string] $ServerName, [string] $ServerIP, [string] $ServerIF)
+
+        Invoke-Command -ComputerName $ServerName -ScriptBlock {
+            param([string] $ServerIP, [string] $ServerIF)
             cmd /c "NdkPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rping -W 15 2>&1"
-        } `
-        -ArgumentList $ServerIP,$ServerIF
-    } `
-    -ArgumentList $Server.NodeName,$Server.IPAddress,$Server.InterfaceIndex
+        } -ArgumentList $ServerIP, $ServerIF
+    } -ArgumentList $Server.NodeName, $Server.IPAddress, $Server.InterfaceIndex
 
-    Start-Sleep -Seconds 1
+    $ClientOutput = Invoke-Command -ComputerName $Client.NodeName -ScriptBlock {
+        param ([string] $ServerIP, [string] $ClientIP, [string] $ClientIF)
 
-    $ClientOutput = Invoke-Command -ComputerName $Client.NodeName `
-    -ScriptBlock { 
-        param([string]$ServerIP,[string]$ClientIP,[string]$ClientIF)
-        cmd /c "NdkPerfCmd.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping 2>&1" 
-    } `
-    -ArgumentList $Server.IPAddress,$Client.IPAddress,$Client.InterfaceIndex
+        cmd /c "NdkPerfCmd.exe -C -ServerAddr  $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rping 2>&1"
+    } -ArgumentList $Server.IPAddress, $Client.IPAddress, $Client.InterfaceIndex
 
-    Start-Sleep -Seconds 5
-            
-    $ServerOutput = Receive-Job $ServerOutput
-                                
+    $ServerOutput = Receive-Job $ServerOutput -Wait -AutoRemoveJob
+
     Write-Verbose "NDK Ping Server Output: "
     $ServerOutput | ForEach-Object {
         $ServerSuccess = $_ -match 'completes'
@@ -44,7 +36,6 @@ function Invoke-NDKPing {
     $NDKPingResults | Add-Member -MemberType NoteProperty -Name ServerSuccess -Value $ServerSuccess
     Return $NDKPingResults
 }
-
 
 function Invoke-NDKPerf1to1 {
     [CmdletBinding()]
@@ -62,7 +53,7 @@ function Invoke-NDKPerf1to1 {
     $NDKPerf1to1Results = New-Object -TypeName psobject
 
     $ServerLinkSpeed = $Server.LinkSpeed.split(" ")
-    Switch($ServerLinkSpeed[1]) {            
+    Switch($ServerLinkSpeed[1]) {
         ("Gbps") {$ServerLinkSpeedBps = [Int]::Parse($ServerLinkSpeed[0]) * [Math]::Pow(10, 9) / 8}
         ("Mbps") {$ServerLinkSpeedBps = [Int]::Parse($ServerLinkSpeed[0]) * [Math]::Pow(10, 6) / 8}
         ("Kbps") {$ServerLinkSpeedBps = [Int]::Parse($ServerLinkSpeed[0]) * [Math]::Pow(10, 3) / 8}
@@ -70,7 +61,7 @@ function Invoke-NDKPerf1to1 {
     }
 
     $ClientLinkSpeed = $Client.LinkSpeed.split(" ")
-    Switch($ClientLinkSpeed[1]) {              
+    Switch($ClientLinkSpeed[1]) {
         ("Gbps") {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) * [Math]::Pow(10, 9) / 8}
         ("Mbps") {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) * [Math]::Pow(10, 6) / 8}
         ("Kbps") {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) * [Math]::Pow(10, 3) / 8}
@@ -82,59 +73,49 @@ function Invoke-NDKPerf1to1 {
     $Success = $False
     $Retries = 3
 
-    while ((-not $Success) -and ($Retries -gt 0)) {                                
+    while ((-not $Success) -and ($Retries -gt 0)) {
         $Success = $False
         $ServerSuccess = $False
         $ClientSuccess = $False
-        Start-Sleep -Seconds 1
 
-        $ServerCounter = Start-Job `
-        -ScriptBlock {
-            param([string]$ServerName,[string]$ServerInterfaceDescription)
-            Invoke-Command -ComputerName $ServerName `
-            -ScriptBlock { 
-                param([string]$ServerInterfaceDescription)
-                Get-Counter -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 20 -ErrorAction Ignore 
-            } `
-            -ArgumentList $ServerInterfaceDescription
-        } `
-        -ArgumentList $Server.NodeName,$Server.InterfaceDescription
-        Start-Sleep -Seconds 1 
+        $ServerCounter = Start-Job -ScriptBlock {
+            param ([string] $ServerName, [string] $ServerInterfaceDescription )
 
-        $ServerOutput = Start-Job `
-        -ScriptBlock {
-            param([string]$ServerName,[string]$ServerIP,[string]$ServerIF)
-            Invoke-Command -ComputerName $ServerName `
-            -ScriptBlock {
-                param([string]$ServerIP,[string]$ServerIF)
-                cmd /c "NDKPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rperf -W 20 2>&1" 
-            } `
-            -ArgumentList $ServerIP,$ServerIF
-        } `
-        -ArgumentList $Server.NodeName,$Server.IPAddress,$Server.InterfaceIndex
-        Start-Sleep -Seconds 1
-                                        
-        $ClientCounter = Start-Job `
-        -ScriptBlock {
-            param([string]$ClientName,[string]$ClientInterfaceDescription)
-            Invoke-Command -ComputerName $ClientName `
-            -ScriptBlock {
-                param([string]$ClientInterfaceDescription)
-                Get-Counter -Counter "\RDMA Activity($ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 20 
-            } `
-            -ArgumentList $ClientInterfaceDescription
-        } `
-        -ArgumentList $Client.NodeName,$Client.InterfaceDescription
-                                        
-        $ClientOutput = Invoke-Command -ComputerName $Client.NodeName `
-        -ScriptBlock {
-            param([string]$ServerIP,[string]$ClientIP,[string]$ClientIF)
-            cmd /c "NDKPerfCmd.exe -C -ServerAddr $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rperf 2>&1" 
-        } `
-        -ArgumentList $Server.IPAddress,$Client.IPAddress,$Client.InterfaceIndex
-                                        
-        $read = Receive-Job $ServerCounter
-        $written = Receive-Job $ClientCounter
+            Invoke-Command -ComputerName $ServerName -ScriptBlock {
+                param( [string] $ServerInterfaceDescription )
+
+                Get-Counter -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 20 -ErrorAction Ignore
+            } -ArgumentList $ServerInterfaceDescription
+        } -ArgumentList $Server.NodeName, $Server.InterfaceDescription
+
+        $ServerOutput = Start-Job -ScriptBlock {
+            param ([string] $ServerName, [string] $ServerIP, [string] $ServerIF)
+
+            Invoke-Command -ComputerName $ServerName -ScriptBlock {
+                param ([string] $ServerIP, [string] $ServerIF)
+
+                cmd /c "NDKPerfCmd.exe -S -ServerAddr $($ServerIP):9000  -ServerIf $ServerIF -TestType rperf -W 20 2>&1"
+            } -ArgumentList $ServerIP,$ServerIF
+        } -ArgumentList $Server.NodeName, $Server.IPAddress, $Server.InterfaceIndex
+
+        $ClientCounter = Start-Job -ScriptBlock {
+            param ([string] $ClientName, [string] $ClientInterfaceDescription)
+
+            Invoke-Command -ComputerName $ClientName -ScriptBlock {
+                param ([string] $ClientInterfaceDescription)
+
+                Get-Counter -Counter "\RDMA Activity($ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 20
+            } -ArgumentList $ClientInterfaceDescription
+
+        } -ArgumentList $Client.NodeName, $Client.InterfaceDescription
+
+        $ClientOutput = Invoke-Command -ComputerName $Client.NodeName -ScriptBlock {
+            param ([string] $ServerIP, [string] $ClientIP, [string] $ClientIF)
+            cmd /c "NDKPerfCmd.exe -C -ServerAddr $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rperf 2>&1"
+        } -ArgumentList $Server.IPAddress,$Client.IPAddress,$Client.InterfaceIndex
+
+        $read = Receive-Job $ServerCounter -Wait -AutoRemoveJob
+        $written = Receive-Job $ClientCounter -Wait -AutoRemoveJob
 
         $FlatServerOutput = $read.Readings.split(":") | ForEach-Object {
             try {[uint64]($_)} catch{}
@@ -145,13 +126,11 @@ function Invoke-NDKPerf1to1 {
         $ServerBytesPerSecond = ($FlatServerOutput | Measure-Object -Maximum).Maximum
         $ClientBytesPerSecond = ($FlatClientOutput | Measure-Object -Maximum).Maximum
 
-        Start-Sleep -Seconds 5
-                                        
-        $ServerOutput = Receive-Job $ServerOutput
-                   
+        $ServerOutput = Receive-Job $ServerOutput -Wait -AutoRemoveJob
+
         $MinLinkSpeedBps = ($ServerLinkSpeedBps, $ClientLinkSpeedBps | Measure-Object -Minimum).Minimum
         $Success = ($ServerBytesPerSecond -gt $MinLinkSpeedBps * $ExpectedTPUTDec) -and ($ClientBytesPerSecond -gt $MinLinkSpeedBps * $ExpectedTPUTDec)
-        $Retries--                         
+        $Retries--
     }
 
     $RawData = New-Object -TypeName psobject
@@ -171,7 +150,6 @@ function Invoke-NDKPerf1to1 {
     Return $NDKPerf1to1Results
 }
 
-
 function Invoke-NDKPerfNto1 {
     [CmdletBinding()]
     param (
@@ -190,9 +168,9 @@ function Invoke-NDKPerfNto1 {
     $NClientResults = @()
     $ResultString = ""
     $ExpectedTPUTDec = $ExpectedTPUT / 100
-    
+
     Write-Host ":: $([System.DateTime]::Now) :: Testing N -> Interface $($Server.InterfaceIndex) ($($Server.IPAddress))"
-        
+
     $j = 9000
 
     $ServerOutput = @()
@@ -203,8 +181,6 @@ function Invoke-NDKPerfNto1 {
     $MultiClientSuccess = $True
 
     $ClientNetwork | ForEach-Object {
-        Start-Sleep -Seconds 1
-                        
         $ClientName = $_.NodeName
         $ClientIP = $_.IPAddress
         $ClientIF = $_.InterfaceIndex
@@ -212,62 +188,51 @@ function Invoke-NDKPerfNto1 {
         $ClientLinkSpeedBps = [Int]::Parse($_.LinkSpeed.Split()[0]) * [Math]::Pow(10, 9) / 8
         $ServerLinkSpeedBps = [Int]::Parse($Server.LinkSpeed.Split()[0]) * [Math]::Pow(10, 9) / 8
 
-        $ServerCounter += Start-Job `
-        -ScriptBlock {
-            param([string]$ServerName,[string]$ServerInterfaceDescription)
+        $ServerCounter += Start-Job -ScriptBlock {
+            param ([string] $ServerName, [string] $ServerInterfaceDescription)
+
             Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 20 #-ErrorAction Ignore
-        } `
-        -ArgumentList $Server.NodeName,$Server.InterfaceDescription
+        } -ArgumentList $Server.NodeName,$Server.InterfaceDescription
 
-        $ServerOutput += Start-Job `
-        -ScriptBlock {
-            param([string]$ServerName,[string]$ServerIP,[string]$ServerIF,[int]$j)
-            Invoke-Command -ComputerName $ServerName `
-            -ScriptBlock {
+        $ServerOutput += Start-Job -ScriptBlock {
+            param ([string] $ServerName, [string] $ServerIP, [string] $ServerIF, [int]$j)
+            Invoke-Command -ComputerName $ServerName -ScriptBlock {
                 param([string]$ServerIP,[string]$ServerIF,[int]$j)
-                cmd /c "NdkPerfCmd.exe -S -ServerAddr $($ServerIP):$j  -ServerIf $ServerIF -TestType rperf -W 20 2>&1" 
-            } `
-            -ArgumentList $ServerIP,$ServerIF,$j
-        } `
-        -ArgumentList $Server.NodeName,$Server.IPAddress,$Server.InterfaceIndex,$j
+                cmd /c "NdkPerfCmd.exe -S -ServerAddr $($ServerIP):$j  -ServerIf $ServerIF -TestType rperf -W 20 2>&1"
+            } -ArgumentList $ServerIP, $ServerIF, $j
+        } -ArgumentList $Server.NodeName, $Server.IPAddress, $Server.InterfaceIndex, $j
 
-        $ClientCounter += Start-Job `
-        -ScriptBlock {
-            param([string]$ClientName,[string]$ClientInterfaceDescription)
+        $ClientCounter += Start-Job -ScriptBlock {
+            param ([string] $ClientName, [string] $ClientInterfaceDescription)
+
             Get-Counter -ComputerName $ClientName -Counter "\RDMA Activity($ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 20
-        } `
-        -ArgumentList $ClientName,$ClientInterfaceDescription
+        } -ArgumentList $ClientName,$ClientInterfaceDescription
 
-        $ClientOutput += Start-Job `
-        -ScriptBlock {
-            param([string]$ClientName,[string]$ServerIP,[string]$ClientIP,[string]$ClientIF,[int]$j)
-            Invoke-Command -Computername $ClientName `
-            -ScriptBlock {
-                param([string]$ServerIP,[string]$ClientIP,[string]$ClientIF,[int]$j)
-                cmd /c "NdkPerfCmd.exe -C -ServerAddr  $($ServerIP):$j -ClientAddr $($ClientIP) -ClientIf $($ClientIF) -TestType rperf 2>&1" 
-            } `
-            -ArgumentList $ServerIP,$ClientIP,$ClientIF,$j
-        } `
-        -ArgumentList $ClientName,$Server.IPAddress,$ClientIP,$ClientIF,$j
+        $ClientOutput += Start-Job -ScriptBlock {
+            param ([string] $ClientName, [string] $ServerIP, [string] $ClientIP, [string] $ClientIF, [int]$j)
 
-        Start-Sleep -Seconds 1
+            Invoke-Command -Computername $ClientName -ScriptBlock {
+                param ([string] $ServerIP, [string] $ClientIP, [string] $ClientIF, [int] $j)
+                cmd /c "NdkPerfCmd.exe -C -ServerAddr  $($ServerIP):$j -ClientAddr $($ClientIP) -ClientIf $($ClientIF) -TestType rperf 2>&1"
+            } -ArgumentList $ServerIP,$ClientIP,$ClientIF,$j
+        } -ArgumentList $ClientName,$Server.IPAddress,$ClientIP,$ClientIF,$j
+
         $j++
     }
-                        
-    Start-Sleep -Seconds 20
 
     $ServerBytesPerSecond = 0
     $ServerBpsArray = @()
     $ServerGbpsArray = @()
     $MinAcceptableLinkSpeedBps = ($ServerLinkSpeedBps, $ClientLinkSpeedBps | Measure-Object -Minimum).Minimum * $ExpectedTPUTDec
     $ServerCounter | ForEach-Object {
-                            
-        $read = Receive-Job $_
+        $read = Receive-Job $_ -Wait -AutoRemoveJob
+
         if ($read.Readings) {
             $FlatServerOutput = $read.Readings.split(":") | ForEach-Object {
                 try {[uint64]($_)} catch{}
             }
         }
+
         $ServerBytesPerSecond = ($FlatServerOutput | Measure-Object -Maximum).Maximum
         $ServerBpsArray += $ServerBytesPerSecond
         $ServerGbpsArray += [Math]::Round(($ServerBytesPerSecond * 8) * [Math]::Pow(10, -9), 2)
@@ -285,9 +250,9 @@ function Invoke-NDKPerfNto1 {
     $NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name ClientNetworkTested -Value $ClientNetwork.IPAddress
     $NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name ServerSuccess -Value $ServerSuccess
     $NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name RawData -Value $RawData
+
     Return $NDKPerfNto1Results
 }
-
 
 function Invoke-NDKPerfNtoN {
     [CmdletBinding()]
@@ -301,7 +266,7 @@ function Invoke-NDKPerfNtoN {
 
     $thisSubnet = ($ServerList | Select-Object -First 1).subnet
     $thisVLAN = ($ServerList | Select-Object -First 1).VLAN
-    
+
     Write-Host ":: $([System.DateTime]::Now) :: Testing N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)"
 
     $NDKPerfNtoNResults = New-Object -TypeName psobject
@@ -322,57 +287,44 @@ function Invoke-NDKPerfNtoN {
         $ClientNetwork = $ServerList | Where-Object NodeName -ne $Server.NodeName
 
         $ClientNetwork | ForEach-Object {
-            Start-Sleep -Seconds 1
-            
             $ClientName = $_.NodeName
             $ClientIP = $_.IPAddress
             $ClientIF = $_.InterfaceIndex
             $ClientInterfaceDescription = $_.InterfaceDescription
             $ClientLinkSpeedBps = [Int]::Parse($_.LinkSpeed.Split()[0]) * [Math]::Pow(10, 9) / 8
-            
-            $ServerCounter += Start-Job `
-            -ScriptBlock {
-                param([string]$ServerName,[string]$ServerInterfaceDescription)
-                Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 20 #-ErrorAction Ignore
-            } `
-            -ArgumentList $Server.NodeName,$Server.InterfaceDescription
 
-            $ServerOutput += Start-Job `
-            -ScriptBlock {
-                param([string]$ServerName,[string]$ServerIP,[string]$ServerIF,[int]$j)
-                Invoke-Command -ComputerName $ServerName `
-                -ScriptBlock {
+            $ServerCounter += Start-Job -ScriptBlock {
+                param ([string] $ServerName, [string] $ServerInterfaceDescription)
+
+                Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 20 #-ErrorAction Ignore
+            } -ArgumentList $Server.NodeName,$Server.InterfaceDescription
+
+            $ServerOutput += Start-Job -ScriptBlock {
+                param ([string] $ServerName, [string] $ServerIP, [string] $ServerIF, [int] $j)
+
+                Invoke-Command -ComputerName $ServerName -ScriptBlock {
                     param([string]$ServerIP,[string]$ServerIF,[int]$j)
-                    cmd /c "NdkPerfCmd.exe -S -ServerAddr $($ServerIP):$j  -ServerIf $ServerIF -TestType rperf -W 20 2>&1" 
-                } `
-                -ArgumentList $ServerIP,$ServerIF,$j
-            } `
-            -ArgumentList $Server.NodeName,$Server.IPAddress,$Server.InterfaceIndex,$j
+                    cmd /c "NdkPerfCmd.exe -S -ServerAddr $($ServerIP):$j  -ServerIf $ServerIF -TestType rperf -W 20 2>&1"
+                } -ArgumentList $ServerIP, $ServerIF, $j
+            } -ArgumentList $Server.NodeName,$Server.IPAddress,$Server.InterfaceIndex,$j
 
             $ClientCounter += Start-Job `
             -ScriptBlock {
                 param([string]$ClientName,[string]$ClientInterfaceDescription)
                 Get-Counter -ComputerName $ClientName -Counter "\RDMA Activity($ClientInterfaceDescription)\RDMA Outbound Bytes/sec" -MaxSamples 20
-            } `
-            -ArgumentList $ClientName,$ClientInterfaceDescription
+            } -ArgumentList $ClientName,$ClientInterfaceDescription
 
-            $ClientOutput += Start-Job `
-            -ScriptBlock {
-                param([string]$ClientName,[string]$ServerIP,[string]$ClientIP,[string]$ClientIF,[int]$j)
-                Invoke-Command -Computername $ClientName `
-                -ScriptBlock {
-                    param([string]$ServerIP,[string]$ClientIP,[string]$ClientIF,[int]$j)
-                    cmd /c "NdkPerfCmd.exe -C -ServerAddr  $($ServerIP):$j -ClientAddr $($ClientIP) -ClientIf $($ClientIF) -TestType rperf 2>&1" 
-                } `
-                -ArgumentList $ServerIP,$ClientIP,$ClientIF,$j
-            } `
-            -ArgumentList $ClientName,$Server.IPAddress,$ClientIP,$ClientIF,$j
+            $ClientOutput += Start-Job -ScriptBlock {
+                param ([string] $ClientName, [string] $ServerIP, [string] $ClientIP, [string] $ClientIF, [int]$j)
 
-            Start-Sleep -Seconds 1
+                Invoke-Command -Computername $ClientName -ScriptBlock {
+                    param ([string] $ServerIP, [string] $ClientIP, [string] $ClientIF, [int]$j)
+                    cmd /c "NdkPerfCmd.exe -C -ServerAddr  $($ServerIP):$j -ClientAddr $($ClientIP) -ClientIf $($ClientIF) -TestType rperf 2>&1"
+                } -ArgumentList $ServerIP,$ClientIP,$ClientIF,$j
+            } -ArgumentList $ClientName,$Server.IPAddress,$ClientIP,$ClientIF,$j
+
             $j++
         }
-                        
-        Start-Sleep -Seconds 20
     }
 
 
@@ -381,8 +333,8 @@ function Invoke-NDKPerfNtoN {
     $ServerGbpsArray = @()
     $MinAcceptableLinkSpeedBps = ($ServerLinkSpeedBps, $ClientLinkSpeedBps | Measure-Object -Minimum).Minimum * $ExpectedTPUTDec
     $ServerCounter | ForEach-Object {
-                            
-        $read = Receive-Job $_
+
+        $read = Receive-Job $_ -Wait -AutoRemoveJob
 
         $FlatServerOutput = $read.Readings.split(":") | ForEach-Object {
             try {[uint64]($_)} catch{}
