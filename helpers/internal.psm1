@@ -132,8 +132,6 @@ Function Get-ConnectivityMapping {
     #TODO: Add IP Target disqualification if the addressState not eq not preferred
 
     $Mapping = @()
-    $localIPs = (Get-NetIPAddress -AddressFamily IPv4 -Type Unicast).IPAddress
-
     foreach ($IP in $IPTarget) {
         $thisNode = (Resolve-DnsName -Name $IP -DnsOnly).NameHost.Split('.')[0]
 
@@ -629,7 +627,7 @@ Function Write-LogFile {
     $LogFile = New-Item -Path $LogPath -ItemType File -Force -ErrorAction SilentlyContinue
 
     $NetStackResults.PSObject.Properties | ForEach-Object {
-        if ($_.Name -notlike 'Failures') {
+        if ($_.Name -notlike 'Failures' -and $_.Name -notlike 'Prerequisites') {
             $_.Name | Out-File $LogFile -Append -Encoding utf8 -Width 2000
         }
         if ($_.Name -like 'DisqualifiedNetworks') {
