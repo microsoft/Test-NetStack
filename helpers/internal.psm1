@@ -10,7 +10,7 @@ Class Reliability {
     [int] $ICMPSent = '2000'
 
     # Minimum success percentage for a pass
-    [int] $ICMPReliability = '90'
+    [int] $ICMPReliability = '99'
 
     # Minimum success percentage for a pass
     [int] $ICMPPacketLoss = '95'
