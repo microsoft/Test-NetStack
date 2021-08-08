@@ -259,11 +259,11 @@ Function Test-NetStack {
                             param ( $thisComputerName, $thisSource, $thisTarget, $Definitions )
 
                             if ($thisSource.NodeName -eq $Env:COMPUTERNAME) {
-                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress
+                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress -MTU
                             }
                             else {
                                 $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
-                                                                    -ArgumentList $thisSource.IPAddress, $thisTarget.IPAddress `
+                                                                    -ArgumentList $thisSource.IPAddress, $thisTarget.IPAddress, 32, 10000, $false, $true `
                                                                     -ScriptBlock  ${Function:\Invoke-ICMPPMTUD}
                             }
 
@@ -276,11 +276,11 @@ Function Test-NetStack {
                             $Result | Add-Member -MemberType NoteProperty -Name MSS -Value $thisSourceResult.MSS
 
                             if ($thisSource.NodeName -eq $Env:COMPUTERNAME) {
-                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress -StartBytes $thisSourceMSS -Reliability
+                                $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress -StartBytes $thisSourceResult.MSS -Reliability
                             }
-                            else {
+                            else { # Arguments must be sent in order. True param indicates the switch for -Reliability.
                                 $thisSourceResult = Invoke-Command -ComputerName $thisComputerName `
-                                                                    -ArgumentList $thisSource.IPAddress, $thisTarget.IPAddress, $thisSourceResult.MSS , $null, $true `
+                                                                    -ArgumentList $thisSource.IPAddress, $thisTarget.IPAddress, $thisSourceResult.MSS, $null, $true `
                                                                     -ScriptBlock ${Function:\Invoke-ICMPPMTUD}
                             }
 

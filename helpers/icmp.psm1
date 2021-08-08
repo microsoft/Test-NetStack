@@ -21,18 +21,13 @@ Function Invoke-ICMPPMTUD {
         [Switch] $Reliability = $false,
 
         [Parameter(Mandatory=$false, Position=5)]
-        [int] $Count = 1000,
+        [Switch] $MTU = $false,
 
         [Parameter(Mandatory=$false, Position=6)]
-        [int] $testTime = 15,
+        [int] $Count = 1000,
 
-        # Used for Write-Progress must also specify ParentID
         [Parameter(Mandatory=$false, Position=7)]
-        [int] $ID,
-
-        # Used for Write-Progress must also specify ID
-        [Parameter(Mandatory=$false, Position=8)]
-        [int] $ParentID
+        [int] $testTime = 15
     )
 
     #region Start-Ping: This function needs to be nested for sending remotely via Invoke-Command (e.g. Function:\Invoke-ICMPPMTU)
@@ -164,7 +159,20 @@ Add-Type @"
     }
 
 #endregion
-    if (-Not($Reliability)) {
+    if ($Reliability) { # If we already know the MTU, we can send a bunch at that size to see how reliable the link is
+        $ICMPResponse = @()
+
+        $testCompleted = 0
+        $startTime = [System.DateTime]::Now
+
+        do {
+            #Specify the RTT Switch. We'll use this for more stuff later.
+            $ICMPResponse += Start-Ping -Source $Source -Destination $Destination -Size $StartBytes -RTT
+        } until([System.DateTime]::Now -ge $startTime.AddSeconds($testTime))
+
+        Return $ICMPResponse
+    }
+    elseif ($MTU) { # Find MTU/MSS
         [int] $lastKnownGood = -1
 
         if ((Start-Ping -Destination $Destination -Source $Source -Size $StartBytes)) {
@@ -261,17 +269,7 @@ Add-Type @"
             return $obj
         }
     }
-    else { # If we already know the MTU, we can send a bunch at that size to see how reliable the link is
-        $ICMPResponse = @()
-
-        $testCompleted = 0
-        $startTime = [System.DateTime]::Now
-
-        do {
-            #Specify the RTT Switch. We'll use this for more stuff later.
-            $ICMPResponse += Start-Ping -Source $Source -Destination $Destination -Size $StartBytes -RTT
-        } until([System.DateTime]::Now -ge $startTime.AddSeconds($testTime))
-
-        Return $ICMPResponse
+    else { # Red October
+        Start-Ping -Destination $Destination -Source $Source
     }
 }
