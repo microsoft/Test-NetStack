@@ -16,7 +16,7 @@ Class Reliability {
     [int] $ICMPPacketLoss = '95'
 
     # Maximum Milliseconds for a pass
-    [int] $ICMPLatency = '3'
+    [int] $ICMPLatency = '1.5'
 
     # Maximum jitter
     [Double] $ICMPJitter = '.1'
