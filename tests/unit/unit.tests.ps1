@@ -19,7 +19,7 @@ Describe "$($env:APPVEYOR_BUILD_FOLDER)-Manifest" {
 
         'icmp.psm1', 'internal.psm1', 'ndk.psm1', 'tcp.psm1' | ForEach-Object {
             $thisModule = $_
-            
+
             It "[Test-Path] - helpers\$thisModule exists" { Test-Path ".\helpers\$thisModule" | Should Be True }
 
             Import-Module .\helpers\$thisModule -Force
@@ -40,7 +40,7 @@ Describe "$($env:APPVEYOR_BUILD_FOLDER)-Manifest" {
 
                 'internal' {
                     'Get-ConnectivityMapping', 'Get-TestableNetworksFromMapping', 'Get-DisqualifiedNetworksFromMapping', 'Get-RunspaceGroups',
-                    'Get-Jitter', 'Get-Latency', 'Get-Failures', 'Write-LogFile', 'Convert-CIDRToMask', 'Convert-MaskToCIDR', 'Convert-IPv4ToInt',
+                    'Get-Jitter', 'Get-Latency', 'Get-Failures', 'Write-RecommendationsToLogFile', 'Convert-CIDRToMask', 'Convert-MaskToCIDR', 'Convert-IPv4ToInt',
                     'Convert-IntToIPv4' | ForEach-Object {
                         It "Should have an available command: $_" {
                             $module.ExportedCommands.ContainsKey($_) | Should be $true
