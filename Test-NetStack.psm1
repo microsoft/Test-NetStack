@@ -241,7 +241,6 @@ Function Test-NetStack {
     if ($TestableNetworks -eq 'None Available' -and (-not($OnlyConnectivityMap))) {
         Write-Error 'No Testable Networks Found. Aborting Test-NetStack.'
         "No Testable Networks Found. Aborting Test-NetStack." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-        # Write-LogFile -NetStackResults $NetStackResults -LogFile $LogFile
         return $NetStackResults
     }
 
@@ -252,11 +251,7 @@ Function Test-NetStack {
     }
     "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-    if ($OnlyConnectivityMap) {
-        # "Connectivity Map Results" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-        # Write-LogFile -NetStackResults $NetStackResults -LogFile $LogFile
-        return $NetStackResults
-    }
+    if ($OnlyConnectivityMap) { return $NetStackResults }
     #endregion Connectivity Maps
 
     $runspaceGroups = Get-RunspaceGroups -TestableNetworks $TestableNetworks
