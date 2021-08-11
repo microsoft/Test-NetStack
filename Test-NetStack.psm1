@@ -164,8 +164,7 @@ Function Test-NetStack {
 
     $LogFile = New-Item -Path $LogPath -ItemType File -Force -ErrorAction SilentlyContinue
 
-    "Starting Test-NetStack - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-    "`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+    "Starting Test-NetStack - $([System.DateTime]::Now)`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
     # Each stages adds their results to this and is eventually returned by this function
     $NetStackResults = New-Object -TypeName psobject
@@ -176,6 +175,7 @@ Function Test-NetStack {
             try { $Nodes = (Get-ClusterNode -ErrorAction SilentlyContinue -WarningAction SilentlyContinue).Name }
             catch {
                 Write-Host 'To run this cmdlet without parameters, join a cluster then try again. Otherwise, specify the Nodes or IPTarget parameters' -ForegroundColor Red
+                "To run this cmdlet without parameters, join a cluster then try again. Otherwise, specify the Nodes or IPTarget parameters." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                 break
             }
         }
@@ -296,7 +296,7 @@ Function Test-NetStack {
                         $PowerShell.RunspacePool = $RunspacePool
 
                         [void] $PowerShell.AddScript({
-                            param ( $thisComputerName, $thisSource, $thisTarget, $Definitions )
+                            param ( $thisComputerName, $thisSource, $thisTarget, $Definitions, $LogFile )
 
                             if ($thisSource.NodeName -eq $Env:COMPUTERNAME) {
                                 $thisSourceResult = Invoke-ICMPPMTUD -Source $thisSource.IPAddress -Destination $thisTarget.IPAddress
@@ -352,7 +352,10 @@ Function Test-NetStack {
                                     }
                                     else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
                             }
-                            else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                            else {
+                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                                "ERROR: Data failed to be collected for path ($($thisComputerName)) $($thisSource.IPAddress) -> $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            }
 
                             return $Result
                         })
@@ -362,6 +365,7 @@ Function Test-NetStack {
                             thisSource  = $thisSource
                             thisTarget  = $thisTarget
                             Definitions = $Definitions
+                            LogFile     = $LogFile
                         }
 
                         [void] $PowerShell.AddParameters($param)
@@ -400,8 +404,7 @@ Function Test-NetStack {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage1 -Value $StageResults
 
             Write-Host "Completed Stage: $thisStage - Connectivity and PMTUD - $([System.DateTime]::Now)"
-            "Completed Stage: $thisStage - Connectivity and PMTUD - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-            "`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            "Completed Stage: $thisStage - Connectivity and PMTUD - $([System.DateTime]::Now)`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "Stage 1 Results" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             $StageResults | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
@@ -443,7 +446,7 @@ Function Test-NetStack {
                     $PowerShell.RunspacePool = $RunspacePool
 
                     [void] $PowerShell.AddScript({
-                        param ( $thisComputerName, $thisSource, $thisTarget, $Definitions )
+                        param ( $thisComputerName, $thisSource, $thisTarget, $Definitions, $LogFile )
 
                         $Result = New-Object -TypeName psobject
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
@@ -461,7 +464,10 @@ Function Test-NetStack {
                             if ($thisTargetResult.ReceivedPctgOfLinkSpeed -ge $Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
                             else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
                         }
-                        else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                        else {
+                            $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                            "ERROR: Data failed to be collected for path  $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        }
 
                         $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisTargetResult.RawData
 
@@ -473,6 +479,7 @@ Function Test-NetStack {
                         thisSource  = $pair.Source
                         thisTarget  = $pair.Target
                         Definitions = $Definitions
+                        LogFile     = $LogFile
                     }
 
                     [void] $PowerShell.AddParameters($param)
@@ -509,8 +516,7 @@ Function Test-NetStack {
 
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage2 -Value $StageResults
             Write-Host "Completed Stage: $thisStage - TCP - $([System.DateTime]::Now)"
-            "Completed Stage: $thisStage - TCP - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-            "`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            "Completed Stage: $thisStage - TCP - $([System.DateTime]::Now)`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "Stage 2 Results" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             $StageResults | Select-Object -Property * -ExcludeProperty RawData | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
@@ -546,14 +552,14 @@ Function Test-NetStack {
                         $PowerShell.RunspacePool = $RunspacePool
 
                         [void] $PowerShell.AddScript({
-                            param ( $thisComputerName, $thisSource, $thisTarget, $Definitions )
+                            param ( $thisSource, $thisTarget, $Definitions )
 
                             $Result = New-Object -TypeName psobject
-                            $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
-                            $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisTarget.IPaddress
-                            $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
+                            $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
+                            $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
+                            $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                            $thisSourceResult = Invoke-NDKPing -Server $thisSource -Client $thisTarget
+                            $thisSourceResult = Invoke-NDKPing -Server $thisTarget -Client $thisSource
 
                             if ($thisSourceResult.ServerSuccess) {
                                 $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $true
@@ -568,7 +574,6 @@ Function Test-NetStack {
                         })
 
                         $param = @{
-                            thisComputerName = $thisSource.NodeName
                             thisSource  = $thisSource
                             thisTarget  = $thisTarget
                             Definitions = $Definitions
@@ -610,8 +615,7 @@ Function Test-NetStack {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage3 -Value $StageResults
 
             Write-Host "Completed Stage: $thisStage - RDMA Ping - $([System.DateTime]::Now)"
-            "Completed Stage: $thisStage - RDMA Ping - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-            "`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            "Completed Stage: $thisStage - RDMA Ping - $([System.DateTime]::Now)`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "Stage 3 Results" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             $StageResults | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
@@ -654,14 +658,14 @@ Function Test-NetStack {
                     $PowerShell.RunspacePool = $RunspacePool
 
                     [void] $PowerShell.AddScript({
-                        param ( $thisComputerName, $thisSource, $thisTarget, $Definitions )
+                        param ( $thisSource, $thisTarget, $Definitions )
 
                         $Result = New-Object -TypeName psobject
-                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
-                        $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisTarget.IPaddress
-                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
+                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
+                        $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
+                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                        $thisSourceResult = Invoke-NDKPerf1to1 -Server $thisSource -Client $thisTarget -ExpectedTPUT $Definitions.NDKPerf.TPUT
+                        $thisSourceResult = Invoke-NDKPerf1to1 -Server $thisTarget -Client $thisSource -ExpectedTPUT $Definitions.NDKPerf.TPUT
 
                         $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
                         $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.ReceivedGbps
@@ -672,7 +676,10 @@ Function Test-NetStack {
                             if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.NDKPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
                             else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
                         }
-                        else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                        else {
+                            $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                            "ERROR: Data failed to be collected for path  $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        }
 
                         $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
 
@@ -680,7 +687,6 @@ Function Test-NetStack {
                     })
 
                     $param = @{
-                        thisComputerName = $pair.Source.NodeName
                         thisSource  = $pair.Source
                         thisTarget  = $pair.Target
                         Definitions = $Definitions
@@ -721,8 +727,7 @@ Function Test-NetStack {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage4 -Value $StageResults
 
             Write-Host "Completed Stage: $thisStage - RDMA Perf 1:1 - $([System.DateTime]::Now)"
-            "Completed Stage: $thisStage - RDMA Perf 1:1 - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-            "`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            "Completed Stage: $thisStage - RDMA Perf 1:1 - $([System.DateTime]::Now)`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "Stage 4 Results" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             $StageResults | Select-Object -Property * -ExcludeProperty RawData | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
@@ -754,32 +759,32 @@ Function Test-NetStack {
                 $thisTestableNet = $_
 
                 $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
-                    $thisSource = $_
-                    $ClientNetwork = @($thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object -FilterScript { $_.RDMAEnabled })
+                    $thisTarget = $_
+                    $ClientNetwork = @($thisTestableNet.Group | Where-Object NodeName -ne $thisTarget.NodeName | Where-Object -FilterScript { $_.RDMAEnabled })
 
-                    Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisSource.InterfaceIndex) ($($thisSource.IPAddress))"
-                    ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisSource.InterfaceIndex) ($($thisSource.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                    Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))"
+                    ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-                    $thisSourceResult = Invoke-NDKPerfNto1 -Server $thisSource -ClientNetwork $ClientNetwork -ExpectedTPUT $Definitions.NDKPerf.TPUT
+                    $thisTargetResult = Invoke-NDKPerfNto1 -Server $thisTarget -ClientNetwork $ClientNetwork -ExpectedTPUT $Definitions.NDKPerf.TPUT
 
                     $Result = New-Object -TypeName psobject
-                    $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
-                    $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
+                    $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
+                    $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                    $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
-                    $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.RxGbps
+                    $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisTargetResult.ReceiverLinkSpeedGbps
+                    $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisTargetResult.RxGbps
 
-                    if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Pass' }
+                    if ($thisTargetResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Pass' }
                     else { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail' }
 
-                    $Result | Add-Member -MemberType NoteProperty -Name ClientNetworkTested -Value $thisSourceResult.ClientNetworkTested
-                    $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
+                    $Result | Add-Member -MemberType NoteProperty -Name ClientNetworkTested -Value $thisTargetResult.ClientNetworkTested
+                    $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisTargetResult.RawData
 
                     $StageResults += $Result
                     Remove-Variable Result -ErrorAction SilentlyContinue
 
-                    Write-Host ":: $([System.DateTime]::Now) :: [Completed] N -> Interface $($thisSource.InterfaceIndex) ($($thisSource.IPAddress))"
-                    ":: $([System.DateTime]::Now) :: [Completed] N -> Interface $($thisSource.InterfaceIndex) ($($thisSource.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                    Write-Host ":: $([System.DateTime]::Now) :: [Completed] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))"
+                    ":: $([System.DateTime]::Now) :: [Completed] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                 }
             }
 
@@ -789,8 +794,7 @@ Function Test-NetStack {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage5 -Value $StageResults
 
             Write-Host "Completed Stage: $thisStage - RDMA Perf N:1 - $([System.DateTime]::Now)"
-            "Completed Stage: $thisStage - RDMA Perf N:1 - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-            "`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            "Completed Stage: $thisStage - RDMA Perf N:1 - $([System.DateTime]::Now)`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "Stage 5 Results" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             $StageResults | Select-Object -Property * -ExcludeProperty RawData | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
@@ -857,8 +861,7 @@ Function Test-NetStack {
             $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage6 -Value $StageResults
 
             Write-Host "Completed Stage: $thisStage - RDMA Perf N:N - $([System.DateTime]::Now)"
-            "Completed Stage: $thisStage - RDMA Perf N:N - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-            "`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            "Completed Stage: $thisStage - RDMA Perf N:N - $([System.DateTime]::Now)`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "Stage 6 Results" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             $StageResults | Select-Object -Property * -ExcludeProperty RawData | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
