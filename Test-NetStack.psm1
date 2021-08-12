@@ -154,7 +154,6 @@ Function Test-NetStack {
     )
 
     $Global:ProgressPreference = 'SilentlyContinue'
-    Clear-Host
 
     $LogFileParentPath = Split-Path -Path $LogPath -Parent -ErrorAction SilentlyContinue
 
