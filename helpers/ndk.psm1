@@ -169,8 +169,6 @@ function Invoke-NDKPerfNto1 {
     $ResultString = ""
     $ExpectedTPUTDec = $ExpectedTPUT / 100
 
-    Write-Host ":: $([System.DateTime]::Now) :: Testing N -> Interface $($Server.InterfaceIndex) ($($Server.IPAddress))"
-
     $j = 9000
 
     $ServerOutput = @()
@@ -266,8 +264,6 @@ function Invoke-NDKPerfNtoN {
 
     $thisSubnet = ($ServerList | Select-Object -First 1).subnet
     $thisVLAN = ($ServerList | Select-Object -First 1).VLAN
-
-    Write-Host ":: $([System.DateTime]::Now) :: Testing N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)"
 
     $NDKPerfNtoNResults = New-Object -TypeName psobject
     $ExpectedTPUTDec = $ExpectedTPUT / 100
