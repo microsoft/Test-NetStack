@@ -125,8 +125,8 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget'   , position = 1)]
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesNodes'   , position = 1)]
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesIPTarget', position = 1)]
-        [ValidateSet('1', '3', '4', '5', '6', '7')]
-        [Int32[]] $Stage = @('1', '3', '4', '5', '6', '7'),
+        [ValidateSet('1', '2', '3', '4', '5', '6', '7')]
+        [Int32[]] $Stage = @('1', '2', '3', '4', '5', '6', '7'),
 
         [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap', position = 2)]
         [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'  , position = 2)]
@@ -953,7 +953,10 @@ Function Test-NetStack {
                 
                 $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage7 -Value $StageResults
         
-                Write-Host "Completed Stage: $thisStage - RDMA Perf N:1 P - $([System.DateTime]::Now)"
+                Write-Host "Completed Stage: $thisStage - RDMA Perf N:1 P - $([System.DateTime]::Now)" "Completed Stage: $thisStage - RDMA Perf N:1 P - $([System.DateTime]::Now)`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                "Stage 7 Results" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                $StageResults | Select-Object -Property * -ExcludeProperty RawData | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
         }
     }
 
