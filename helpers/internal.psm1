@@ -359,9 +359,11 @@ Function Get-ConnectivityMapping {
             $EthernetResult | Add-Member -MemberType NoteProperty -Name PrefixLength -Value $thisAdapterIP.PrefixLength
             $RDMAResult     | Add-Member -MemberType NoteProperty -Name PrefixLength -Value $thisAdapterIP.PrefixLength
 
-            # We don't need these for RDMAResult
             $EthernetResult | Add-Member -MemberType NoteProperty -Name AddressState -Value $thisAdapterIP.AddressState
+            $RDMAResult     | Add-Member -MemberType NoteProperty -Name AddressState -Value $thisAdapterIP.AddressState
+
             $EthernetResult | Add-Member -MemberType NoteProperty -Name InterfaceDescription -Value $thisNetAdapter.InterfaceDescription
+            $RDMAResult     | Add-Member -MemberType NoteProperty -Name InterfaceDescription -Value $thisNetAdapter.InterfaceDescription
 
             $EthernetResult | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
             $RDMAResult     | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
