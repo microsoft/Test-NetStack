@@ -68,6 +68,11 @@ Function Test-NetStack {
     .PARAMETER LogPath
     Defines the path for the logfile. By default, this will be in the path of the module under the results folder
 
+    .PARAMETER DontCheckATC
+    By default, Test-NetStack tests networks created by Network ATC intents which requires an account that can access the cluster.
+    - This flag tells Test-NetStack to identify and test any possible network that resolves by the connectivity mapper
+    - This flag is implicitely enabled when IP Targets are specified (rather than Node names) as ATC requires a cluster with DNS resolution
+
     .PARAMETER ContinueOnFailure
     By default, Test-NetStack will stop processing later stages if a failure is incurred during an earlier stage. This switch will continue testing later stages.
 
@@ -144,9 +149,14 @@ Function Test-NetStack {
         [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapIPTarget', position = 2)]
         [Switch] $OnlyConnectivityMap = $false,
 
-        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap', position = 3)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'  , position = 3)]
-        [Parameter(Mandatory = $false)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'       , position = 3)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapNodes'   , position = 3)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapIPTarget', position = 3)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'         , position = 3)]
+        [switch] $DontCheckATC = $false,
+
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap', position = 4)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'  , position = 4)]
         [switch] $ContinueOnFailure = $false,
 
         [Parameter(Mandatory = $false)]
@@ -213,16 +223,26 @@ Function Test-NetStack {
     }
 
     #region Connectivity Maps
-    if ($Nodes) { $Mapping = Get-ConnectivityMapping -Nodes $Nodes }
-    else        { $Mapping = Get-ConnectivityMapping -IPTarget $IPTarget }
+    if ($Nodes) { $EthernetMapping, $RDMAMapping = Get-ConnectivityMapping -Nodes $Nodes       -Logfile $LogFile -DontCheckATC:$DontCheckATC }
+    else        { $EthernetMapping, $RDMAMapping = Get-ConnectivityMapping -IPTarget $IPTarget -Logfile $LogFile -DontCheckATC:$DontCheckATC }
 
-    $TestableNetworks     = Get-TestableNetworksFromMapping     -Mapping $Mapping
-    $DisqualifiedNetworks = Get-DisqualifiedNetworksFromMapping -Mapping $Mapping
 
-    # If at least one note property doesn't exist, then no disqualified networks were identified
-    if (($DisqualifiedNetworks | Get-Member -MemberType NoteProperty).Count) {
-        "Disqualified Networks" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-        $DisqualifiedNetworks.PSObject.Properties | ForEach-Object {
+    if (-not($EthernetMapping)) { # Not sure if we want to fail if RDMAMapping is missing as well...
+        "Connectivity mapping has failed. This may be because Network ATC is not in use. To resolve this either define Network ATC intents, or specify the DontCheckATC switch." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+        throw "Connectivity mapping has failed. This may be because Network ATC is not in use. To resolve this either define Network ATC intents, or specify the DontCheckATC switch."
+    }
+
+    $TestableEthernetNetworks = Get-TestableNetworksFromMapping -Mapping $EthernetMapping
+    $TestableRDMANetworks     = Get-TestableNetworksFromMapping -Mapping $RDMAMapping
+
+    $DisqualifiedEthernetNetworks = Get-DisqualifiedNetworksFromMapping -Mapping $EthernetMapping
+    $DisqualifiedRDMANetworks     = Get-DisqualifiedNetworksFromMapping -Mapping $RDMAMapping
+
+    # If at least one note property doesn't exist, then no disqualified networks (Ethernet) were identified
+    if (($DisqualifiedEthernetNetworks | Get-Member -MemberType NoteProperty).Count) {
+        "Disqualified Ethernet Networks" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+
+        $DisqualifiedEthernetNetworks.PSObject.Properties | ForEach-Object {
             $DisqualificationCategory = $_
             "`r`nDisqualification Category: $($DisqualificationCategory.Name)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             $DisqualificationCategory.Value | ForEach-Object {
@@ -230,21 +250,48 @@ Function Test-NetStack {
                 $_.Group | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             }
         }
+
         "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-        $NetStackResults | Add-Member -MemberType NoteProperty -Name DisqualifiedNetworks -Value $DisqualifiedNetworks
+        $NetStackResults | Add-Member -MemberType NoteProperty -Name DisqualifiedEthernetNetworks -Value $DisqualifiedEthernetNetworks
     }
-    else { Remove-Variable -Name DisqualifiedNetworks -ErrorAction SilentlyContinue }
+    else { Remove-Variable -Name DisqualifiedEthernetNetworks -ErrorAction SilentlyContinue }
 
-    $NetStackResults | Add-Member -MemberType NoteProperty -Name TestableNetworks -Value $TestableNetworks
+    # If at least one note property doesn't exist, then no disqualified networks (RDMA) were identified
+    if (($DisqualifiedRDMANetworks | Get-Member -MemberType NoteProperty).Count) {
+        "Disqualified RDMA Networks" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-    if ($TestableNetworks -eq 'None Available' -and (-not($OnlyConnectivityMap))) {
-        Write-Error 'No Testable Networks Found. Aborting Test-NetStack.'
-        "No Testable Networks Found. Aborting Test-NetStack." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+        $DisqualifiedRDMANetworks.PSObject.Properties | ForEach-Object {
+            $DisqualificationCategory = $_
+            "`r`nDisqualification Category: $($DisqualificationCategory.Name)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            $DisqualificationCategory.Value | ForEach-Object {
+                $_.Name | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                $_.Group | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            }
+        }
+
+        "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+        $NetStackResults | Add-Member -MemberType NoteProperty -Name DisqualifiedRDMANetworks -Value $DisqualifiedRDMANetworks
+    }
+    else { Remove-Variable -Name DisqualifiedRDMANetworks -ErrorAction SilentlyContinue }
+
+    $NetStackResults | Add-Member -MemberType NoteProperty -Name TestableEthernetNetworks -Value $TestableEthernetNetworks
+    $NetStackResults | Add-Member -MemberType NoteProperty -Name TestableRDMANetworks     -Value $TestableRDMANetworks
+
+    if ($TestableEthernetNetworks -eq 'None Available' -and (-not($OnlyConnectivityMap))) { # Not sure if we want to fail if there are no RDMA networks.
+        Write-Error 'No testable ethernet networks found. Aborting Test-NetStack.'
+        "No testable ethernet networks found. Aborting Test-NetStack." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
         return $NetStackResults
     }
 
-    "Testable Networks`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-    $TestableNetworks | ForEach-Object {
+    "Testable Ethernet Networks`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+    $TestableEthernetNetworks | ForEach-Object {
+        $_.Values | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+        $_.Group | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+    }
+    "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+
+    "Testable RDMA Networks`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+    $TestableRDMANetworks | ForEach-Object {
         $_.Values | Out-File $LogFile -Append -Encoding utf8 -Width 2000
         $_.Group | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
     }
@@ -253,7 +300,8 @@ Function Test-NetStack {
     if ($OnlyConnectivityMap) { return $NetStackResults }
     #endregion Connectivity Maps
 
-    $runspaceGroups = Get-RunspaceGroups -TestableNetworks $TestableNetworks
+    $EthernetRunspaceGroups = Get-RunspaceGroups -TestableNetworks $TestableEthernetNetworks
+    $RDMARunspaceGroups     = Get-RunspaceGroups -TestableNetworks $TestableRDMANetworks
 
     # Defines the stage requirements - internal.psm1
     $Definitions = [Analyzer]::new()
@@ -281,7 +329,7 @@ Function Test-NetStack {
             $AllJobs = @()
             $StageResults = @()
 
-            $TestableNetworks | ForEach-Object {
+            $TestableEthernetNetworks | ForEach-Object {
                 $thisTestableNet = $_
 
                 $thisTestableNet.Group | ForEach-Object {
@@ -438,7 +486,7 @@ Function Test-NetStack {
             $RunspacePool.Open()
 
             $StageResults = @()
-            foreach ($group in $runspaceGroups) {
+            foreach ($group in $EthernetRunspaceGroups) {
                 $GroupedJobs = @()
                 foreach ($pair in $group) {
                     $PowerShell = [powershell]::Create()
@@ -523,10 +571,11 @@ Function Test-NetStack {
 
         '3' { # RDMA Connectivity
             $thisStage = $_
-            Write-Host "Beginning Stage: $thisStage - RDMA Ping - $([System.DateTime]::Now)"
-            "Stage 3`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+
+            "Stage 3`r`n"    | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "Console Output" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "Beginning Stage: $thisStage - RDMA Ping - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            Write-Host "Beginning Stage: $thisStage - RDMA Ping - $([System.DateTime]::Now)"
 
             $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
             $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
@@ -537,7 +586,7 @@ Function Test-NetStack {
 
             $AllJobs = @()
             $StageResults = @()
-            $TestableNetworks | ForEach-Object {
+            $TestableRDMANetworks | ForEach-Object {
                 $thisTestableNet = $_
 
                 $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
@@ -551,7 +600,7 @@ Function Test-NetStack {
                         $PowerShell.RunspacePool = $RunspacePool
 
                         [void] $PowerShell.AddScript({
-                            param ( $thisSource, $thisTarget, $Definitions )
+                            param ( $thisSource, $thisTarget, $Definitions, $IsIPTarget )
 
                             $Result = New-Object -TypeName psobject
                             $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
@@ -562,7 +611,14 @@ Function Test-NetStack {
 
                             if ($thisSourceResult.ServerSuccess) {
                                 $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $true
-                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus   -Value 'Pass'
+
+                                if ($IsIPTarget) {
+                                    $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Warning'
+                                    $Result | Add-Member -MemberType NoteProperty -Name Reason     -Value 'RDMA Intent Undefined'
+                                }
+                                else {
+                                    $Result | Add-Member -MemberType NoteProperty -Name PathStatus   -Value 'Pass'
+                                }
                             }
                             else {
                                 $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $false
@@ -572,10 +628,13 @@ Function Test-NetStack {
                             Return $Result
                         })
 
+                        if ($IPTarget) { [Boolean] $IsIPTarget = $true }
+
                         $param = @{
                             thisSource  = $thisSource
                             thisTarget  = $thisTarget
                             Definitions = $Definitions
+                            IsIPTarget  = $IsIPTarget
                         }
 
                         [void] $PowerShell.AddParameters($param)
@@ -649,7 +708,7 @@ Function Test-NetStack {
             $RunspacePool.Open()
 
             $StageResults = @()
-            foreach ($group in $runspaceGroups) {
+            foreach ($group in $RDMARunspaceGroups) {
                 $GroupedJobs = @()
                 foreach ($pair in $group) {
 
@@ -657,7 +716,7 @@ Function Test-NetStack {
                     $PowerShell.RunspacePool = $RunspacePool
 
                     [void] $PowerShell.AddScript({
-                        param ( $thisSource, $thisTarget, $Definitions )
+                        param ( $thisSource, $thisTarget, $Definitions, $IsIPTarget )
 
                         $Result = New-Object -TypeName psobject
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
@@ -672,7 +731,15 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.NDKPerf.TPUT
 
                         if ($thisSourceResult.ReceivedPctgOfLinkSpeed -and $Definitions.NDKPerf.TPUT) {
-                            if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.NDKPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                            if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.NDKPerf.TPUT) {
+                                if ($IsIPTarget) {
+                                    $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Warning'
+                                    $Result | Add-Member -MemberType NoteProperty -Name Reason     -Value 'RDMA Intent Undefined'
+                                }
+                                else {
+                                    $Result | Add-Member -MemberType NoteProperty -Name PathStatus   -Value 'Pass'
+                                }
+                            }
                             else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
                         }
                         else {
@@ -681,23 +748,24 @@ Function Test-NetStack {
                         }
 
                         $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
-
                         Return $Result
                     })
+
+                    if ($IPTarget) { [Boolean] $IsIPTarget = $true }
 
                     $param = @{
                         thisSource  = $pair.Source
                         thisTarget  = $pair.Target
                         Definitions = $Definitions
+                        IsIPTarget  = $IsIPTarget
                     }
 
                     [void] $PowerShell.AddParameters($param)
 
                     Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($pair.Source.IPAddress) -> ($($pair.Target.NodeName)) $($pair.Target.IPAddress)"
                     ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($pair.Source.IPAddress) -> ($($pair.Target.NodeName)) $($pair.Target.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                    $asyncJobObj = @{ JobHandle   = $PowerShell
-                                        AsyncHandle = $PowerShell.BeginInvoke() }
 
+                    $asyncJobObj = @{ JobHandle   = $PowerShell; AsyncHandle = $PowerShell.BeginInvoke() }
                     $GroupedJobs += $asyncJobObj
                 }
 
@@ -754,7 +822,7 @@ Function Test-NetStack {
             "Beginning Stage: $thisStage - RDMA Perf N:1 - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
             $StageResults = @()
-            $TestableNetworks | ForEach-Object {
+            $TestableRDMANetworks | ForEach-Object {
                 $thisTestableNet = $_
 
                 $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
@@ -821,7 +889,7 @@ Function Test-NetStack {
             "Beginning Stage: $thisStage - RDMA Perf N:N - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
             $StageResults = @()
-            $TestableNetworks | ForEach-Object {
+            $TestableRDMANetworks | ForEach-Object {
                 $thisTestableNet = $_
 
                 $ServerList = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }

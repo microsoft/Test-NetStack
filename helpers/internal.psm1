@@ -120,85 +120,126 @@ Function Convert-IntToIPv4 {
 
     Return ([IPAddress]($bytes)).ToString()
 }
+
+Function Convert-NetworkATCIntentType {
+    param ( $IntentType )
+
+    # Define bitwise flags to figure out the specified intents per given intent
+    [Flags()] enum IntentEnum {
+        None       = 0
+        Compute    = 2
+        Storage    = 4
+        Management = 8
+    }
+
+    $IntentType | ForEach-Object {
+        $thisIntentType = $_
+        $intentsContained = [enum]::GetValues([IntentEnum]) | Where-Object { $_.value__ -band $thisIntentType }
+    }
+
+    return $intentsContained
+}
 #endregion Non-Exported Helpers
 
 #region Helper Functions
 Function Get-ConnectivityMapping {
     param (
-        [string[]] $Nodes,
-        [string[]] $IPTarget
+        [string[]] $Nodes    ,
+        [string[]] $IPTarget ,
+        [string]   $LogFile  ,
+        [Switch]   $DontCheckATC
    )
 
-    #TODO: Add IP Target disqualification if the addressState not eq not preferred
+    $EthernetMapping = @()
+    $RDMAMapping     = @()
 
-    $Mapping = @()
     foreach ($IP in $IPTarget) {
         $thisNode = (Resolve-DnsName -Name $IP -DnsOnly).NameHost.Split('.')[0]
 
         if ($thisNode) { # Resolution Available
             if ($thisNode -eq $env:COMPUTERNAME) {
                 $AdapterIP = Get-NetIPAddress -IPAddress $IP -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
-                    Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
+                                Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
+
+                $RDMAAdapter = (Get-NetAdapterRdma -Name "*" -ErrorAction SilentlyContinue | Where Enabled -eq $true).Name
 
                 # Remove APIPA
                 $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
 
                 $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
-
                 $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
-
-                $RDMAAdapter = Get-NetAdapterRdma -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
             }
             else {
                 # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
                 $AdapterIP = Get-NetIPAddress -IPAddress $IP -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
                                 Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
+                $RDMAAdapter = (Get-NetAdapterRdma -CimSession $thisNode -Name "*" -ErrorAction SilentlyContinue | Where Enabled -eq $true).Name
+
                 # Remove APIPA
                 $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
 
                 $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
                 $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
-                $RDMAAdapter = Get-NetAdapterRdma -CimSession $thisNode -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
             }
 
             $ClusRes = Get-ClusterResource -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Where { $_.OwnerGroup -eq 'Cluster Group' -and $_.ResourceType -eq 'IP Address' }
             $ClusterIPs = ($ClusRes | Get-ClusterParameter -ErrorAction SilentlyContinue -Name Address).Value
 
-            $NodeOutput = @()
+            $EthernetNodeOutput = @()
+            $RDMANodeOutput     = @()
+
             foreach ($thisAdapterIP in ($AdapterIP | Where IPAddress -NotIn $ClusterIPs)) {
-                $Result = New-Object -TypeName psobject
-                $thisNetAdapter = $NetAdapter | Where InterfaceIndex -eq $thisAdapterIP.InterfaceIndex
+                $EthernetResult = New-Object -TypeName psobject
+                $RDMAResult     = New-Object -TypeName psobject
+
+                $thisNetAdapter       = $NetAdapter       | Where InterfaceIndex -eq $thisAdapterIP.InterfaceIndex
                 $thisVMNetworkAdapter = $VMNetworkAdapter | Where DeviceID -EQ $thisNetAdapter.DeviceID
 
-                $Result | Add-Member -MemberType NoteProperty -Name NodeName -Value $thisNode
-                $Result | Add-Member -MemberType NoteProperty -Name InterfaceAlias -Value $thisAdapterIP.InterfaceAlias
-                $Result | Add-Member -MemberType NoteProperty -Name InterfaceIndex -Value $thisAdapterIP.InterfaceIndex
-                $Result | Add-Member -MemberType NoteProperty -Name IPAddress -Value $thisAdapterIP.IPAddress
-                $Result | Add-Member -MemberType NoteProperty -Name PrefixLength -Value $thisAdapterIP.PrefixLength
-                $Result | Add-Member -MemberType NoteProperty -Name AddressState -Value $thisAdapterIP.AddressState
-                $Result | Add-Member -MemberType NoteProperty -Name InterfaceDescription -Value $thisNetAdapter.InterfaceDescription
-                $Result | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name NodeName -Value $thisNode
+                $RDMAResult     | Add-Member -MemberType NoteProperty -Name NodeName -Value $thisNode
 
-                if ($thisNetAdapter.Name -in $RDMAAdapter) {
-                    $Result | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $true
-                } else {
-                    $Result | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $false
-                }
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name InterfaceAlias -Value $thisAdapterIP.InterfaceAlias
+                $RDMAResult     | Add-Member -MemberType NoteProperty -Name InterfaceAlias -Value $thisAdapterIP.InterfaceAlias
 
-                $SubnetMask = Convert-CIDRToMask -PrefixLength $thisAdapterIP.PrefixLength
-                $SubNetInInt = Convert-IPv4ToInt -IPv4Address $SubnetMask
-                $IPInInt     = Convert-IPv4ToInt -IPv4Address $thisAdapterIP.IPAddress
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name InterfaceIndex -Value $thisAdapterIP.InterfaceIndex
+                $RDMAResult     | Add-Member -MemberType NoteProperty -Name InterfaceIndex -Value $thisAdapterIP.InterfaceIndex
+
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name IPAddress -Value $thisAdapterIP.IPAddress
+                $RDMAResult     | Add-Member -MemberType NoteProperty -Name IPAddress -Value $thisAdapterIP.IPAddress
+
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name PrefixLength -Value $thisAdapterIP.PrefixLength
+                $RDMAResult     | Add-Member -MemberType NoteProperty -Name PrefixLength -Value $thisAdapterIP.PrefixLength
+
+                # We don't need these for RDMAResult
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name AddressState -Value $thisAdapterIP.AddressState
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name InterfaceDescription -Value $thisNetAdapter.InterfaceDescription
+
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
+                $RDMAResult     | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
+
+                #TODO: Create a warning that indicates we can't establish if this is the correct network.
+                if ($thisNetAdapter.Name -in $RDMAAdapter) { $RDMAResult | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $true }
+                else { $RDMAResult | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $false }
+
+                $SubnetMask  = Convert-CIDRToMask -PrefixLength $thisAdapterIP.PrefixLength
+                $SubNetInInt = Convert-IPv4ToInt  -IPv4Address  $SubnetMask
+                $IPInInt     = Convert-IPv4ToInt  -IPv4Address  $thisAdapterIP.IPAddress
 
                 $Network    = Convert-IntToIPv4 -Integer ($SubNetInInt -band $IPInInt)
                 $Subnet     = "$($Network)/$($thisAdapterIP.PrefixLength)"
 
-                $Result | Add-Member -MemberType NoteProperty -Name SubnetMask -Value $SubnetMask
-                $Result | Add-Member -MemberType NoteProperty -Name Network -Value $Network
-                $Result | Add-Member -MemberType NoteProperty -Name Subnet -Value $Subnet
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name SubnetMask -Value $SubnetMask
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name Network    -Value $Network
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name Subnet     -Value $Subnet
+
+                $RDMAResult | Add-Member -MemberType NoteProperty -Name SubnetMask -Value $SubnetMask
+                $RDMAResult | Add-Member -MemberType NoteProperty -Name Network    -Value $Network
+                $RDMAResult | Add-Member -MemberType NoteProperty -Name Subnet     -Value $Subnet
 
                 if ($thisVMNetworkAdapter) {
-                    $Result | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value $thisVMNetworkAdapter.Name
+                    $EthernetResult | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value $thisVMNetworkAdapter.Name
+                    $RDMAResult     | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value $thisVMNetworkAdapter.Name
 
                     if ($thisVMNetworkAdapter.IsolationSetting.IsolationMode -eq 'VLAN') {
                         $VLAN = $thisVMNetworkAdapter.IsolationSetting.DefaultIsolationID
@@ -213,90 +254,138 @@ Function Get-ConnectivityMapping {
                     else { $thisInterfaceDetails.VLAN = 'Unsupported by Test-NetStack' }
                 }
                 else {
-                    $Result | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value 'Not Applicable'
+                    $EthernetResult | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value 'Not Applicable'
+                    $RDMAResult     | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value 'Not Applicable'
 
                     if ($thisNetAdapter.VlanID -in 0..4095) { $VLAN = $thisNetAdapter.VlanID }
                     else { $VLAN = 'Unsupported' } # In this case, the adapter does not support VLANs
                 }
 
-                $Result | Add-Member -MemberType NoteProperty -Name VLAN -Value $VLAN
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name VLAN -Value $VLAN
+                $RDMAResult     | Add-Member -MemberType NoteProperty -Name VLAN -Value $VLAN
 
-                $NodeOutput += $Result
+                $EthernetNodeOutput += $EthernetResult
+                $RDMANodeOutput     += $RDMAResult
             }
         }
         else { # No DNS Available; we should never get here if the prerequisites do their job
             throw 'DNS Not available; required for remoting and to identify realistic system expectations.'
         }
 
-        $Mapping += $NodeOutput
-        Remove-Variable AdapterIP -ErrorAction SilentlyContinue
-        Remove-Variable RDMAAdapter -ErrorAction SilentlyContinue
+        $EthernetMapping += $EthernetNodeOutput
+        $RDMAMapping     += $RDMANodeOutput
+
+        Remove-Variable AdapterIP, NetAdapter, VMNetworkAdapter, RDMAAdapter -ErrorAction SilentlyContinue
+    }
+
+    # ATC is only applicable to the nodes code path. With this, we can know if the nodes were supposed to have RDMA enabled.
+    if (-not($DontCheckATC)) {
+        $ATCIntentData = Get-NetworkATCAdapters
+        $AdapterNames  = $ATCIntentData.Adapters + $ATCIntentData.ManagementvNIC + $ATCIntentData.StoragevNIC
+
+        # this probably won't work because it won't throw and exit the function...keeping here as a reminder
+        if (-not ($ATCIntentData)) {
+            'No Network ATC intents were found. To resolve this issue, verify that you are using an account with access to the local cluster or use the DontCheckATC switch.' | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            $NetStackResults.Prerequisites | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            throw 'No Network ATC intents were found. To resolve this issue, verify that you are using an account with access to the local cluster or use the DontCheckATC switch.'
+        }
+        else {
+            foreach ($intent in $ATCIntentData) {
+                if ( 'Storage' -in $ATCIntentData.IntentType ) { # There can be only 1 storage intent so this will zip through quickly
+                    $StorageAdapters = $ATCIntentData.Adapters + $ATCIntentData.StoragevNIC
+                }
+            }
+        }
     }
 
     foreach ($thisNode in $Nodes) {
         if ($thisNode -eq $env:COMPUTERNAME) {
             $AdapterIP = Get-NetIPAddress -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
-                Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
+                            Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
-            # Remove APIPA
-            $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
+            if ($DontCheckATC) {
+                $RDMAAdapter = (Get-NetAdapterRdma -Name "*" -ErrorAction SilentlyContinue | Where Enabled -eq $true).Name
+            }
+            else {
+                $RDMAAdapter = (Get-NetAdapterRdma -Name $StorageAdapters -ErrorAction SilentlyContinue | Where Enabled -eq $true).Name
+            }
 
+            $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*' # Remove APIPA
             $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
-
             $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
-
-            $RDMAAdapter = Get-NetAdapterRdma -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
         }
         else {
             # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
             $AdapterIP = Get-NetIPAddress -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
                             Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
 
-            # Remove APIPA
-            $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*'
+            if ($DontCheckATC) {
+                $RDMAAdapter = (Get-NetAdapterRdma -CimSession $thisNode -Name "*" -ErrorAction SilentlyContinue | Where Enabled -eq $true).Name
+            }
+            else {
+                $RDMAAdapter = (Get-NetAdapterRdma -CimSession $thisNode -Name $StorageAdapters -ErrorAction SilentlyContinue | Where Enabled -eq $true).Name
+            }
 
+            $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*' # Remove APIPA
             $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
             $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
-            $RDMAAdapter = Get-NetAdapterRdma -CimSession $thisNode -Name "*" | Where-Object -FilterScript { $_.Enabled } | Select-Object -ExpandProperty Name
         }
 
         $ClusRes = Get-ClusterResource -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Where { $_.OwnerGroup -eq 'Cluster Group' -and $_.ResourceType -eq 'IP Address' }
         $ClusterIPs = ($ClusRes | Get-ClusterParameter -ErrorAction SilentlyContinue -Name Address).Value
 
-        $NodeOutput = @()
+        $EthernetNodeOutput = @()
+        $RDMANodeOutput     = @()
+
         foreach ($thisAdapterIP in ($AdapterIP | Where IPAddress -NotIn $ClusterIPs)) {
-            $Result = New-Object -TypeName psobject
-            $thisNetAdapter = $NetAdapter | Where InterfaceIndex -eq $thisAdapterIP.InterfaceIndex
-            $thisVMNetworkAdapter = $VMNetworkAdapter | Where DeviceID -EQ $thisNetAdapter.DeviceID
+            $EthernetResult = New-Object -TypeName psobject
+            $RDMAResult     = New-Object -TypeName psobject
 
-            $Result | Add-Member -MemberType NoteProperty -Name NodeName -Value $thisNode
-            $Result | Add-Member -MemberType NoteProperty -Name InterfaceAlias -Value $thisAdapterIP.InterfaceAlias
-            $Result | Add-Member -MemberType NoteProperty -Name InterfaceIndex -Value $thisAdapterIP.InterfaceIndex
-            $Result | Add-Member -MemberType NoteProperty -Name IPAddress -Value $thisAdapterIP.IPAddress
-            $Result | Add-Member -MemberType NoteProperty -Name PrefixLength -Value $thisAdapterIP.PrefixLength
-            $Result | Add-Member -MemberType NoteProperty -Name AddressState -Value $thisAdapterIP.AddressState
-            $Result | Add-Member -MemberType NoteProperty -Name InterfaceDescription -Value $thisNetAdapter.InterfaceDescription
-            $Result | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
+            $thisNetAdapter       = $NetAdapter       | Where InterfaceIndex -eq $thisAdapterIP.InterfaceIndex
+            $thisVMNetworkAdapter = $VMNetworkAdapter | Where DeviceID -eq $thisNetAdapter.DeviceID
 
-            if ($thisNetAdapter.Name -in $RDMAAdapter) {
-                $Result | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $true
-            } else {
-                $Result | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $false
-            }
+            $EthernetResult | Add-Member -MemberType NoteProperty -Name NodeName -Value $thisNode
+            $RDMAResult     | Add-Member -MemberType NoteProperty -Name NodeName -Value $thisNode
 
-            $SubnetMask = Convert-CIDRToMask -PrefixLength $thisAdapterIP.PrefixLength
-            $SubNetInInt = Convert-IPv4ToInt -IPv4Address $SubnetMask
-            $IPInInt     = Convert-IPv4ToInt -IPv4Address $thisAdapterIP.IPAddress
+            $EthernetResult | Add-Member -MemberType NoteProperty -Name InterfaceAlias -Value $thisAdapterIP.InterfaceAlias
+            $RDMAResult     | Add-Member -MemberType NoteProperty -Name InterfaceAlias -Value $thisAdapterIP.InterfaceAlias
 
-            $Network    = Convert-IntToIPv4 -Integer ($SubNetInInt -band $IPInInt)
-            $Subnet     = "$($Network)/$($thisAdapterIP.PrefixLength)"
+            $EthernetResult | Add-Member -MemberType NoteProperty -Name InterfaceIndex -Value $thisAdapterIP.InterfaceIndex
+            $RDMAResult     | Add-Member -MemberType NoteProperty -Name InterfaceIndex -Value $thisAdapterIP.InterfaceIndex
 
-            $Result | Add-Member -MemberType NoteProperty -Name SubnetMask -Value $SubnetMask
-            $Result | Add-Member -MemberType NoteProperty -Name Network -Value $Network
-            $Result | Add-Member -MemberType NoteProperty -Name Subnet -Value $Subnet
+            $EthernetResult | Add-Member -MemberType NoteProperty -Name IPAddress -Value $thisAdapterIP.IPAddress
+            $RDMAResult     | Add-Member -MemberType NoteProperty -Name IPAddress -Value $thisAdapterIP.IPAddress
+
+            $EthernetResult | Add-Member -MemberType NoteProperty -Name PrefixLength -Value $thisAdapterIP.PrefixLength
+            $RDMAResult     | Add-Member -MemberType NoteProperty -Name PrefixLength -Value $thisAdapterIP.PrefixLength
+
+            # We don't need these for RDMAResult
+            $EthernetResult | Add-Member -MemberType NoteProperty -Name AddressState -Value $thisAdapterIP.AddressState
+            $EthernetResult | Add-Member -MemberType NoteProperty -Name InterfaceDescription -Value $thisNetAdapter.InterfaceDescription
+
+            $EthernetResult | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
+            $RDMAResult     | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
+
+            if ($thisNetAdapter.Name -in $RDMAAdapter) { $RDMAResult | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $true }
+            else { $RDMAResult | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $false }
+
+            $SubnetMask  = Convert-CIDRToMask -PrefixLength $thisAdapterIP.PrefixLength
+            $SubNetInInt = Convert-IPv4ToInt  -IPv4Address  $SubnetMask
+            $IPInInt     = Convert-IPv4ToInt  -IPv4Address  $thisAdapterIP.IPAddress
+            $Network     = Convert-IntToIPv4 -Integer ($SubNetInInt -band $IPInInt)
+            $Subnet      = "$($Network)/$($thisAdapterIP.PrefixLength)"
+
+            $EthernetResult | Add-Member -MemberType NoteProperty -Name SubnetMask -Value $SubnetMask
+            $EthernetResult | Add-Member -MemberType NoteProperty -Name Network    -Value $Network
+            $EthernetResult | Add-Member -MemberType NoteProperty -Name Subnet     -Value $Subnet
+
+            $RDMAResult | Add-Member -MemberType NoteProperty -Name SubnetMask -Value $SubnetMask
+            $RDMAResult | Add-Member -MemberType NoteProperty -Name Network    -Value $Network
+            $RDMAResult | Add-Member -MemberType NoteProperty -Name Subnet     -Value $Subnet
 
             if ($thisVMNetworkAdapter) {
-                $Result | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value $thisVMNetworkAdapter.Name
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value $thisVMNetworkAdapter.Name
+                $RDMAResult     | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value $thisVMNetworkAdapter.Name
 
                 if ($thisVMNetworkAdapter.IsolationSetting.IsolationMode -eq 'VLAN') {
                     $VLAN = $thisVMNetworkAdapter.IsolationSetting.DefaultIsolationID
@@ -311,23 +400,27 @@ Function Get-ConnectivityMapping {
                 else { $thisInterfaceDetails.VLAN = 'Unsupported by Test-NetStack' }
             }
             else {
-                $Result | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value 'Not Applicable'
+                $EthernetResult | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value 'Not Applicable'
+                $RDMAResult     | Add-Member -MemberType NoteProperty -Name VMNetworkAdapterName -Value 'Not Applicable'
 
                 if ($thisNetAdapter.VlanID -in 0..4095) { $VLAN = $thisNetAdapter.VlanID }
                 else { $VLAN = 'Unsupported' } # In this case, the adapter does not support VLANs
             }
 
-            $Result | Add-Member -MemberType NoteProperty -Name VLAN -Value $VLAN
+            $EthernetResult | Add-Member -MemberType NoteProperty -Name VLAN -Value $VLAN
+            $RDMAResult     | Add-Member -MemberType NoteProperty -Name VLAN -Value $VLAN
 
-            $NodeOutput += $Result
+            $EthernetNodeOutput += $EthernetResult
+            $RDMANodeOutput     += $RDMAResult
         }
 
-        $Mapping += $NodeOutput
-        Remove-Variable AdapterIP -ErrorAction SilentlyContinue
-        Remove-Variable RDMAAdapter -ErrorAction SilentlyContinue
+        $EthernetMapping += $EthernetNodeOutput
+        $RDMAMapping     += $RDMANodeOutput
+
+        Remove-Variable AdapterIP, NetAdapter, VMNetworkAdapter, RDMAAdapter -ErrorAction SilentlyContinue
     }
 
-   Return $Mapping
+   Return $EthernetMapping, $RDMAMapping
 }
 
 Function Get-TestableNetworksFromMapping {
@@ -335,8 +428,8 @@ Function Get-TestableNetworksFromMapping {
 
     $VLANSupportedNets = $Mapping | Where-Object VLAN -ne 'Unsupported' | Group-Object Subnet, VLAN
     $UsableNetworks    = $VLANSupportedNets | Where-Object {
-        $_.Count -ge 1 -and
-        (($_.Group.NodeName | Select-Object -Unique).Count) -eq $($Mapping.NodeName | Select-Object -Unique).Count }
+        $_.Count -ge 1 -and (($_.Group.NodeName | Select-Object -Unique).Count) -eq $($Mapping.NodeName | Select-Object -Unique).Count
+    }
 
     if ($UsableNetworks) { Return $UsableNetworks }
     else { Return 'None Available' }
@@ -457,7 +550,6 @@ Function Get-Latency {
     return ($RTTNumerator / $RTTNormalized.Count).ToString('.###')
 
 }
-
 
 Function Get-Failures {
     param ( $NetStackResults )
@@ -610,7 +702,6 @@ Function Get-Failures {
     Return $Failures
 }
 
-
 Function Write-RecommendationsToLogFile {
     param (
         $NetStackResults,
@@ -738,5 +829,43 @@ Function Write-RecommendationsToLogFile {
         }
         "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
     }
+}
+
+Function Get-NetworkATCAdapters {
+    param (
+        [string] $ClusterName
+    )
+
+    if (-not($ClusterName)) {
+        try { $ClusterName = (Get-Cluster -ErrorAction SilentlyContinue -WarningAction SilentlyContinue).Name }
+        catch { }
+    }
+
+    $NetIntents          = Get-NetIntent              -ClusterName $ClusterName -ErrorAction SilentlyContinue
+    $NetIntentGoalStates = Get-NetIntentAllGoalStates -ClusterName $ClusterName -ErrorAction SilentlyContinue
+
+    $IntentData = @()
+    Foreach ($intent in $NetIntents) {
+        $thisIntentType = Convert-NetworkATCIntentType -IntentType $intent.IntentType
+
+        $ATCManagementvNIC = $NetIntentGoalStates.${env:computername}.$($intent.IntentName).SwitchConfig.SwitchHostVNic
+        $ATCStoragevNIC    = $NetIntentGoalStates.${env:computername}.$($intent.IntentName).SwitchConfig.StorageVirtualNetworkAdapters.PhysicalEndpointAdapterName
+        $ATCStatus         = Get-NetIntentStatus -Name $intent.IntentName -ClusterName $ClusterName
+
+        $thisIntent = [PSCustomObject] @{
+            IntentName = $intent.IntentName
+            Scope      = $intent.Scope
+            Adapters   = $intent.NetAdapterNamesAsList
+            IntentType = $thisIntentType
+            ManagementvNIC = $ATCManagementvNIC
+            StoragevNIC    = $ATCStoragevNIC
+            LastConfigApplied = $ATCStatus.LastConfigApplied
+            Progress          = $ATCStatus.Progress
+        }
+
+        $IntentData += $thisIntent
+    }
+
+    Return $IntentData
 }
 #endregion Helper Functions
