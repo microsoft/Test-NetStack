@@ -149,10 +149,9 @@ Function Test-NetStack {
         [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapIPTarget', position = 2)]
         [Switch] $OnlyConnectivityMap = $false,
 
+        # Should not be part of the IPTarget param sets
         [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'       , position = 3)]
         [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapNodes'   , position = 3)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapIPTarget', position = 3)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'         , position = 3)]
         [switch] $DontCheckATC = $false,
 
         [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap', position = 4)]
@@ -310,6 +309,10 @@ Function Test-NetStack {
     $StageFailures = 0
 
     $MaxRunspaces = [int]$env:NUMBER_OF_PROCESSORS * 2
+
+    # This is passed into a runspace to determine if we should flag a network as a warning because we couldn't determine if RDMA was supposed to be enabled or disabled (but we tested anyway).
+    if ($IPTarget) { [Boolean] $IsIPTarget = $true }
+    else { [Boolean] $IsIPTarget = $false }
 
     Switch ( $Stage | Sort-Object ) {
         '1' { # ICMP Connectivity, Reliability, and PMTUD
@@ -628,8 +631,6 @@ Function Test-NetStack {
                             Return $Result
                         })
 
-                        if ($IPTarget) { [Boolean] $IsIPTarget = $true }
-
                         $param = @{
                             thisSource  = $thisSource
                             thisTarget  = $thisTarget
@@ -750,8 +751,6 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
                         Return $Result
                     })
-
-                    if ($IPTarget) { [Boolean] $IsIPTarget = $true }
 
                     $param = @{
                         thisSource  = $pair.Source
