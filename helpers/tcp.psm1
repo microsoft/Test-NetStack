@@ -45,7 +45,7 @@ function Invoke-TCP {
         Invoke-Command -ComputerName $ServerName -ScriptBlock {
             param ([string] $ServerIP, [string] $ModuleBase)
 
-            & "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -listen:$ServerIP -consoleverbosity:1 -verify:connection -buffer:4194304 -transfer:0xffffffffffffffff -msgwaitall:on -io:rioiocp -TimeLimit:30000
+            & "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -listen:$ServerIP -consoleverbosity:1 -verify:connection -buffer:4194304 -transfer:0xffffffffffffffff -msgwaitall:on -io:rioiocp -TimeLimit:20000
          } -ArgumentList $ServerIP, $ModuleBase
 
     } -ArgumentList $Receiver.NodeName, $Receiver.IPAddress, $ModuleBase
@@ -68,7 +68,7 @@ function Invoke-TCP {
         Invoke-Command -ComputerName $ClientName -ScriptBlock {
             param ([string] $ServerIP, [string] $ClientIP, $ModuleBase)
 
-            & "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -bind:$ClientIP -target:$ServerIP -consoleverbosity:1 -verify:connection -buffer:4194304 -transfer:0xffffffffffffffff -msgwaitall:on -io:rioiocp -connections:32
+            & "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -bind:$ClientIP -target:$ServerIP -consoleverbosity:1 -verify:connection -buffer:4194304 -transfer:0xffffffffffffffff -msgwaitall:on -io:rioiocp -connections:32 -iterations:5
          } -ArgumentList $ServerIP, $ClientIP, $ModuleBase
 
     } -ArgumentList $Sender.NodeName, $Receiver.IPAddress, $Sender.IPAddress, $ModuleBase
