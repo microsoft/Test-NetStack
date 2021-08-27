@@ -843,8 +843,11 @@ Function Get-NetworkATCAdapters {
         catch { }
     }
 
-    $NetIntents          = Get-NetIntent              -ClusterName $ClusterName -ErrorAction SilentlyContinue
-    $NetIntentGoalStates = Get-NetIntentAllGoalStates -ClusterName $ClusterName -ErrorAction SilentlyContinue
+    # try in case ATC commands are not available
+    try {
+        $NetIntents          = Get-NetIntent              -ClusterName $ClusterName -ErrorAction SilentlyContinue
+        $NetIntentGoalStates = Get-NetIntentAllGoalStates -ClusterName $ClusterName -ErrorAction SilentlyContinue
+    } catch { }
 
     $IntentData = @()
     Foreach ($intent in $NetIntents) {
