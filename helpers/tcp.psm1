@@ -16,7 +16,7 @@ function Invoke-TCP {
         ("Gbps") {$ServerLinkSpeedBps = [Int]::Parse($ServerLinkSpeed[0]) * [Math]::Pow(10, 9) / 8}
         ("Mbps") {$ServerLinkSpeedBps = [Int]::Parse($ServerLinkSpeed[0]) * [Math]::Pow(10, 6) / 8}
         ("Kbps") {$ServerLinkSpeedBps = [Int]::Parse($ServerLinkSpeed[0]) * [Math]::Pow(10, 3) / 8}
-        ("bps") {$ServerLinkSpeedBps = [Int]::Parse($ServerLinkSpeed[0]) / 8}
+        ("bps") {$ServerLinkSpeedBps  = [Int]::Parse($ServerLinkSpeed[0]) / 8}
     }
 
     $ClientLinkSpeed = $Sender.LinkSpeed.split(" ")
@@ -27,51 +27,25 @@ function Invoke-TCP {
         ("bps")  {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) / 8}
     }
 
-    $ServerRecvCounter = Start-Job -ScriptBlock {
-        param ([string] $ServerName, [string] $ServerInterfaceDescription)
+    $ServerRecvCounter = Invoke-Command -ComputerName $Receiver.NodeName -ScriptBlock {
+        $ServerInterfaceDescription = ((($($using:Receiver).InterfaceDescription -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
 
-        $ServerInterfaceDescription = (((($ServerInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
+        Get-Counter -Counter "\Network Adapter($ServerInterfaceDescription)\Bytes Received/sec" -MaxSamples 20 -ErrorAction Ignore
+    } -JobName "Svr.Counter.$($Receiver.NodeName)" -AsJob
 
-        Invoke-Command -ComputerName $ServerName -ScriptBlock {
-            param([string]$ServerInterfaceDescription)
-            Get-Counter -Counter "\Network Adapter($ServerInterfaceDescription)\Bytes Received/sec" -MaxSamples 20 -ErrorAction Ignore
-         } -ArgumentList $ServerInterfaceDescription
+    $ServerOutput = Invoke-Command -ComputerName $Receiver.NodeName -ScriptBlock {
+        & "$($using:ModuleBase)\tools\CTS-Traffic\ctsTraffic.exe" -listen:$($using:Receiver).IPAddress -consoleverbosity:1 -verify:connection -buffer:4194304 -transfer:0xffffffffffffffff -msgwaitall:on -io:rioiocp -TimeLimit:20000
+    } -JobName "Svr.Output.$($Receiver.NodeName)" -AsJob
 
-    } -ArgumentList $Receiver.NodeName, $Receiver.InterfaceDescription
+    $ClientSendCounter = Invoke-Command -ComputerName $Sender.NodeName -ScriptBlock {
+        $ClientInterfaceDescription = ((($($using:Sender).InterfaceDescription -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
 
-    $ServerOutput = Start-Job -ScriptBlock {
-        param ([string] $ServerName, [string] $ServerIP, $ModuleBase)
+        Get-Counter -Counter "\Network Adapter($ClientInterfaceDescription)\Bytes Sent/sec" -MaxSamples 20
+    } -JobName "Client.Counter.$($Sender.NodeName)" -AsJob
 
-        Invoke-Command -ComputerName $ServerName -ScriptBlock {
-            param ([string] $ServerIP, [string] $ModuleBase)
-
-            & "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -listen:$ServerIP -consoleverbosity:1 -verify:connection -buffer:4194304 -transfer:0xffffffffffffffff -msgwaitall:on -io:rioiocp -TimeLimit:20000
-         } -ArgumentList $ServerIP, $ModuleBase
-
-    } -ArgumentList $Receiver.NodeName, $Receiver.IPAddress, $ModuleBase
-
-    $ClientSendCounter = Start-Job -ScriptBlock {
-        param([string] $ClientName, [string] $ClientInterfaceDescription)
-        $ClientInterfaceDescription = (((($ClientInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
-
-        Invoke-Command -ComputerName $ClientName -ScriptBlock {
-            param ([string] $ClientInterfaceDescription)
-
-            Get-Counter -Counter "\Network Adapter($ClientInterfaceDescription)\Bytes Sent/sec" -MaxSamples 20
-         } -ArgumentList $ClientInterfaceDescription
-
-    } -ArgumentList $Sender.NodeName,$Sender.InterfaceDescription
-
-    $ClientOutput = Start-Job -ScriptBlock {
-        param ([string] $ClientName, [string] $ServerIP, [string] $ClientIP, [string] $ModuleBase)
-
-        Invoke-Command -ComputerName $ClientName -ScriptBlock {
-            param ([string] $ServerIP, [string] $ClientIP, $ModuleBase)
-
-            & "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -bind:$ClientIP -target:$ServerIP -consoleverbosity:1 -verify:connection -buffer:4194304 -transfer:0xffffffffffffffff -msgwaitall:on -io:rioiocp -connections:32 -iterations:5
-         } -ArgumentList $ServerIP, $ClientIP, $ModuleBase
-
-    } -ArgumentList $Sender.NodeName, $Receiver.IPAddress, $Sender.IPAddress, $ModuleBase
+    $ClientOutput = Invoke-Command -ComputerName $Sender.NodeName -ScriptBlock {
+        & "$($using:ModuleBase)\tools\CTS-Traffic\ctsTraffic.exe" -bind:$($using:Sender.IPAddress) -target:$($using:Receiver.IPAddress) -consoleverbosity:1 -verify:connection -buffer:4194304 -transfer:0xffffffffffffffff -msgwaitall:on -io:rioiocp -connections:32 -iterations:5
+    } -JobName "Client.Output.$($Sender.NodeName)" -AsJob
 
     $ServerRecv = Receive-Job $ServerRecvCounter -Wait -AutoRemoveJob
     $ClientSend = Receive-Job $ClientSendCounter -Wait -AutoRemoveJob
