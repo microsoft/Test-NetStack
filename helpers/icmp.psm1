@@ -154,8 +154,6 @@ Add-Type @"
         else {
             return ($pingStatus.PingStatus($Source, $Destination, $Size))
         }
-
-
     }
 
 #endregion
@@ -270,6 +268,6 @@ Add-Type @"
         }
     }
     else { # Red October
-        Start-Ping -Destination $Destination -Source $Source
+        Start-Ping -Destination $Destination -Source $Source -Size $StartBytes
     }
 }
