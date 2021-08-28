@@ -153,10 +153,14 @@ Function Get-ConnectivityMapping {
     $EthernetMapping = @()
     $RDMAMapping     = @()
 
+    $ClusRes = Get-ClusterResource -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Where { $_.OwnerGroup -eq 'Cluster Group' -and $_.ResourceType -eq 'IP Address' }
+    $ClusterIPs = ($ClusRes | Get-ClusterParameter -ErrorAction SilentlyContinue -Name Address).Value
+
     foreach ($IP in $IPTarget) {
         $thisNode = (Resolve-DnsName -Name $IP -DnsOnly).NameHost.Split('.')[0]
 
         if ($thisNode) { # Resolution Available
+            # Since ATC relies on a domain join, we'll assume that a specified IP target means the we're not going to check ATC adapters.
             if ($thisNode -eq $env:COMPUTERNAME) {
                 $AdapterIP = Get-NetIPAddress -IPAddress $IP -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
                                 Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
@@ -182,9 +186,6 @@ Function Get-ConnectivityMapping {
                 $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
                 $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
             }
-
-            $ClusRes = Get-ClusterResource -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Where { $_.OwnerGroup -eq 'Cluster Group' -and $_.ResourceType -eq 'IP Address' }
-            $ClusterIPs = ($ClusRes | Get-ClusterParameter -ErrorAction SilentlyContinue -Name Address).Value
 
             $EthernetNodeOutput = @()
             $RDMANodeOutput     = @()
@@ -283,7 +284,6 @@ Function Get-ConnectivityMapping {
         $ATCIntentData = Get-NetworkATCAdapters
         $AdapterNames  = $ATCIntentData.Adapters + $ATCIntentData.ManagementvNIC + $ATCIntentData.StoragevNIC
 
-        # this probably won't work because it won't throw and exit the function...keeping here as a reminder
         if (-not ($ATCIntentData)) {
             'No Network ATC intents were found. To resolve this issue, verify that you are using an account with access to the local cluster or use the DontCheckATC switch.' | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             $NetStackResults.Prerequisites | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
@@ -300,39 +300,49 @@ Function Get-ConnectivityMapping {
 
     foreach ($thisNode in $Nodes) {
         if ($thisNode -eq $env:COMPUTERNAME) {
-            $AdapterIP = Get-NetIPAddress -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
-                            Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
-
             if ($DontCheckATC) {
+                $AdapterIP = Get-NetIPAddress -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
+                                Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
+
                 $RDMAAdapter = (Get-NetAdapterRdma -Name "*" -ErrorAction SilentlyContinue | Where Enabled -eq $true).Name
+
+                # We only want to do this in this path, as we don't want to remove APIPA adapters from ATC adapters. This could indicate a misconfiguration
+                $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*' # Remove APIPA
             }
             else {
+                $AdapterIP = Get-NetIPAddress -InterfaceAlias $AdapterNames -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred, Invalid, Duplicate |
+                                Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
+
                 $RDMAAdapter = (Get-NetAdapterRdma -Name $StorageAdapters -ErrorAction SilentlyContinue | Where Enabled -eq $true).Name
             }
 
-            $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*' # Remove APIPA
             $NetAdapter = Get-NetAdapter -InterfaceIndex $AdapterIP.InterfaceIndex
             $VMNetworkAdapter = Get-VMNetworkAdapter -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
         }
         else {
-            # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
-            $AdapterIP = Get-NetIPAddress -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
-                            Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
-
             if ($DontCheckATC) {
+                # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
+                $AdapterIP = Get-NetIPAddress -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
+                                Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
+
                 $RDMAAdapter = (Get-NetAdapterRdma -CimSession $thisNode -Name "*" -ErrorAction SilentlyContinue | Where Enabled -eq $true).Name
+
+                # We only want to do this in this path, as we don't want to remove APIPA adapters from ATC adapters. This could indicate a misconfiguration
+                $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*' # Remove APIPA
             }
             else {
+                # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
+                # Since this is looking for ATC adapters, it's safe to send it all adapters even if not bound to TCPIP (e.g. teamed adapters)
+                $AdapterIP = Get-NetIPAddress -InterfaceAlias $AdapterNames -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
+                                Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
+
                 $RDMAAdapter = (Get-NetAdapterRdma -CimSession $thisNode -Name $StorageAdapters -ErrorAction SilentlyContinue | Where Enabled -eq $true).Name
             }
 
-            $AdapterIP = $AdapterIP | Where IPAddress -NotLike '169.254.*' # Remove APIPA
             $NetAdapter = Get-NetAdapter -CimSession $thisNode -InterfaceIndex $AdapterIP.InterfaceIndex
             $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
         }
 
-        $ClusRes = Get-ClusterResource -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Where { $_.OwnerGroup -eq 'Cluster Group' -and $_.ResourceType -eq 'IP Address' }
-        $ClusterIPs = ($ClusRes | Get-ClusterParameter -ErrorAction SilentlyContinue -Name Address).Value
 
         $EthernetNodeOutput = @()
         $RDMANodeOutput     = @()
