@@ -604,7 +604,40 @@ Function Get-Failures {
             if ($StageHadFailures) {
                 $Failures | Add-Member -MemberType NoteProperty -Name $_.Name -Value $StageFailures
             }
+        } elseif ($_.Name -like 'Stage7') {
+            $StageResults = $_.Value
 
+            $InterfaceFailures = @()
+            $Interfaces | ForEach-Object {
+                $thisInterface = $_
+                $thisInterfaceResults = $StageResults | Where-Object Receiver -eq $thisInterface
+                if ($thisInterfaceResults.ReceiverStatus -notcontains "Pass") {
+                    $InterfaceFailures += $thisInterface
+                }
+            }
+
+            $MachineFailures = @()
+            $HostNames | ForEach-Object {
+                $thisHost = $_
+                $thisMachineResults = $StageResults | Where-Object ReceiverHostName -eq $thisHost
+                if ($thisMachineResults.ReceiverStatus -notcontains "Pass") {
+                    $MachineFailures += $thisHost
+                }
+            }
+
+            $StageFailures = New-Object -TypeName psobject
+            $StageHadFailures = $false
+            if ($InterfaceFailures.Count -gt 0) {
+                $StageFailures | Add-Member -MemberType NoteProperty -Name InterfaceFailures -Value $InterfaceFailures
+                $StageHadFailures = $true
+            }
+            if ($MachineFailures.Count -gt 0) {
+                $StageFailures | Add-Member -MemberType NoteProperty -Name MachineFailures -Value $MachineFailures
+                $StageHadFailures = $true
+            }
+            if ($StageHadFailures) {
+                $Failures | Add-Member -MemberType NoteProperty -Name $_.Name -Value $StageFailures
+            }
         }
     }
     Return $Failures
@@ -733,7 +766,21 @@ Function Write-RecommendationsToLogFile {
                         "Verify NIC RDMA provisioning and traffic class settings. Consider confirming NIC firmware and drivers, as well. If the problem persists, consider checking NIC cabling or physical interlinks." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                     }
                 }
+                'Stage7' {
+                    if ($NetStackResults.Failures.Stage7.PSObject.Properties.Name -contains "InterfaceFailures") {
+                        "Interface Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        "RDMA Perf VMSwitch Stress failed for the following target NICs:" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        $NetStackResults.Failures.Stage7.InterfaceFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        "Verify NIC RDMA provisioning and traffic class settings. Confirm NIC firmware, drivers, and check NIC cabling or physical interlinks as well." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                    }
+                    if ($NetStackResults.Failures.Stage7.PSObject.Properties.Name -contains "MachineFailures") {
+                        "`nMachine Failure Recommendations" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        "RDMA Perf VMSwitch Stress failed across all source machines for the following target machines:" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        $NetStackResults.Failures.Stage7.MachineFailures | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        "Check your VMSwitch configuration and verify NIC RDMA provisioning and traffic class settings." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                    }
                 }
+            }
             "`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
         }
         "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
