@@ -73,8 +73,10 @@ function Invoke-TCP {
 
     } -ArgumentList $Sender.NodeName, $Receiver.IPAddress, $Sender.IPAddress, $ModuleBase
 
-    $ServerRecv = Receive-Job $ServerRecvCounter -Wait -AutoRemoveJob
-    $ClientSend = Receive-Job $ClientSendCounter -Wait -AutoRemoveJob
+    Sleep 30
+
+    $ServerRecv = Receive-Job $ServerRecvCounter
+    $ClientSend = Receive-Job $ClientSendCounter
 
     $FlatServerRecvOutput = $ServerRecv.Readings.split(":") | ForEach-Object {
         try {[uint64]($_) * 8} catch {}
@@ -89,8 +91,8 @@ function Invoke-TCP {
     Write-Verbose "Server Recv bps: $ServerRecvBitsPerSecond"
     Write-Verbose "Client Send bps: $ClientSendBitsPerSecond"
 
-    $ServerOutput = Receive-Job $ServerOutput -Wait -AutoRemoveJob
-    $ClientOutput = Receive-Job $ClientOutput -Wait -AutoRemoveJob
+    $ServerOutput = Receive-Job $ServerOutput
+    $ClientOutput = Receive-Job $ClientOutput
 
     $ServerLinkSpeedBitsPerSecond = $ServerLinkSpeedBps * 8
     $ClientLinkSpeedBitsPerSecond = $ClientLinkSpeedBps * 8
