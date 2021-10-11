@@ -19,6 +19,7 @@ Function Test-NetStack {
         - Stage4: RDMA Stress 1:1
         - Stage5: RDMA Stress N:1
         - Stage6: RDMA Stress N:N
+        - Stage7: *EXPERIMENTAL* RDMA Stress N:1 Parallel
 
     .PARAMETER Nodes
         - Specifies the machines by DNS Name to test.
@@ -125,7 +126,7 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget'   , position = 1)]
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesNodes'   , position = 1)]
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesIPTarget', position = 1)]
-        [ValidateSet('1', '2', '3', '4', '5', '6', '7')]
+        [ValidateSet('1', '2', '3', '4', '5', '6', '7', '8')]
         [Int32[]] $Stage = @('1', '2', '3', '4', '5', '6'),
 
         [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap', position = 2)]
@@ -149,9 +150,24 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false)]
         [switch] $ContinueOnFailure = $false,
 
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'          , position = 4)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'            , position = 4)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes'      , position = 4)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget'   , position = 4)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesNodes'   , position = 4)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesIPTarget', position = 4)]
+        [Switch] $Experimental = $false,
+
         [Parameter(Mandatory = $false)]
         [String] $LogPath = "$(Join-Path -Path $((Get-Module -Name Test-Netstack -ListAvailable | Select-Object -First 1).ModuleBase) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt")"
     )
+    $ExperimentalStages = @('7', '8')
+    $ChosenStages = $Stages | Where-Object {$ExperimentalStages -contains $_}
+    if ($Experimental -eq $false -and $ChosenStages.Length -gt 0) {
+        Write-Error "The experimental stage(s) $ChosenStages have been selected to be run, but the experimental flag has not been set. Please enable it to run experimental stages."
+        "The experimental stage(s) $ChosenStages have been selected to be run, but the experimental flag has not been set. Please enable it to run experimental stages." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+        break
+    }
 
     $Global:ProgressPreference = 'SilentlyContinue'
 
@@ -865,7 +881,24 @@ Function Test-NetStack {
             "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
         }
 
-        '7' { # RDMA Stress N:1
+        '7' { # RDMA Stress N:1 Parallel
+
+            if ($Experimental -eq $false) {
+                Write-Error "Stage $_ is experimental. The experimental flag has not been set. Please enable it to run experimental stages."
+                "The experimental stage(s) $ChosenStages have been selected to be run, but the experimental flag has not been set. Please enable it to run experimental stages." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                return $NetStackResults
+            }
+
+            $IsVDiskUnhealthy = Get-VDiskStatus($LogFile)
+            if ($IsVDiskUnhealthy) { 
+                $Stage -ge 7 | ForEach-Object {
+                    $AbortedStage = $_
+                    $NetStackResults | Add-Member -MemberType NoteProperty -Name "Stage$AbortedStage" -Value 'Aborted'; $StageFailures++
+                }
+
+                Write-Warning 'Aborted due to unhealthy VDisk.' | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            }
+
             if ( $ContinueOnFailure -eq $false ) {
                 if ('fail' -in $NetStackResults.Stage3.PathStatus -or 'fail' -in $NetStackResults.Stage4.PathStatus -or 'fail' -in $NetStackResults.Stage5.ReceiverStatus -or 'fail' -in $NetStackResults.Stage6.NetworkStatus) {
     
@@ -907,16 +940,25 @@ Function Test-NetStack {
                         param ( $thisSource, $ClientNodes, $Definitions, $LogFile )
                         Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisSource.InterfaceIndex) ($($thisSource.IPAddress))"
                         ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisTarget.InterfaceIndex) ($($thisSource.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        $events = @()
 
                         $thisSourceResult = Invoke-NDKPerfNto1 -Server $thisSource -ClientNetwork $ClientNodes -ExpectedTPUT $Definitions.NDKPerf.TPUT
-                       
+
+                        $events = (Get-EventLog System -InstanceId 0x466,0x467,0x469,0x46a)
+
                         $Result = New-Object -TypeName psobject
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
                         $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisSource.IPAddress
                         $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
                         $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.RxGbps
-        
-                        if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Pass' }
+
+                        if ($events) { 
+                            Write-Host "Found cluster membership lost events when testing node $($thisSource.NodeName). They can be found in the test log."
+                            "Found cluster membership lost events when testing node $($thisSource.NodeName). They can be found in the test log." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $events | Select-Object Time, EntryType, InstanceID, Message | Format-Table -AutoSize | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        }
+
+                        if ($thisSourceResult.ServerSuccess -and $events.count -eq 0) { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Pass' }
                         else { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail' }
         
                         $Result | Add-Member -MemberType NoteProperty -Name ClientNetworkTested -Value $thisSourceResult.ClientNetworkTested
@@ -958,7 +1000,9 @@ Function Test-NetStack {
                 
             }
 
-            if ('Fail' -in $StageResults.ReceiverStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage7 -Value 'Fail'; $StageFailures++ }
+            $IsVDiskUnhealthy = Get-VDiskStatus($LogFile)
+
+            if ('Fail' -in $StageResults.ReceiverStatus -or $IsVDiskUnhealthy) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage7 -Value 'Fail'; $StageFailures++ }
                 else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage7 -Value 'Pass' }
                 
                 $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage7 -Value $StageResults
