@@ -50,6 +50,7 @@ Class Analyzer {
 }
 #endregion Analysis
 
+<#
 #region DataTypes
 Class InterfaceDetails {
     [string] $Node
@@ -67,6 +68,7 @@ Class InterfaceDetails {
     [string] $VMNetworkAdapterName
 }
 #endregion DataTypes
+#>
 
 #region Non-Exported Helpers
 Function Convert-CIDRToMask {
@@ -343,7 +345,6 @@ Function Get-ConnectivityMapping {
             $VMNetworkAdapter = Get-VMNetworkAdapter -CimSession $thisNode -ManagementOS | Where DeviceID -in $NetAdapter.DeviceID
         }
 
-
         $EthernetNodeOutput = @()
         $RDMANodeOutput     = @()
 
@@ -473,6 +474,137 @@ Function Get-DisqualifiedNetworksFromMapping {
     }
 
     Return $Disqualified
+}
+
+Function Get-PhysicalMapping {
+    param (
+        [string[]] $Nodes    ,
+        [string[]] $IPTarget ,
+        [string]   $LogFile  ,
+
+        # Default for this function is to get all adapters as required by Test-NetStack.
+        # However this function can be called by other scenarios (e.g. ATC) and needs to support the physical mapping of ATC adapters only.
+        [Switch] $DontCheckATC = $true
+    )
+
+    if ($DontCheckATC -eq $false) { # By default, this path should not be engaged because we want the full physical map
+        $ATCIntentData = Get-NetworkATCAdapters
+
+        # I think we only need the physical adapters here
+        $AdapterNames  = $ATCIntentData.Adapters # + $ATCIntentData.ManagementvNIC + $ATCIntentData.StoragevNIC
+    }
+
+    $PhysicalMapping = New-Object -TypeName psobject
+    foreach ($thisNode in $Nodes) {
+        $FabricInfo = @() # FabricInfo will carry the list of information from a specific node
+
+        if ($thisNode -eq $env:COMPUTERNAME) {
+            if ($DontCheckATC) { # Do not remove APIPA here as we can still get physical mapping
+                $AdapterNames = (Get-NetAdapter | Where {$_.MediaType -eq '802.3' -and $_.Status -eq 'Up' -and $_.DriverFileName -notlike '*KDNIC.sys*'}).Name
+
+                # We also need to get the remote adapter names
+                $remoteAdapters = @()
+                $remoteAdapters += Invoke-Command -ComputerName ($Nodes -ne $thisNode) -ScriptBlock {
+                    (Get-NetAdapter | Where {$_.MediaType -eq '802.3' -and $_.Status -eq 'Up' -and
+                                             $_.DriverFileName -notlike '*KDNIC.sys*'}) | Select PSComputerName, Name, MacAddress
+                }
+            }
+            else {
+                # We do not need to get the remote adapter names because they will be the same if included in ATC
+                # We already have the adapternames from ATC run earlier
+            }
+
+            $FabricInfo = Get-FabricInfo -InterfaceNames $localAdapterNames -ErrorAction SilentlyContinue
+
+            #$RemoteAdaptersNormalizedMAC = $RemoteAdapters | ForEach-Object {$_.MacAddress -replace '-', ':'}
+
+
+            ($FabricInfo.GetEnumerator() | Where Key -ne 'ChassisGroups' | ForEach-Object { $FabricInfo.$($_.Key) }).Fabric.PortID
+
+            #$B2BSrcMac = $RemoteAdapters | Where-Object {$_.MacAddress.Replace('-', ':') -like `
+            #                                             $FabricInfo.$thisInterfaceName.Fabric.SourceMac }
+
+            $B2BSrcMac = $RemoteAdapters | Foreach-Object { $_ | Where-Object {$_.MacAddress.Replace('-', ':') -like `
+                                                            $FabricInfo.GetEnumerator() | Where Key -ne 'ChassisGroups' | ForEach-Object {
+                                                                $FabricInfo.$($_.Key)
+                                                            }
+                                                        }
+        }
+        else {
+            if ($DontCheckATC) { # Do not remove APIPA here as we can still get physical mapping
+                # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
+                $AdapterNames = (Get-NetAdapter -CimSession $thisNode | Where {$_.MediaType -eq '802.3' -and $_.Status -eq 'Up' -and $_.DriverFileName -notlike '*KDNIC.sys*'}).Name
+                #$AdapterIP = Get-NetIPAddress -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
+                #                    Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
+
+                # We also need to get the remote adapter names
+            }
+            else {
+                # Do Not use Invoke-Command here. In the current build nested properties are not preserved and become strings
+                # Since this is looking for ATC adapters, it's safe to send it all adapters even if not bound to TCPIP (e.g. teamed adapters)
+                #$AdapterIP = Get-NetIPAddress -InterfaceAlias $AdapterNames -CimSession $thisNode -AddressFamily IPv4 -SuffixOrigin Dhcp, Manual -AddressState Preferred |
+                #                    Select InterfaceAlias, InterfaceIndex, IPAddress, PrefixLength, AddressState
+
+                # We do not need to get the remote adapter names because they will be the same if included in ATC
+            }
+
+            $FabricInfo = Invoke-Command -ComputerName $thisNode -ScriptBlock {
+                Get-FabricInfo -InterfaceNames $($using:AdapterNames) -ErrorAction SilentlyContinue
+            }
+        }
+
+        $B2BSrcMac = $RemoteAdapter | Where-Object {$_.MacAddress.Replace('-', ':') -like $FabricInfo.$thisInterfaceName.Fabric.SourceMac}
+
+        $PhysicalMapping | Add-Member -MemberType NoteProperty -Name $thisNode -Value $FabricInfo
+        Remove-Variable -Name FabricInfo -ErrorAction SilentlyContinue
+    }
+
+
+
+
+
+
+    $Mapping.Group | ForEach-Object {
+        $thisSource = $_
+        $thisSourceName = $thisSource.Name
+
+        $B2BSrcMac = $Mapping.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object {$_.MacAddress.Replace('-', ':') -like $FabricInfo.$thisSourceName.Fabric.SourceMac}
+        if ($B2BSrcMac) {
+            $thisSwitchlessMapping = New-Object -TypeName psobject
+            $thisSwitchlessMapping | Add-Member -MemberType NoteProperty -Name SystemName -Value $Env:COMPUTERNAME
+            $thisSwitchlessMapping | Add-Member -MemberType NoteProperty -Name LocalNIC   -Value $FabricInfo.$thisSourceName.Fabric.InterfaceName
+            $thisSwitchlessMapping | Add-Member -MemberType NoteProperty -Name LocalMac   -Value $($thisSource.MacAddress -replace '-', ':')
+
+            $thisSwitchlessMapping | Add-Member -MemberType NoteProperty -Name Connection -Value 'Switchless'
+            $thisSwitchlessMapping | Add-Member -MemberType NoteProperty -Name SubNet     -Value $FabricInfo.$thisSourceName.InterfaceDetails.Subnet
+            $thisSwitchlessMapping | Add-Member -MemberType NoteProperty -Name VLAN       -Value $FabricInfo.$thisSourceName.InterfaceDetails.VLAN
+
+            $thisSwitchlessMapping | Add-Member -MemberType NoteProperty -Name RemoteSystem    -Value $B2BSrcMac.PSComputerName
+            $thisSwitchlessMapping | Add-Member -MemberType NoteProperty -Name RemoteName      -Value $B2BSrcMac.Name
+            $thisSwitchlessMapping | Add-Member -MemberType NoteProperty -Name RemoteChassisID -Value $FabricInfo.$thisSourceName.Fabric.ChassisID
+            $thisSwitchlessMapping | Add-Member -MemberType NoteProperty -Name RemoteMac       -Value $B2BSrcMac.MacAddress
+
+            $Mapping += $thisSwitchlessMapping
+        }
+        else { # not switchless, check if connected to same rack
+            $thisSwitchedMapping = New-Object -TypeName psobject
+            $thisSwitchedMapping | Add-Member -MemberType NoteProperty -Name SystemName -Value $Env:COMPUTERNAME
+
+            $thisSwitchedMapping | Add-Member -MemberType NoteProperty -Name LocalNIC -Value $FabricInfo.$thisSourceName.Fabric.InterfaceName
+            $thisSwitchedMapping | Add-Member -MemberType NoteProperty -Name LocalMac -Value $($thisSource.MacAddress -replace '-', ':')
+
+            $thisSwitchedMapping | Add-Member -MemberType NoteProperty -Name Connection -Value 'Switched'
+            $thisSwitchedMapping | Add-Member -MemberType NoteProperty -Name SubNet     -Value $FabricInfo.$thisSourceName.InterfaceDetails.Subnet
+            $thisSwitchedMapping | Add-Member -MemberType NoteProperty -Name VLAN       -Value $FabricInfo.$thisSourceName.InterfaceDetails.VLAN
+
+            $thisSwitchedMapping | Add-Member -MemberType NoteProperty -Name RemoteSystem -Value $FabricInfo.$thisSourceName.Fabric.SystemName
+            $thisSwitchedMapping | Add-Member -MemberType NoteProperty -Name RemoteName   -Value $FabricInfo.$thisSourceName.Fabric.PortID
+            $thisSwitchedMapping | Add-Member -MemberType NoteProperty -Name RemoteChassisID -Value $FabricInfo.$thisSourceName.Fabric.ChassisID
+            $thisSwitchedMapping | Add-Member -MemberType NoteProperty -Name RemoteMac       -Value $($FabricInfo.$thisSourceName.Fabric.sourceMac -replace '-', ':')
+
+            $Mapping += $thisSwitchedMapping
+        }
+    }
 }
 
 Function Get-RunspaceGroups {

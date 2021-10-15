@@ -51,7 +51,7 @@ Description = 'Test-NetStack is a module that can be used to exercise enterprise
 # ProcessorArchitecture = ''
 
 # Modules that must be imported into the global environment prior to importing this module
-# RequiredModules = @()
+RequiredModules = @(@{ModuleName = 'DataCenterBridging'; ModuleVersion = '2021.8.18.41'})
 
 # Assemblies that must be loaded prior to importing this module
 # RequiredAssemblies = @()
@@ -129,4 +129,3 @@ PrivateData = @{
 # DefaultCommandPrefix = ''
 
 }
-

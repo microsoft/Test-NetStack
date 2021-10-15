@@ -1,3 +1,4 @@
+#TODO: Add check for DataCenterBridging
 Function Test-NetStackPrerequisites {
     param (
         [String[]] $Nodes,

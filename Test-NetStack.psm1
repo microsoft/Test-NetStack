@@ -158,6 +158,8 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'  , position = 4)]
         [switch] $ContinueOnFailure = $false,
 
+        #TODO: Add a OnlyFabricInfo or OnlyPhysicalMapping scenario.
+
         [Parameter(Mandatory = $false)]
         [String] $LogPath = "$(Join-Path -Path $((Get-Module -Name Test-Netstack -ListAvailable | Select-Object -First 1).ModuleBase) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt")"
     )
@@ -222,6 +224,19 @@ Function Test-NetStack {
     }
 
     #region Connectivity Maps
+
+    <# We will not enable the LLDP Agent here. However, if available, we will use the published information to construct the physical mapping
+        Restrictions:
+            - This must remain independent of the any other logical mapping (Get-Connectivity...)
+            - All NICs must be searched as upper level solutions (ATC/HUD will be dependent on what is found)
+            - Should be done early in the process.
+    #>
+
+    $PhysicalMapping = Get-PhysicalMapping -Nodes $Nodes -Logfile $LogFile
+    $NetStackResults | Add-Member -MemberType NoteProperty -Name PhysicalMapping -Value $PhysicalMapping
+
+    if ($OnlyPhysicalMapping) { return $NetStackResults }
+
     if ($Nodes) { $EthernetMapping, $RDMAMapping = Get-ConnectivityMapping -Nodes $Nodes       -Logfile $LogFile -DontCheckATC:$DontCheckATC }
     else        { $EthernetMapping, $RDMAMapping = Get-ConnectivityMapping -IPTarget $IPTarget -Logfile $LogFile -DontCheckATC:$DontCheckATC }
 
