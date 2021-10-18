@@ -938,13 +938,14 @@ Function Test-NetStack {
                     
                     [void] $PowerShell.AddScript({
                         param ( $thisSource, $ClientNodes, $Definitions, $LogFile )
+                        $StartTime = Get-Date
                         Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisSource.InterfaceIndex) ($($thisSource.IPAddress))"
                         ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisTarget.InterfaceIndex) ($($thisSource.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         $events = @()
 
                         $thisSourceResult = Invoke-NDKPerfNto1 -Server $thisSource -ClientNetwork $ClientNodes -ExpectedTPUT $Definitions.NDKPerf.TPUT
 
-                        $events = (Get-EventLog System -InstanceId 0x466,0x467,0x469,0x46a)
+                        $events = (Get-EventLog System -InstanceId 0x466,0x467,0x469,0x46a -After $StartTime)
 
                         $Result = New-Object -TypeName psobject
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName

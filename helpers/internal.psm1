@@ -383,8 +383,8 @@ Function Get-VDiskStatus {
         } 
     }
     if ($UnhealthyDisks.Length -gt 0) { 
-        Write-Host "$(UnhealthyDisks) are unhealthy." 
-        "$(UnhealthyDisks) are unhealthy." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+        Write-Host "$($UnhealthyDisks) are unhealthy." 
+        "$($UnhealthyDisks) are unhealthy." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
         return $true
     }  
     else { 
