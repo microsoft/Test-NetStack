@@ -162,7 +162,7 @@ Function Test-NetStack {
         [String] $DpdkUser='',
         [Parameter(Mandatory = $false)]
         [String[]] $DpdkPortIps ='',
-	      [Parameter(Mandatory = $false)]
+	    [Parameter(Mandatory = $false)]
         [String] $DpdkNode='',
 
         [Parameter(Mandatory = $false)]
