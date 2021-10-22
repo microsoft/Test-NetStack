@@ -109,6 +109,7 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes'   , position = 0)]
         [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapNodes'   , position = 0)]
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesNodes', position = 0)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'Experimental'      , position = 0)]
         [ValidateScript({[System.Uri]::CheckHostName($_) -eq 'DNS'})]
         [ValidateCount(2, 16)]
         [String[]] $Nodes,
@@ -126,6 +127,7 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget'   , position = 1)]
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesNodes'   , position = 1)]
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesIPTarget', position = 1)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'Experimental'         , position = 1)]
         [ValidateSet('1', '2', '3', '4', '5', '6', '7', '8')]
         [Int32[]] $Stage = @('1', '2', '3', '4', '5', '6'),
 
@@ -145,24 +147,22 @@ Function Test-NetStack {
         [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapIPTarget', position = 2)]
         [Switch] $OnlyConnectivityMap = $false,
 
-        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap', position = 3)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'  , position = 3)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap' , position = 3)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'   , position = 3)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'Experimental', position = 3)]
         [Parameter(Mandatory = $false)]
         [switch] $ContinueOnFailure = $false,
 
-        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'          , position = 4)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'            , position = 4)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes'      , position = 4)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget'   , position = 4)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesNodes'   , position = 4)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesIPTarget', position = 4)]
-
+        [Parameter(Mandatory = $false, ParameterSetName = 'Experimental'          , position = 4)]
         [Switch] $Experimental = $false,
-        [Parameter(Mandatory = $false)]
+
+        [Parameter(Mandatory = $false, ParameterSetName = 'Experimental'          , position = 5)]
         [String] $DpdkUser='',
-        [Parameter(Mandatory = $false)]
+
+        [Parameter(Mandatory = $false, ParameterSetName = 'Experimental'          , position = 6)]
         [String[]] $DpdkPortIps ='',
-	    [Parameter(Mandatory = $false)]
+        
+	    [Parameter(Mandatory = $false, ParameterSetName = 'Experimental'          , position = 7)]
         [String] $DpdkNode='',
 
         [Parameter(Mandatory = $false)]
