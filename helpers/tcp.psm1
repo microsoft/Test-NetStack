@@ -142,6 +142,7 @@ function UDP {
     # The test will fail if a password is required to connect to the VM.  
     # The dpdk user must also be able to execute sudo commands without entering a password.
 
+    $StartTime = Get-Date
     $UDPBlastResults = New-Object -TypeName psobject
     $OrderedIps = @()
     $MacAddresses = @()
@@ -171,8 +172,8 @@ function UDP {
     } -ArgumentList $AddressPairs,$DpdkUser,$DpdkNode,$DpdkPortIps
 
     $ServerOutput = Receive-Job $ServerOutput -Wait -AutoRemoveJob
-    $Events = Get-EventLog System -InstanceId 0x466,0x467,0x469,0x46a -ErrorAction SilentlyContinue
-    Write-Host $Events
+    
+    $Events = (Get-EventLog System -InstanceId 0x466,0x467,0x469,0x46a -After $StartTime -ErrorAction SilentlyContinue)
     if ($Events.length -gt 0) {
     	$UDPBlastResults | Add-Member -MemberType NoteProperty -Name MembershipLostEvents -Value $Events
     } else {

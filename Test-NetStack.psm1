@@ -952,13 +952,14 @@ Function Test-NetStack {
                     
                     [void] $PowerShell.AddScript({
                         param ( $thisSource, $ClientNodes, $Definitions, $LogFile )
+		        $StartTime = Get-Date
                         Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisSource.InterfaceIndex) ($($thisSource.IPAddress))"
                         ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisTarget.InterfaceIndex) ($($thisSource.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         $events = @()
 
                         $thisSourceResult = Invoke-NDKPerfNto1 -Server $thisSource -ClientNetwork $ClientNodes -ExpectedTPUT $Definitions.NDKPerf.TPUT
 
-                        $events = (Get-EventLog System -InstanceId 0x466,0x467,0x469,0x46a)
+                        $events = (Get-EventLog System -InstanceId 0x466,0x467,0x469,0x46a -After $StartTime -ErrorAction SilentlyContinue)
 
                         $Result = New-Object -TypeName psobject
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
@@ -1090,6 +1091,7 @@ Function Test-NetStack {
 
 
       		    $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $($VNics[0].NodeName)
+
                     $thisSourceResult = UDP -VNics $VNics -DpdkPortIps $DpdkPortIps -DpdkUser $DpdkUser -DpdkNode $DpdkNode
                     
 		    if ($thisSourceResult.MembershipLostEvents.count -gt 0) { 
@@ -1103,7 +1105,7 @@ Function Test-NetStack {
 
                     Write-Host ":: $([System.DateTime]::Now) :: [Completed] UDP Test -> $($VNics[0].NodeName)"
                     ":: $([System.DateTime]::Now) :: [Completed] UDP Test -> $($VNics[0].NodeName)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-           	    Write-Host $Result
+
 		    $IsVDiskUnhealthy = Get-VDiskStatus($LogFile)
 
             	    if ($IsVDiskUnhealthy) { 
