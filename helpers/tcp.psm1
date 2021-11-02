@@ -91,8 +91,8 @@ function Invoke-TCP {
     Write-Verbose "Server Recv bps: $ServerRecvBitsPerSecond"
     Write-Verbose "Client Send bps: $ClientSendBitsPerSecond"
 
-    $ServerOutput = Receive-Job $ServerOutput -Wait -AutoRemoveJob
-    $ClientOutput = Receive-Job $ClientOutput -Wait -AutoRemoveJob
+    $ServerOutput = Receive-Job $ServerOutput
+    $ClientOutput = Receive-Job $ClientOutput
 
     $ServerLinkSpeedBitsPerSecond = $ServerLinkSpeedBps * 8
     $ClientLinkSpeedBitsPerSecond = $ClientLinkSpeedBps * 8
