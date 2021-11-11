@@ -162,14 +162,11 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesIPTarget', position = 4)]
 	[Parameter(Mandatory = $false, ParameterSetName = 'Experimental'         , position = 4)]
         [Switch] $Experimental = $false,
-        
-	[Parameter(Mandatory = $false, ParameterSetName = 'Experimental'      , position = 5)]
-        [String] $DpdkUser='',
 
-	[Parameter(Mandatory = $false, ParameterSetName = 'Experimental'      , position = 6)]
+	[Parameter(Mandatory = $false, ParameterSetName = 'Experimental'      , position = 5)]
         [String[]] $DpdkPortIps ='',
 
-	[Parameter(Mandatory = $false, ParameterSetName = 'Experimental'      , position = 7)]
+	[Parameter(Mandatory = $false, ParameterSetName = 'Experimental'      , position = 6)]
         [String] $DpdkNode='',
 
         [Parameter(Mandatory = $false)]
@@ -1036,9 +1033,9 @@ Function Test-NetStack {
                 return $NetStackResults
             }
 
-            if ($DpdkUser -eq '' -or $DpdkPortIps -eq '' -or $DpdkNode -eq '') {
-                Write-Error "Stage 8 requires a valid Linux VM to connect to and run DPDK. Please provide the IP of the vm and the username to connect with."
-                "Stage 8 requires a valid Linux VM to connect to and run DPDK. Please provide the IP of the vm and the username to connect with."  | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            if ($DpdkPortIps -eq '' -or $DpdkNode -eq '') {
+                Write-Error "Stage 8 requires a valid Linux VM to connect to and run DPDK. Please provide the IP of the vm to connect to."
+                "Stage 8 requires a valid Linux VM to connect to and run DPDK. Please provide the IP of the vm to connect to."  | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                 return $NetStackResults
             }
 
@@ -1092,7 +1089,7 @@ Function Test-NetStack {
 
       		    $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $($VNics[0].NodeName)
 
-                    $thisSourceResult = UDP -VNics $VNics -DpdkPortIps $DpdkPortIps -DpdkUser $DpdkUser -DpdkNode $DpdkNode
+                    $thisSourceResult = UDP -VNics $VNics -DpdkPortIps $DpdkPortIps -DpdkNode $DpdkNode
                     
 		    if ($thisSourceResult.MembershipLostEvents.count -gt 0) { 
         	        Write-Host "Found cluster membership lost events when testing node $($thisSource.NodeName). They can be found in the test log."

@@ -130,9 +130,6 @@ function UDP {
 	[PSObject[]] $VNics,
 
         [Parameter(Mandatory=$true)]
-        [string] $DpdkUser,
-
-        [Parameter(Mandatory=$true)]
         [string[]] $DpdkPortIps,
 
 	[Parameter(Mandatory=$true)]
@@ -162,16 +159,16 @@ function UDP {
 
     $AddressPairs = Select-Zip -First $OrderedIps -Second $MacAddresses
     $ServerOutput += Start-Job -ScriptBlock {
-        param ([string[][]] $AddressPairs, [string] $DpdkUser, [string] $DpdkNode, [string[]] $DpdkPortIps)
+        param ([string[][]] $AddressPairs, [string] $DpdkNode, [string[]] $DpdkPortIps)
         Invoke-Command -Computername $DpdkNode -ScriptBlock {
-            param ([string[][]] $AddressPairs, [string] $DpdkUser, [string[]] $DpdkPortIps)
+            param ([string[][]] $AddressPairs, [string[]] $DpdkPortIps)
 	    $port = 0
 	    $InsideCommand="printf 'set all proto udp\nset all size 1518\nset all dport 8888\n" 
 	    $AddressPairs | ForEach-Object { $InsideCommand += "set $port dst ip $($_[0])\nset $port dst mac $($_[1])\n"; $port += 1 }
-	    $InsideCommand += "start all\ndelay 50000\nstop all\nquit' > /home/$DpdkUser/test.pkt.sequences.test && sudo pktgen -l 1-8 -- -m '[2:3-5].0, [6:7].1' -P -f /home/$DpdkUser/test.pkt.sequences.test"
-	    ssh $DpdkUser@$($DpdkPortIps[0]) $InsideCommand
-        } -ArgumentList $AddressPairs,$DpdkUser,$DpdkPortIps
-    } -ArgumentList $AddressPairs,$DpdkUser,$DpdkNode,$DpdkPortIps
+	    $InsideCommand += "start all\ndelay 50000\nstop all\nquit' > /home/admin/test.pkt.sequences.test && sudo pktgen -l 1-8 -- -m '[2:3-5].0, [6:7].1' -P -f /home/admin/test.pkt.sequences.test"
+	    ssh admin@$($DpdkPortIps[0]) $InsideCommand
+        } -ArgumentList $AddressPairs,$DpdkPortIps
+    } -ArgumentList $AddressPairs,$DpdkNode,$DpdkPortIps
 
     $ServerOutput = Receive-Job $ServerOutput -Wait -AutoRemoveJob
     
