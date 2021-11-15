@@ -667,7 +667,7 @@ Function Test-NetStack {
             $StageResults = @()
             foreach ($group in $runspaceGroups) {
                 $GroupedJobs = @()
-                foreach ($pair in $group) {
+                foreach ($pair in ($group | Where {($group.Source.RDMAEnabled) -and ($group.Target.RDMAEnabled)})) {
 
                     $PowerShell = [powershell]::Create()
                     $PowerShell.RunspacePool = $RunspacePool
