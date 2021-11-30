@@ -19,7 +19,6 @@ Function Test-NetStack {
         - Stage4: RDMA Stress 1:1
         - Stage5: RDMA Stress N:1
         - Stage6: RDMA Stress N:N
-        - Stage7: *EXPERIMENTAL* RDMA Stress N:1 Parallel
 
     .PARAMETER Nodes
         - Specifies the machines by DNS Name to test.
@@ -40,6 +39,8 @@ Function Test-NetStack {
         - Stage4: RDMA Stress 1:1
         - Stage5: RDMA Stress N:1
         - Stage6: RDMA Stress N:N
+	- Stage7: *EXPERIMENTAL* RDMA Stress N:1 Parallel
+	- Stage8: *EXPERIMENTAL* UDP Stress
 
     .PARAMETER EnableFirewallRules
     * This command is best-effort and may fail for a variety of reasons *
@@ -109,6 +110,7 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqNodes'   , position = 0)]
         [Parameter(Mandatory = $false, ParameterSetName = 'OnlyConMapNodes'   , position = 0)]
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesNodes', position = 0)]
+	[Parameter(Mandatory = $false, ParameterSetName = 'Experimental'      , position = 0)]
         [ValidateScript({[System.Uri]::CheckHostName($_) -eq 'DNS'})]
         [ValidateCount(2, 16)]
         [String[]] $Nodes,
@@ -126,6 +128,7 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget'   , position = 1)]
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesNodes'   , position = 1)]
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesIPTarget', position = 1)]
+	[Parameter(Mandatory = $false, ParameterSetName = 'Experimental'         , position = 1)]
         [ValidateSet('1', '2', '3', '4', '5', '6', '7', '8')]
         [Int32[]] $Stage = @('1', '2', '3', '4', '5', '6'),
 
@@ -145,8 +148,9 @@ Function Test-NetStack {
         [Parameter(Mandatory = $true, ParameterSetName = 'OnlyConMapIPTarget', position = 2)]
         [Switch] $OnlyConnectivityMap = $false,
 
-        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap', position = 3)]
-        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'  , position = 3)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'FullNodeMap'       , position = 3)]
+        [Parameter(Mandatory = $false, ParameterSetName = 'IPAddress'         , position = 3)]
+	[Parameter(Mandatory = $false, ParameterSetName = 'Experimental'      , position = 3)]
         [Parameter(Mandatory = $false)]
         [switch] $ContinueOnFailure = $false,
 
@@ -156,7 +160,14 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false, ParameterSetName = 'OnlyPrereqIPTarget'   , position = 4)]
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesNodes'   , position = 4)]
         [Parameter(Mandatory = $false, ParameterSetName = 'RevokeFWRulesIPTarget', position = 4)]
+	[Parameter(Mandatory = $false, ParameterSetName = 'Experimental'         , position = 4)]
         [Switch] $Experimental = $false,
+
+	[Parameter(Mandatory = $false, ParameterSetName = 'Experimental'      , position = 5)]
+        [String[]] $DpdkPortIps ='',
+
+	[Parameter(Mandatory = $false, ParameterSetName = 'Experimental'      , position = 6)]
+        [String] $DpdkNode='',
 
         [Parameter(Mandatory = $false)]
         [String] $LogPath = "$(Join-Path -Path $((Get-Module -Name Test-Netstack -ListAvailable | Select-Object -First 1).ModuleBase) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt")"
@@ -938,14 +949,14 @@ Function Test-NetStack {
                     
                     [void] $PowerShell.AddScript({
                         param ( $thisSource, $ClientNodes, $Definitions, $LogFile )
-                        $StartTime = Get-Date
+		        $StartTime = Get-Date
                         Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisSource.InterfaceIndex) ($($thisSource.IPAddress))"
                         ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisTarget.InterfaceIndex) ($($thisSource.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         $events = @()
 
                         $thisSourceResult = Invoke-NDKPerfNto1 -Server $thisSource -ClientNetwork $ClientNodes -ExpectedTPUT $Definitions.NDKPerf.TPUT
 
-                        $events = (Get-EventLog System -InstanceId 0x466,0x467,0x469,0x46a -After $StartTime)
+                        $events = (Get-EventLog System -InstanceId 0x466,0x467,0x469,0x46a -After $StartTime -ErrorAction SilentlyContinue)
 
                         $Result = New-Object -TypeName psobject
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisSource.NodeName
@@ -1012,6 +1023,106 @@ Function Test-NetStack {
                 "Stage 7 Results" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                 $StageResults | Select-Object -Property * -ExcludeProperty RawData | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                 "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+        }
+
+        '8' { # UDP Stress N:1
+
+            if ($Experimental -eq $false) {
+                Write-Error "Stage $_ is experimental. The experimental flag has not been set. Please enable it to run experimental stages."
+                "The experimental stage(s) $ChosenStages have been selected to be run, but the experimental flag has not been set. Please enable it to run experimental stages." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                return $NetStackResults
+            }
+
+            if ($DpdkPortIps -eq '' -or $DpdkNode -eq '') {
+                Write-Error "Stage 8 requires a valid Linux VM to connect to and run DPDK. Please provide the IP of the vm to connect to."
+                "Stage 8 requires a valid Linux VM to connect to and run DPDK. Please provide the IP of the vm to connect to."  | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                return $NetStackResults
+            }
+
+            if ( $ContinueOnFailure -eq $false ) {
+                if ('fail' -in $NetStackResults.Stage3.PathStatus -or 'fail' -in $NetStackResults.Stage4.PathStatus -or 'fail' -in $NetStackResults.Stage5.ReceiverStatus -or 'fail' -in $NetStackResults.Stage6.NetworkStatus) {
+    
+                    $Stage -ge 8 | ForEach-Object {
+                        $AbortedStage = $_
+                        $NetStackResults | Add-Member -MemberType NoteProperty -Name "Stage$AbortedStage" -Value 'Aborted'; $StageFailures++
+                    }
+    
+                    Write-Warning 'Aborted due to failures in earlier stage(s). To continue despite failures, use the ContinueOnFailure parameter.'
+                    return $NetStackResults
+                }
+            }
+
+	    $IsVDiskUnhealthy = Get-VDiskStatus($LogFile)
+            if ($IsVDiskUnhealthy) { 
+                $Stage -ge 8 | ForEach-Object {
+                    $AbortedStage = $_
+                    $NetStackResults | Add-Member -MemberType NoteProperty -Name "Stage$AbortedStage" -Value 'Aborted'; $StageFailures++
+                }
+
+                Write-Warning 'Aborted due to unhealthy VDisk.' | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            }
+
+	    $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
+            $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
+            $NodeGroups = $Mapping | Where-Object VLAN -ne 'Unsupported' | Group-Object NodeName
+            $thisStage = $_
+            Write-Host "Beginning Stage: $thisStage - UDP Traffic Stress Test - $([System.DateTime]::Now)"
+            "Stage 8`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            "Console Output" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            "Beginning Stage: $thisStage - UDP Traffic Stress Test - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            $StageResults = @()
+            $NodeGroups | ForEach-Object {
+		$Result = New-Object -TypeName psobject
+                $testNodeGroup = $_  
+                $VNics=$testNodeGroup.Group | Where-Object -FilterScript { $_.RDMAEnabled }
+		if($VNics.Length -eq 0) {
+		    $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $testNodeGroup.Group[0]
+		    $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail' 
+		    Write-Host "This node does not have any RDMA enabled devices."	
+                    Write-Warning "This node does not have any RDMA enabled devices." | Out-File $LogFile -Append -Encoding utf8 -Wi
+		    $StageResults += $Result
+		} else {
+                    Write-Host ":: $([System.DateTime]::Now) :: [Started] UDP Test -> $($VNics[0].NodeName)"
+                    ":: $([System.DateTime]::Now) :: [Started] UDP Test -> $($VNics[0].NodeName)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+
+
+      		    $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $($VNics[0].NodeName)
+
+                    $thisSourceResult = UDP -VNics $VNics -DpdkPortIps $DpdkPortIps -DpdkNode $DpdkNode
+                    
+		    if ($thisSourceResult.MembershipLostEvents.count -gt 0) { 
+        	        Write-Host "Found cluster membership lost events when testing node $($thisSource.NodeName). They can be found in the test log."
+        	        "Found cluster membership lost events when testing node $($thisSource.NodeName). They can be found in the test log." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+        	        $thisSourceResult.MembershipLostEvents | Select-Object Time, EntryType, InstanceID, Message | Format-Table -AutoSize | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+    	                $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail' 
+		    } else {
+		    $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Pass'
+		    }
+
+                    Write-Host ":: $([System.DateTime]::Now) :: [Completed] UDP Test -> $($VNics[0].NodeName)"
+                    ":: $([System.DateTime]::Now) :: [Completed] UDP Test -> $($VNics[0].NodeName)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+
+		    $IsVDiskUnhealthy = Get-VDiskStatus($LogFile)
+
+            	    if ($IsVDiskUnhealthy) { 
+		        $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail' 
+		        Write-Host "VDisk became unhealthy while testing $($VNics[0].NodeName)"	
+                        Write-Warning "VDisk became unhealthy while testing $($VNics[0].NodeName)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            	    }
+                    $StageResults += $Result
+		}
+            }
+
+            if ('Fail' -in $StageResults.TestStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage8 -Value 'Fail'; $StageFailures++ }
+            else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage8 -Value 'Pass' }
+         
+	    $NetStackResults | Add-Member -MemberType NoteProperty -Name Stage8 -Value $StageResults
+            Write-Host "Completed Stage: $thisStage - RDMA Perf VMSwitch Stress - $([System.DateTime]::Now)`r`n"
+            "Completed Stage: $thisStage - UDP Stress - $([System.DateTime]::Now)`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            "Stage 8 Results" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            $StageResults | Select-Object -Property * -ExcludeProperty RawData | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+            "####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
         }
     }
 

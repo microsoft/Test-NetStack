@@ -277,6 +277,7 @@ Function Get-ConnectivityMapping {
             $Result | Add-Member -MemberType NoteProperty -Name AddressState -Value $thisAdapterIP.AddressState
             $Result | Add-Member -MemberType NoteProperty -Name InterfaceDescription -Value $thisNetAdapter.InterfaceDescription
             $Result | Add-Member -MemberType NoteProperty -Name LinkSpeed -Value $thisNetAdapter.LinkSpeed
+	    $Result | Add-Member -MemberType NoteProperty -Name MacAddress -Value $thisNetAdapter.MacAddress
 
             if ($thisNetAdapter.Name -in $RDMAAdapter) {
                 $Result | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $true

@@ -74,8 +74,8 @@ function Invoke-TCP {
     } -ArgumentList $Sender.NodeName, $Receiver.IPAddress, $Sender.IPAddress, $ModuleBase
 
     Sleep 30
-
-    $ServerRecv = Receive-Job $ServerRecvCounter
+    
+    $ServerRecv = Receive-Job $ServerRecvCounter 
     $ClientSend = Receive-Job $ClientSendCounter
 
     $FlatServerRecvOutput = $ServerRecv.Readings.split(":") | ForEach-Object {
@@ -116,4 +116,80 @@ function Invoke-TCP {
     $TCPResults | Add-Member -MemberType NoteProperty -Name RawData -Value $RawData
 
     Return $TCPResults
+}
+
+function UDP {
+    [CmdletBinding()]
+    param (
+
+	# It is expected that any test using stage 8 will only have 2 vnics. The logic in this function assumes that there will
+	# never be more or less than that number. The linux vm will have a virtual function that corresponds with the IP Address of 
+	# one vNIC. 
+
+	[Parameter(Mandatory=$true)]
+	[PSObject[]] $VNics,
+
+        [Parameter(Mandatory=$true)]
+        [string[]] $DpdkPortIps,
+
+	[Parameter(Mandatory=$true)]
+        [string] $DpdkNode
+    )
+
+    # This test requires the admin to have a DPDK enabled Linux VM setup that has pktgen installed.
+    # The VM must be able to connect to each node that will be tested and each interface, and should have each node able to ssh to the VM without using a password.
+    # The test will fail if a password is required to connect to the VM.  
+    # The dpdk user must also be able to execute sudo commands without entering a password.
+
+    $StartTime = Get-Date
+    $UDPBlastResults = New-Object -TypeName psobject
+    $OrderedIps = @()
+    $MacAddresses = @()
+    $DpdkPortIps | foreach {
+	$Port = $_
+	$VNics | foreach {
+	    $nsplit = $_.IPAddress.Split(".")
+	    $isplit = $Port.Split(".")
+	    if ($nsplit[2] -eq $isplit[2]) {
+		$OrderedIps += $_.IPAddress
+		$MacAddresses += $_.MacAddress -Split "-" -Join ":"
+	    }
+	}
+    }
+
+    $AddressPairs = Select-Zip -First $OrderedIps -Second $MacAddresses
+    $ServerOutput += Start-Job -ScriptBlock {
+        param ([string[][]] $AddressPairs, [string] $DpdkNode, [string[]] $DpdkPortIps)
+        Invoke-Command -Computername $DpdkNode -ScriptBlock {
+            param ([string[][]] $AddressPairs, [string[]] $DpdkPortIps)
+	    $port = 0
+	    $InsideCommand="printf 'set all proto udp\nset all size 1518\nset all dport 8888\n" 
+	    $AddressPairs | ForEach-Object { $InsideCommand += "set $port dst ip $($_[0])\nset $port dst mac $($_[1])\n"; $port += 1 }
+	    $InsideCommand += "start all\ndelay 50000\nstop all\nquit' > /home/admin/test.pkt.sequences.test && sudo pktgen -l 1-8 -- -m '[2:3-5].0, [6:7].1' -P -f /home/admin/test.pkt.sequences.test"
+	    ssh admin@$($DpdkPortIps[0]) $InsideCommand
+        } -ArgumentList $AddressPairs,$DpdkPortIps
+    } -ArgumentList $AddressPairs,$DpdkNode,$DpdkPortIps
+
+    $ServerOutput = Receive-Job $ServerOutput -Wait -AutoRemoveJob
+    
+    $Events = (Get-EventLog System -InstanceId 0x466,0x467,0x469,0x46a -After $StartTime -ErrorAction SilentlyContinue)
+    if ($Events.length -gt 0) {
+    	$UDPBlastResults | Add-Member -MemberType NoteProperty -Name MembershipLostEvents -Value $Events
+    } else {
+	$UDPBlastResults | Add-Member -MemberType NoteProperty -Name MembershipLostEvents -Value @()
+    }
+
+    Return $UDPBlastResults
+}
+
+
+function Select-Zip {
+    [CmdletBinding()]
+    Param(
+        $First,
+        $Second,
+        $ResultSelector = { ,$args }
+    )
+
+    [System.Linq.Enumerable]::Zip($First, $Second, [Func[Object, Object, Object[]]]$ResultSelector)
 }
