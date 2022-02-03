@@ -121,6 +121,7 @@ Function Test-NetStackPrerequisites {
                     if ($EnableFirewallRules) {
                         $psSession = New-PSSession -ComputerName $thisTarget
                         $ModuleBase = (Get-Module Test-NetStack -PSSession $psSession -ListAvailable).ModuleBase
+                        Remove-PSSession -Session $psSession
                         $null = New-NetFirewallRule -CimSession $thisTarget -DisplayName 'Test-NetStack - CTSTraffic' -Direction Inbound -Program "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow -ErrorAction SilentlyContinue
                     }
                 }
