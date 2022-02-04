@@ -539,90 +539,133 @@ Function Test-NetStack {
 
         '3' { # RDMA Connectivity
             $thisStage = $_
-            Write-Host "Beginning Stage: $thisStage - RDMA Ping - $([System.DateTime]::Now)"
             "Stage 3`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "Console Output" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-            "Beginning Stage: $thisStage - RDMA Ping - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-            $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
-            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
-            $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
+            # Using this variable as a placeholder for potential future debug mode options
+            # Set to true for now while NDKPerf does not support parallel connections
+            $Sequential = $true
+            if ($Sequential -eq $false) { # Run in parallel (re-enable when supported by NDKPerf)
+                Write-Host "Beginning Stage: $thisStage - RDMA Ping - Parallel - $([System.DateTime]::Now)"
+                "Beginning Stage: $thisStage - RDMA Ping - Parallel - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $MaxRunspaces, $ISS, $host)
-            $RunspacePool.Open()
+                $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+                $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
+                $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
-            $AllJobs = @()
-            $StageResults = @()
-            $TestableNetworks | ForEach-Object {
-                $thisTestableNet = $_
+                $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $MaxRunspaces, $ISS, $host)
+                $RunspacePool.Open()
 
-                $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
-                    $thisSource = $_
-                    $thisSourceResult = @()
+                $AllJobs = @()
+                $StageResults = @()
+                $TestableNetworks | ForEach-Object {
+                    $thisTestableNet = $_
 
-                    $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
-                        $thisTarget = $_
+                    $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
+                        $thisSource = $_
+                        $thisSourceResult = @()
 
-                        $PowerShell = [powershell]::Create()
-                        $PowerShell.RunspacePool = $RunspacePool
+                        $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
+                            $thisTarget = $_
 
-                        [void] $PowerShell.AddScript({
-                            param ( $thisSource, $thisTarget, $Definitions )
+                            $PowerShell = [powershell]::Create()
+                            $PowerShell.RunspacePool = $RunspacePool
+
+                            [void] $PowerShell.AddScript({
+                                param ( $thisSource, $thisTarget, $Definitions )
+
+                                $Result = New-Object -TypeName psobject
+                                $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
+                                $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
+                                $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
+
+                                $thisSourceResult = Invoke-NDKPing -Server $thisTarget -Client $thisSource
+
+                                if ($thisSourceResult.ServerSuccess) {
+                                    $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $true
+                                    $Result | Add-Member -MemberType NoteProperty -Name PathStatus   -Value 'Pass'
+                                }
+                                else {
+                                    $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $false
+                                    $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                                }
+
+                                Return $Result
+                            })
+
+                            $param = @{
+                                thisSource  = $thisSource
+                                thisTarget  = $thisTarget
+                                Definitions = $Definitions
+                            }
+
+                            [void] $PowerShell.AddParameters($param)
+
+                            Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
+                            ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            $asyncJobObj = @{ JobHandle   = $PowerShell
+                                              AsyncHandle = $PowerShell.BeginInvoke() }
+
+                            $AllJobs += $asyncJobObj
+                        }
+                    }
+                }
+
+                While ($AllJobs -ne $null) {
+                    $AllJobs | Where-Object { $_.AsyncHandle.IsCompleted } | ForEach-Object {
+                        $thisJob = $_
+                        $StageResults += $thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)
+                        $thisReceiverHostName = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).ReceiverHostName
+                        $thisSource = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).Sender
+                        $thisTarget = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).Receiver
+
+                        $AllJobs = $AllJobs -ne $thisJob
+
+                        Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)"
+                        ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                    }
+                }
+
+                $RunspacePool.Close()
+                $RunspacePool.Dispose()
+            } else { # Run sequentially 
+                Write-Host "Beginning Stage 3 - NDK Ping - Sequential - $([System.DateTime]::Now)"
+                "Beginning Stage: $thisStage - RDMA Ping - Sequential - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                $StageResults = @()
+                $TestableNetworks | ForEach-Object {
+                    $thisTestableNet = $_
+
+                    $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
+                        $thisSource = $_
+                        $thisSourceResult = @()
+                    
+                        $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
+                            $thisTarget = $_
 
                             $Result = New-Object -TypeName psobject
                             $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
                             $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
                             $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
+                            Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
+                            ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+
                             $thisSourceResult = Invoke-NDKPing -Server $thisTarget -Client $thisSource
 
-                            if ($thisSourceResult.ServerSuccess) {
-                                $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $true
-                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus   -Value 'Pass'
-                            }
-                            else {
-                                $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $false
-                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
-                            }
+                            Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
+                            ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-                            Return $Result
-                        })
+                            if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                            else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
 
-                        $param = @{
-                            thisSource  = $thisSource
-                            thisTarget  = $thisTarget
-                            Definitions = $Definitions
+                            $StageResults += $Result
+                            Remove-Variable Result -ErrorAction SilentlyContinue
                         }
-
-                        [void] $PowerShell.AddParameters($param)
-
-                        Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
-                        ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                        $asyncJobObj = @{ JobHandle   = $PowerShell
-                                          AsyncHandle = $PowerShell.BeginInvoke() }
-
-                        $AllJobs += $asyncJobObj
                     }
                 }
             }
 
-            While ($AllJobs -ne $null) {
-                $AllJobs | Where-Object { $_.AsyncHandle.IsCompleted } | ForEach-Object {
-                    $thisJob = $_
-                    $StageResults += $thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)
-                    $thisReceiverHostName = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).ReceiverHostName
-                    $thisSource = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).Sender
-                    $thisTarget = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).Receiver
-
-                    $AllJobs = $AllJobs -ne $thisJob
-
-                    Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)"
-                    ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                }
-            }
-
-            $RunspacePool.Close()
-            $RunspacePool.Dispose()
+            
 
             if ('Fail' -in $StageResults.PathStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage3 -Value 'Fail'; $StageFailures++ }
             else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage3 -Value 'Pass' }
