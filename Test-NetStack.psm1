@@ -579,7 +579,7 @@ Function Test-NetStack {
                                 $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
                                 $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                                $thisSourceResult = Invoke-NDKPing -Server $thisTarget -Client $thisSource
+                                $thisSourceResult = Invoke-NDKPing -Server $thisSource -Client $thisTarget
 
                                 if ($thisSourceResult.ServerSuccess) {
                                     $Result | Add-Member -MemberType NoteProperty -Name Connectivity -Value $true
@@ -650,7 +650,7 @@ Function Test-NetStack {
                             Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
                             ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-                            $thisSourceResult = Invoke-NDKPing -Server $thisTarget -Client $thisSource
+                            $thisSourceResult = Invoke-NDKPing -Server $thisSource -Client $thisTarget
 
                             Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
                             ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
