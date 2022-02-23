@@ -654,7 +654,7 @@ Function Test-NetStack {
                             Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
                             ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-                            $thisSourceResult = Invoke-NDKPing -Server $thisTarget -Client $thisSource
+                            $thisSourceResult = Invoke-NDKPing -Server $thisTarget -Client $thisSource -NDKLog $NDKLog
 
                             Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
                             ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
