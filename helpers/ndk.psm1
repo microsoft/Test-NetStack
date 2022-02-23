@@ -5,7 +5,10 @@ function Invoke-NDKPing {
         [PSObject] $Server,
 
         [Parameter(Mandatory=$true, Position=1)]
-        [PSObject] $Client
+        [PSObject] $Client,
+
+        [Parameter(Mandatory=$true, Position=2)]
+        $NDKLog
     )
 
     $NDKPingResults = New-Object -TypeName psobject
@@ -27,10 +30,10 @@ function Invoke-NDKPing {
 
     $ServerOutput = Receive-Job $ServerOutput -Wait -AutoRemoveJob
 
-    Write-Verbose "NDK Ping Server Output: "
+    "NDK Ping Server Output $($Server.IPAddress): " | Out-File $NDKLog -Append
     $ServerOutput | ForEach-Object {
         $ServerSuccess = $_ -match 'completes'
-        if ($_) { Write-Verbose $_ }
+        if ($_) { $_ | Out-File $NDKLog -Append }
     }
 
     $NDKPingResults | Add-Member -MemberType NoteProperty -Name ServerSuccess -Value $ServerSuccess
@@ -47,7 +50,13 @@ function Invoke-NDKPerf1to1 {
         [PSObject] $Client,
 
         [Parameter(Mandatory=$true, Position=2)]
-        [int] $ExpectedTPUT
+        [int] $ExpectedTPUT,
+
+        [Parameter(Mandatory=$true, Position=3)]
+        $NDKServerLog,
+
+        [Parameter(Mandatory=$true, Position=4)]
+        $NDKClientLog
     )
 
     $NDKPerf1to1Results = New-Object -TypeName psobject
@@ -109,10 +118,15 @@ function Invoke-NDKPerf1to1 {
 
         } -ArgumentList $Client.NodeName, $Client.InterfaceDescription
 
-        $ClientOutput = Invoke-Command -ComputerName $Client.NodeName -ScriptBlock {
-            param ([string] $ServerIP, [string] $ClientIP, [string] $ClientIF)
-            cmd /c "NDKPerfCmd.exe -C -ServerAddr $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rperf 2>&1"
-        } -ArgumentList $Server.IPAddress,$Client.IPAddress,$Client.InterfaceIndex
+        $ClientOutput = Start-Job -ScriptBlock {
+            param ([string] $ClientName, [string] $ServerIP, [string] $ClientIP, [string] $ClientIF)
+
+            Invoke-Command -ComputerName $ClientName -ScriptBlock {
+                param ([string] $ServerIP, [string] $ClientIP, [string] $ClientIF)
+
+                cmd /c "NDKPerfCmd.exe -C -ServerAddr $($ServerIP):9000 -ClientAddr $ClientIP -ClientIf $ClientIF -TestType rperf 2>&1"
+            } -ArgumentList $ServerIP, $ClientIP, $ClientIF
+        } -ArgumentList $Client.NodeName, $Server.IPAddress, $Client.IPAddress, $Client.InterfaceIndex
 
         $read = Receive-Job $ServerCounter -Wait -AutoRemoveJob
         $written = Receive-Job $ClientCounter -Wait -AutoRemoveJob
@@ -127,6 +141,18 @@ function Invoke-NDKPerf1to1 {
         $ClientBytesPerSecond = ($FlatClientOutput | Measure-Object -Maximum).Maximum
 
         $ServerOutput = Receive-Job $ServerOutput -Wait -AutoRemoveJob
+        $ClientOutput = Receive-Job $ClientOutput -Wait -AutoRemoveJob
+
+        "NDK Ping Server Output $($Server.IPAddress): " | Out-File $NDKServerLog -Append
+        $ServerOutput | ForEach-Object {
+            $ServerSuccess = $_ -match 'completes'
+            if ($_) { Write-Host $_; $_ | Out-File $NDKServerLog -Append }
+        }
+
+        "NDK Ping Client Output $($Client.IPAddress): " | Out-File $NDKClientLog -Append
+        $ClientOutput | ForEach-Object {
+            if ($_) { Write-Host $_; $_ | Out-File $NDKClientLog -Append }
+        }
 
         $MinLinkSpeedBps = ($ServerLinkSpeedBps, $ClientLinkSpeedBps | Measure-Object -Minimum).Minimum
         $Success = ($ServerBytesPerSecond -gt $MinLinkSpeedBps * $ExpectedTPUTDec) -and ($ClientBytesPerSecond -gt $MinLinkSpeedBps * $ExpectedTPUTDec)
