@@ -27,9 +27,19 @@ function Invoke-TCP {
         ("bps")  {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) / 8}
     }
 
+    $ServerOutput = Start-Job -ScriptBlock {
+        param ([string] $ServerName, [string] $ServerIP, $ModuleBase)
+
+        Invoke-Command -ComputerName $ServerName -ScriptBlock {
+            param ([string] $ServerIP, [string] $ModuleBase)
+            Set-Location $ModuleBase
+            cmd /c ".\tools\NTttcp\ntttcp.exe -r -m 64,*,$ServerIP   -l 65536 -a 16 -v -t 20" | Out-File "$($ModuleBase)\Results\NTttcp\NTttcp_$($ServerIP)_Recv_$(Get-Date -f yyyy-MM-dd-HHmmss).txt" -Append
+         } -ArgumentList $ServerIP, $ModuleBase
+
+    } -ArgumentList $Receiver.NodeName, $Receiver.IPAddress, $ModuleBase
+
     $ServerRecvCounter = Start-Job -ScriptBlock {
         param ([string] $ServerName, [string] $ServerInterfaceDescription)
-
         $ServerInterfaceDescription = (((($ServerInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
 
         Invoke-Command -ComputerName $ServerName -ScriptBlock {
@@ -39,24 +49,12 @@ function Invoke-TCP {
 
     } -ArgumentList $Receiver.NodeName, $Receiver.InterfaceDescription
 
-    $ServerOutput = Start-Job -ScriptBlock {
-        param ([string] $ServerName, [string] $ServerIP, $ModuleBase)
-
-        Invoke-Command -ComputerName $ServerName -ScriptBlock {
-            param ([string] $ServerIP, [string] $ModuleBase)
-
-            & "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -listen:$ServerIP -consoleverbosity:1 -verify:connection -buffer:4194304 -transfer:0xffffffffffffffff -msgwaitall:on -io:rioiocp -TimeLimit:30000
-         } -ArgumentList $ServerIP, $ModuleBase
-
-    } -ArgumentList $Receiver.NodeName, $Receiver.IPAddress, $ModuleBase
-
     $ClientSendCounter = Start-Job -ScriptBlock {
         param([string] $ClientName, [string] $ClientInterfaceDescription)
         $ClientInterfaceDescription = (((($ClientInterfaceDescription) -replace '#', '_') -replace '[(]', '[') -replace '[)]', ']') -replace '/', '_'
 
         Invoke-Command -ComputerName $ClientName -ScriptBlock {
             param ([string] $ClientInterfaceDescription)
-
             Get-Counter -Counter "\Network Adapter($ClientInterfaceDescription)\Bytes Sent/sec" -MaxSamples 20
          } -ArgumentList $ClientInterfaceDescription
 
@@ -67,13 +65,13 @@ function Invoke-TCP {
 
         Invoke-Command -ComputerName $ClientName -ScriptBlock {
             param ([string] $ServerIP, [string] $ClientIP, $ModuleBase)
-
-            & "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -bind:$ClientIP -target:$ServerIP -consoleverbosity:1 -verify:connection -buffer:4194304 -transfer:0xffffffffffffffff -msgwaitall:on -io:rioiocp -connections:32
+            Set-Location $ModuleBase
+            cmd /c ".\tools\NTttcp\ntttcp.exe  -s -m 64,*,$ServerIP   -l 65536 -a 16 -v -t 20" | Out-File "$($ModuleBase)\Results\NTttcp\NTttcp_$($clientip)_Send_$(Get-Date -f yyyy-MM-dd-HHmmss).txt" -Append
          } -ArgumentList $ServerIP, $ClientIP, $ModuleBase
 
     } -ArgumentList $Sender.NodeName, $Receiver.IPAddress, $Sender.IPAddress, $ModuleBase
 
-    Sleep 30
+    Sleep 20
 
     $ServerRecv = Receive-Job $ServerRecvCounter
     $ClientSend = Receive-Job $ClientSendCounter

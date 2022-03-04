@@ -47,7 +47,7 @@ Function Test-NetStack {
     Works with:
     - The Windows Firewall
     - The built-in firewall rules for ICMP, WinRM, and iWARP
-    - CTSTraffic rules (by application path) needed for Stage 2
+    - NTTTCP rules (by application path) needed for Stage 2
 
     Note: if you upgrade the module version, firewall rules should be revoked, then re-enabled.
 
@@ -57,7 +57,7 @@ Function Test-NetStack {
     Works with:
     - The Windows Firewall
     - The built-in firewall rules for ICMP and iWARP
-    - CTSTraffic rules defined by the EnableFirewallRules parameter
+    - NTTTCP rules defined by the EnableFirewallRules parameter
     - Will not disable WinRM
 
     .PARAMETER OnlyPrerequisites
@@ -441,90 +441,154 @@ Function Test-NetStack {
             }
 
             $thisStage = $_
-            Write-Host "Beginning Stage: $thisStage - TCP - $([System.DateTime]::Now)"
+
             "Stage 2`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "Console Output" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-            "Beginning Stage: $thisStage - TCP - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-            $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
-            $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
-            $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
+            $NTttcpLogPath = Join-Path -Path $LogFileParentPath -ChildPath "\NTttcp"
+            foreach ($Node in $Nodes) {
+                if ($Node -ne $Env:ComputerName) {
+                    $NTttcpLog = Invoke-Command -ComputerName $Node { New-Item -Path $Using:NTttcpLogPath -ItemType Directory -Force -ErrorAction SilentlyContinue }   
+                }
+                else { # Machine is local
+                
+                    $NTttcpLog = New-Item -Path $NTttcpLogPath -ItemType Directory -Force -ErrorAction SilentlyContinue
+                }
+            }
+            
+            # Using this variable as a placeholder for potential future debug mode options
+            # Set to true for now while monitoring lab runs after switching to NTttcp
+            $Sequential = $true
+            if ( $Sequential -eq $false ) {
+                Write-Host "Beginning Stage: $thisStage - TCP - Parallel - $([System.DateTime]::Now)"
+                "Beginning Stage: $thisStage - TCP - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-            $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $MaxRunspaces, $ISS, $host)
-            $RunspacePool.Open()
+                $ISS = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+                $NetStackHelperModules = Get-ChildItem (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers\*') -Include '*.psm1'
+                $NetStackHelperModules | ForEach-Object { $ISS.ImportPSModule($_.FullName) }
 
-            $StageResults = @()
-            foreach ($group in $runspaceGroups) {
-                $GroupedJobs = @()
-                foreach ($pair in $group) {
-                    $PowerShell = [powershell]::Create()
-                    $PowerShell.RunspacePool = $RunspacePool
+                $RunspacePool = [runspacefactory]::CreateRunspacePool(1, $MaxRunspaces, $ISS, $host)
+                $RunspacePool.Open()
 
-                    [void] $PowerShell.AddScript({
-                        param ( $thisComputerName, $thisSource, $thisTarget, $Definitions, $LogFile )
+                $StageResults = @()
+                foreach ($group in $runspaceGroups) {
+                    $GroupedJobs = @()
+                    foreach ($pair in $group) {
+                        $PowerShell = [powershell]::Create()
+                        $PowerShell.RunspacePool = $RunspacePool
 
-                        $Result = New-Object -TypeName psobject
-                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
-                        $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
-                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
+                        [void] $PowerShell.AddScript({
+                            param ( $thisComputerName, $thisSource, $thisTarget, $Definitions, $LogFile )
 
-                        $thisTargetResult = Invoke-TCP -Receiver $thisTarget -Sender $thisSource
+                            $Result = New-Object -TypeName psobject
+                            $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
+                            $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
+                            $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                        $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisTargetResult.ReceiverLinkSpeedGbps
-                        $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisTargetResult.ReceivedGbps
-                        $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisTargetResult.ReceivedPctgOfLinkSpeed
-                        $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.TCPPerf.TPUT
+                            $thisTargetResult = Invoke-TCP -Receiver $thisTarget -Sender $thisSource
 
-                        if ($thisTargetResult.ReceivedPctgOfLinkSpeed -and $Definitions.TCPPerf.TPUT) {
-                            if ($thisTargetResult.ReceivedPctgOfLinkSpeed -ge $Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
-                            else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                            $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisTargetResult.ReceiverLinkSpeedGbps
+                            $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisTargetResult.ReceivedGbps
+                            $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisTargetResult.ReceivedPctgOfLinkSpeed
+                            $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.TCPPerf.TPUT
+
+                            if ($thisTargetResult.ReceivedPctgOfLinkSpeed -and $Definitions.TCPPerf.TPUT) {
+                                if ($thisTargetResult.ReceivedPctgOfLinkSpeed -ge $Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                                else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                            }
+                            else {
+                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                                "ERROR: Data failed to be collected for path  $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            }
+
+                            $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisTargetResult.RawData
+
+                            Return $Result
+                        })
+
+                        $param = @{
+                            thisComputerName = $pair.Source.NodeName
+                            thisSource  = $pair.Source
+                            thisTarget  = $pair.Target
+                            Definitions = $Definitions
+                            LogFile     = $LogFile
                         }
-                        else {
-                            $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
-                            "ERROR: Data failed to be collected for path  $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                        }
 
-                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisTargetResult.RawData
+                        [void] $PowerShell.AddParameters($param)
 
-                        Return $Result
-                    })
+                        Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($pair.Source.IPAddress) -> ($($pair.Target.NodeName)) $($pair.Target.IPAddress)"
+                        ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($pair.Source.IPAddress) -> ($($pair.Target.NodeName)) $($pair.Target.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        $asyncJobObj = @{ JobHandle   = $PowerShell
+                                            AsyncHandle = $PowerShell.BeginInvoke() }
 
-                    $param = @{
-                        thisComputerName = $pair.Source.NodeName
-                        thisSource  = $pair.Source
-                        thisTarget  = $pair.Target
-                        Definitions = $Definitions
-                        LogFile     = $LogFile
+                        $GroupedJobs += $asyncJobObj
                     }
 
-                    [void] $PowerShell.AddParameters($param)
+                    While ($GroupedJobs -ne $null) {
+                        $GroupedJobs | Where-Object { $_.AsyncHandle.IsCompleted } | ForEach-Object {
+                            $thisJob = $_
+                            $StageResults += $thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)
+                            $thisReceiverHostName = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).ReceiverHostName
+                            $thisSource = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).Sender
+                            $thisTarget = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).Receiver
 
-                    Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($pair.Source.IPAddress) -> ($($pair.Target.NodeName)) $($pair.Target.IPAddress)"
-                    ":: Stage $thisStage : $([System.DateTime]::Now) :: [Started] $($pair.Source.IPAddress) -> ($($pair.Target.NodeName)) $($pair.Target.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                    $asyncJobObj = @{ JobHandle   = $PowerShell
-                                        AsyncHandle = $PowerShell.BeginInvoke() }
+                            $GroupedJobs = $GroupedJobs -ne $thisJob
 
-                    $GroupedJobs += $asyncJobObj
+                            Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)"
+                            ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        }
+                    }
                 }
 
-                While ($GroupedJobs -ne $null) {
-                    $GroupedJobs | Where-Object { $_.AsyncHandle.IsCompleted } | ForEach-Object {
-                        $thisJob = $_
-                        $StageResults += $thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)
-                        $thisReceiverHostName = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).ReceiverHostName
-                        $thisSource = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).Sender
-                        $thisTarget = ($thisJob.JobHandle.EndInvoke($thisJob.AsyncHandle)).Receiver
+                $RunspacePool.Close()
+                $RunspacePool.Dispose()
+            } 
+            else { # Run sequentially
+                Write-Host "Beginning Stage 2 - TCP - Sequential - $([System.DateTime]::Now)"
+                "Beginning Stage 2 - TCP - Sequential - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                $StageResults = @()
+                $TestableNetworks | ForEach-Object {
+                    $thisTestableNet = $_
 
-                        $GroupedJobs = $GroupedJobs -ne $thisJob
+                    $thisTestableNet.Group | ForEach-Object {
+                        $thisSource = $_
+                        $thisSourceResult = @()
 
-                        Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)"
-                        ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource) -> ($thisReceiverHostName) $($thisTarget)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
+                            $thisTarget = $_
+
+                            $Result = New-Object -TypeName psobject
+                            $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
+                            $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
+                            $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
+
+                            Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IpAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
+                            ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IpAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        
+                            $thisSourceResult = Invoke-TCP -Receiver $thisTarget -Sender $thisSource
+
+                            Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IpAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
+                            ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IpAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+
+                            $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
+                            $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.ReceivedGbps
+                            $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
+                            $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.TCPPerf.TPUT
+                        
+                            $ThroughputPercentageDec = $Definitions.TCPPerf.TPUT / 100.0
+                            $AcceptableThroughput = $thisSourceResult.RawData.MinLinkSpeedbps * $ThroughputPercentageDec
+
+                            if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.TCPPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                            else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+
+                            $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
+
+                            $StageResults += $Result
+                            Remove-Variable Result -ErrorAction SilentlyContinue
+                        }
                     }
                 }
             }
-
-            $RunspacePool.Close()
-            $RunspacePool.Dispose()
 
             if ('Fail' -in $StageResults.PathStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage2 -Value 'Fail'; $StageFailures++ }
             else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage2 -Value 'Pass' }
