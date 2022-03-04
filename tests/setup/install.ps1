@@ -5,6 +5,8 @@ Invoke-AppveyorInstallTask
 
 Remove-Item .\DscResource.Tests\ -Force -Confirm:$false -Recurse
 
+# To be replaced with checking version and downloading new NTttcp exe as needed
+<#
 Write-Output 'Checking version of CTSTraffic...'
 
 git.exe clone -q https://github.com/microsoft/ctsTraffic c:\projects\CTSTraffic
@@ -26,6 +28,7 @@ else {
 Remove-Item C:\projects\CTSTraffic -Force -Confirm:$false -Recurse
 
 Write-Output '...Ending CTSTraffic version check'
+#>
 
 [string[]]$PowerShellModules = @("Pester", 'posh-git')
 

@@ -122,7 +122,7 @@ Function Test-NetStackPrerequisites {
                         $psSession = New-PSSession -ComputerName $thisTarget
                         $ModuleBase = (Get-Module Test-NetStack -PSSession $psSession -ListAvailable).ModuleBase
                         Remove-PSSession -Session $psSession
-                        $null = New-NetFirewallRule -CimSession $thisTarget -DisplayName 'Test-NetStack - CTSTraffic' -Direction Inbound -Program "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow -ErrorAction SilentlyContinue
+                        $null = New-NetFirewallRule -CimSession $thisTarget -DisplayName 'Test-NetStack - NTTTCP' -Direction Inbound -Program "$ModuleBase\tools\NTttcp\ntttcp.exe" -Action Allow -ErrorAction SilentlyContinue
                     }
                 }
                 else { # Machine is local; no need to test
@@ -136,7 +136,7 @@ Function Test-NetStackPrerequisites {
 
                     if ($EnableFirewallRules) {
                         $ModuleBase = (Get-Module Test-NetStack -ListAvailable | Select-Object -First 1).ModuleBase
-                        $null = New-NetFirewallRule -DisplayName 'Test-NetStack - CTSTraffic' -Direction Inbound -Program "$ModuleBase\tools\CTS-Traffic\ctsTraffic.exe" -Action Allow -ErrorAction SilentlyContinue
+                        $null = New-NetFirewallRule -DisplayName 'Test-NetStack - NTTTCP' -Direction Inbound -Program "$ModuleBase\tools\NTttcp\ntttcp.exe" -Action Allow -ErrorAction SilentlyContinue
                     }
                 }
             }
@@ -205,10 +205,10 @@ Function Revoke-FirewallRules {
                 $thisTarget = $_
 
                 if ($thisTarget -ne $Env:ComputerName) {
-                    $null = Remove-NetFirewallRule -DisplayName 'Test-NetStack - CTSTraffic' -CimSession $thisTarget -ErrorAction SilentlyContinue
+                    $null = Remove-NetFirewallRule -DisplayName 'Test-NetStack - NTTTCP' -CimSession $thisTarget -ErrorAction SilentlyContinue
                 }
                 else {
-                    $null = Remove-NetFirewallRule -DisplayName 'Test-NetStack - CTSTraffic' -ErrorAction SilentlyContinue
+                    $null = Remove-NetFirewallRule -DisplayName 'Test-NetStack - NTTTCP' -ErrorAction SilentlyContinue
                 }
             }
         }
