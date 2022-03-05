@@ -5,7 +5,10 @@ function Invoke-TCP {
         [PSObject] $Receiver,
 
         [Parameter(Mandatory=$true, Position=1)]
-        [PSObject] $Sender
+        [PSObject] $Sender,
+
+        [Parameter(Mandatory=$true, Position=2)]
+        $LogDir
     )
 
     $ModuleBase = (Get-Module Test-NetStack -ListAvailable | Select-Object -First 1).ModuleBase
@@ -28,15 +31,15 @@ function Invoke-TCP {
     }
 
     $ServerOutput = Start-Job -ScriptBlock {
-        param ([string] $ServerName, [string] $ServerIP, $ModuleBase)
+        param ([string] $ServerName, [string] $ServerIP, $ModuleBase, $LogDir)
 
         Invoke-Command -ComputerName $ServerName -ScriptBlock {
-            param ([string] $ServerIP, [string] $ModuleBase)
+            param ([string] $ServerIP, [string] $ModuleBase, $LogDir)
             Set-Location $ModuleBase
-            cmd /c ".\tools\NTttcp\ntttcp.exe -r -m 64,*,$ServerIP   -l 65536 -a 16 -v -t 20" | Out-File "$($ModuleBase)\Results\NTttcp\NTttcp_$($ServerIP)_Recv_$(Get-Date -f yyyy-MM-dd-HHmmss).txt" -Append
-         } -ArgumentList $ServerIP, $ModuleBase
+            cmd /c ".\tools\NTttcp\ntttcp.exe -r -m 64,*,$ServerIP   -l 65536 -a 16 -v -t 20" | Out-File "$($LogDir)\NTttcp_$($ServerIP)_Recv_$(Get-Date -f yyyy-MM-dd-HHmmss).txt" -Append
+         } -ArgumentList $ServerIP, $ModuleBase, $LogDir
 
-    } -ArgumentList $Receiver.NodeName, $Receiver.IPAddress, $ModuleBase
+    } -ArgumentList $Receiver.NodeName, $Receiver.IPAddress, $ModuleBase, $LogDir
 
     $ServerRecvCounter = Start-Job -ScriptBlock {
         param ([string] $ServerName, [string] $ServerInterfaceDescription)
@@ -61,15 +64,15 @@ function Invoke-TCP {
     } -ArgumentList $Sender.NodeName,$Sender.InterfaceDescription
 
     $ClientOutput = Start-Job -ScriptBlock {
-        param ([string] $ClientName, [string] $ServerIP, [string] $ClientIP, [string] $ModuleBase)
+        param ([string] $ClientName, [string] $ServerIP, [string] $ClientIP, [string] $ModuleBase, $LogDir)
 
         Invoke-Command -ComputerName $ClientName -ScriptBlock {
-            param ([string] $ServerIP, [string] $ClientIP, $ModuleBase)
+            param ([string] $ServerIP, [string] $ClientIP, $ModuleBase, $LogDir)
             Set-Location $ModuleBase
-            cmd /c ".\tools\NTttcp\ntttcp.exe  -s -m 64,*,$ServerIP   -l 65536 -a 16 -v -t 20" | Out-File "$($ModuleBase)\Results\NTttcp\NTttcp_$($clientip)_Send_$(Get-Date -f yyyy-MM-dd-HHmmss).txt" -Append
-         } -ArgumentList $ServerIP, $ClientIP, $ModuleBase
+            cmd /c ".\tools\NTttcp\ntttcp.exe  -s -m 64,*,$ServerIP   -l 65536 -a 16 -v -t 20" | Out-File "$($LogDir)\NTttcp_$($clientip)_Send_$(Get-Date -f yyyy-MM-dd-HHmmss).txt" -Append
+         } -ArgumentList $ServerIP, $ClientIP, $ModuleBase, $LogDir
 
-    } -ArgumentList $Sender.NodeName, $Receiver.IPAddress, $Sender.IPAddress, $ModuleBase
+    } -ArgumentList $Sender.NodeName, $Receiver.IPAddress, $Sender.IPAddress, $ModuleBase, $LogDir
 
     Sleep 20
 
