@@ -448,11 +448,11 @@ Function Test-NetStack {
             $NTttcpLogPath = Join-Path -Path $LogFileParentPath -ChildPath "\NTttcp"
             foreach ($Node in $Nodes) {
                 if ($Node -ne $Env:ComputerName) {
-                    $NTttcpLog = Invoke-Command -ComputerName $Node { New-Item -Path $Using:NTttcpLogPath -ItemType Directory -Force -ErrorAction SilentlyContinue }   
+                    $NTttcpLogDir = Invoke-Command -ComputerName $Node { New-Item -Path $Using:NTttcpLogPath -ItemType Directory -Force -ErrorAction SilentlyContinue }   
                 }
                 else { # Machine is local
                 
-                    $NTttcpLog = New-Item -Path $NTttcpLogPath -ItemType Directory -Force -ErrorAction SilentlyContinue
+                    $NTttcpLogDir = New-Item -Path $NTttcpLogPath -ItemType Directory -Force -ErrorAction SilentlyContinue
                 }
             }
             
@@ -565,7 +565,7 @@ Function Test-NetStack {
                             Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IpAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
                             ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IpAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                         
-                            $thisSourceResult = Invoke-TCP -Receiver $thisTarget -Sender $thisSource
+                            $thisSourceResult = Invoke-TCP -Receiver $thisTarget -Sender $thisSource -LogDir $NTttcpLogDir
 
                             Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IpAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
                             ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IpAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
