@@ -33,7 +33,8 @@ Class TCPPerf {
 
 Class NDKPerf {
         # Min TPUT by % of link speed
-        [int] $TPUT = '90'
+        # Lowering to 70% while we are still in the tuning phase, return to 90% once we are more confident
+        [int] $TPUT = '70'
 
     NDKPerf () {}
 }
