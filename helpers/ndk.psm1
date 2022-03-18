@@ -204,6 +204,12 @@ function Invoke-NDKPerfNto1 {
     $ServerSuccess = $True
     $MultiClientSuccess = $True
 
+    $ServerCounter = Start-Job -ScriptBlock {
+        param ([string] $ServerName, [string] $ServerInterfaceDescription)
+
+        Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 20 #-ErrorAction Ignore
+    } -ArgumentList $Server.NodeName,$Server.InterfaceDescription
+
     $ClientNetwork | ForEach-Object {
         $ClientName = $_.NodeName
         $ClientIP = $_.IPAddress
@@ -211,12 +217,6 @@ function Invoke-NDKPerfNto1 {
         $ClientInterfaceDescription = $_.InterfaceDescription
         $ClientLinkSpeedBps = [Int]::Parse($_.LinkSpeed.Split()[0]) * [Math]::Pow(10, 9) / 8
         $ServerLinkSpeedBps = [Int]::Parse($Server.LinkSpeed.Split()[0]) * [Math]::Pow(10, 9) / 8
-
-        $ServerCounter += Start-Job -ScriptBlock {
-            param ([string] $ServerName, [string] $ServerInterfaceDescription)
-
-            Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 20 #-ErrorAction Ignore
-        } -ArgumentList $Server.NodeName,$Server.InterfaceDescription
 
         $ServerOutput += Start-Job -ScriptBlock {
             param ([string] $ServerName, [string] $ServerIP, [string] $ServerIF, [int]$j)
@@ -244,33 +244,31 @@ function Invoke-NDKPerfNto1 {
         $j++
     }
 
-    $ServerBytesPerSecond = 0
-    $ServerBpsArray = @()
-    $ServerGbpsArray = @()
+    Sleep 25
+
     $MinAcceptableLinkSpeedBps = ($ServerLinkSpeedBps, $ClientLinkSpeedBps | Measure-Object -Minimum).Minimum * $ExpectedTPUTDec
-    $ServerCounter | ForEach-Object {
-        $read = Receive-Job $_ -Wait -AutoRemoveJob
 
-        if ($read.Readings) {
-            $FlatServerOutput = $read.Readings.split(":") | ForEach-Object {
-                try {[uint64]($_)} catch{}
-            }
-        }
+    $ServerRecv = Receive-Job $ServerCounter
 
-        $ServerBytesPerSecond = ($FlatServerOutput | Measure-Object -Maximum).Maximum
-        $ServerBpsArray += $ServerBytesPerSecond
-        $ServerGbpsArray += [Math]::Round(($ServerBytesPerSecond * 8) * [Math]::Pow(10, -9), 2)
-        $ServerSuccess = $ServerSuccess -and ($ServerBytesPerSecond -gt $MinAcceptableLinkSpeedBps)
+    $FlatServerRecvOutput = $ServerRecv.Readings.split(":") | ForEach-Object {
+        try {[uint64]($_)} catch {}
     }
 
+    $ServerRecvBps = [Math]::Round(($FlatServerRecvOutput | Measure-Object -Maximum).Maximum, 2)
+    $ServerSuccess = $ServerRecvBps -gt $MinAcceptableLinkSpeedBps
+
     $RawData = New-Object -TypeName psobject
-    $RawData | Add-Member -MemberType NoteProperty -Name ServerBytesPerSecond -Value $ServerBpsArray
+    $RawData | Add-Member -MemberType NoteProperty -Name ServerBytesPerSecond -Value $ServerRecvBps
     $RawData | Add-Member -MemberType NoteProperty -Name MinLinkSpeedBps -Value $MinAcceptableLinkSpeedBps
 
     $ReceiverLinkSpeedGbps = [Math]::Round(($ServerLinkSpeedBps * 8) * [Math]::Pow(10, -9), 2)
+    $ServerRecvBitsPerSecond = $ServerRecvBps * 8
+    $ReceivedGbps = [Math]::Round($ServerRecvBitsPerSecond * [Math]::Pow(10, -9), 2)
+    $ReceivedPercentageOfLinkSpeed = [Math]::Round(($ReceivedGbps / $ReceiverLinkSpeedGbps) * 100, 2)
 
     $NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name ReceiverLinkSpeedGbps -Value $ReceiverLinkSpeedGbps
-    $NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name RxGbps -Value $ServerGbpsArray
+    $NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name RxGbps -Value $ReceivedGbps
+    $NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name ReceivedPctgOfLinkSpeed -Value $ReceivedPercentageOfLinkSpeed
     $NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name ClientNetworkTested -Value $ClientNetwork.IPAddress
     $NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name ServerSuccess -Value $ServerSuccess
     $NDKPerfNto1Results | Add-Member -MemberType NoteProperty -Name RawData -Value $RawData
@@ -348,7 +346,6 @@ function Invoke-NDKPerfNtoN {
             $j++
         }
     }
-
 
     $ServerBytesPerSecond = 0
     $ServerBpsArray = @()

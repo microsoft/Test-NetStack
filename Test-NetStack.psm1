@@ -953,6 +953,7 @@ Function Test-NetStack {
 
                     $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisTargetResult.ReceiverLinkSpeedGbps
                     $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisTargetResult.RxGbps
+                    $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisTargetResult.ReceivedPctgOfLinkSpeed
 
                     if ($thisTargetResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Pass' }
                     else { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail' }
