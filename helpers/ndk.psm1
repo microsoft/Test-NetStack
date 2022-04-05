@@ -306,18 +306,18 @@ function Invoke-NDKPerfNtoN {
         $ServerLinkSpeedBps = [Int]::Parse($Server.LinkSpeed.Split()[0]) * [Math]::Pow(10, 9) / 8
         $ClientNetwork = $ServerList | Where-Object NodeName -ne $Server.NodeName
 
+        $ServerCounter += Start-Job -ScriptBlock {
+            param ([string] $ServerName, [string] $ServerInterfaceDescription)
+
+            Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 20
+        } -ArgumentList $Server.NodeName,$Server.InterfaceDescription
+
         $ClientNetwork | ForEach-Object {
             $ClientName = $_.NodeName
             $ClientIP = $_.IPAddress
             $ClientIF = $_.InterfaceIndex
             $ClientInterfaceDescription = $_.InterfaceDescription
             $ClientLinkSpeedBps = [Int]::Parse($_.LinkSpeed.Split()[0]) * [Math]::Pow(10, 9) / 8
-
-            $ServerCounter += Start-Job -ScriptBlock {
-                param ([string] $ServerName, [string] $ServerInterfaceDescription)
-
-                Get-Counter -ComputerName $ServerName -Counter "\RDMA Activity($ServerInterfaceDescription)\RDMA Inbound Bytes/sec" -MaxSamples 20 #-ErrorAction Ignore
-            } -ArgumentList $Server.NodeName,$Server.InterfaceDescription
 
             $ServerOutput += Start-Job -ScriptBlock {
                 param ([string] $ServerName, [string] $ServerIP, [string] $ServerIF, [int] $j)
@@ -345,6 +345,19 @@ function Invoke-NDKPerfNtoN {
 
             $j++
         }
+    }
+
+    Sleep 40
+    
+    $ServerOutput = Receive-Job $ServerOutput
+    $ServerOutput | ForEach-Object {
+        $ServerSuccess = $_ -match 'completes'
+        if ($_) { Write-Host $_ }
+    }
+
+    $ClientOutput = Receive-Job $ClientOutput
+    $ClientOutput | ForEach-Object {
+        if ($_) { Write-Host $_ }
     }
 
     $ServerBytesPerSecond = 0
