@@ -30,16 +30,21 @@ function Invoke-TCP {
         ("bps")  {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) / 8}
     }
 
+    $BufferSize = 65536
+    if ($ServerLinkSpeed -ge 50) {
+        $BufferSize = $BufferSize * 10
+    }
+
     $ServerOutput = Start-Job -ScriptBlock {
-        param ([string] $ServerName, [string] $ServerIP, $ModuleBase, $LogDir)
+        param ([string] $ServerName, [string] $ServerIP, $ModuleBase, $LogDir, $BufferSize)
 
         Invoke-Command -ComputerName $ServerName -ScriptBlock {
-            param ([string] $ServerIP, [string] $ModuleBase, $LogDir)
+            param ([string] $ServerIP, [string] $ModuleBase, $LogDir, $BufferSize)
             Set-Location $ModuleBase
-            cmd /c ".\tools\NTttcp\ntttcp.exe -r -m 64,*,$ServerIP   -l 65536 -a 16 -v -t 20" | Out-File "$($LogDir)\NTttcp_$($ServerIP)_Recv_$(Get-Date -f yyyy-MM-dd-HHmmss).txt" -Append
-         } -ArgumentList $ServerIP, $ModuleBase, $LogDir
+            cmd /c ".\tools\NTttcp\ntttcp.exe -r -m 64,*,$ServerIP   -l $BufferSize -a 16 -v -t 20" | Out-File "$($LogDir)\NTttcp_$($ServerIP)_Recv_$(Get-Date -f yyyy-MM-dd-HHmmss).txt" -Append
+         } -ArgumentList $ServerIP, $ModuleBase, $LogDir, $BufferSize
 
-    } -ArgumentList $Receiver.NodeName, $Receiver.IPAddress, $ModuleBase, $LogDir
+    } -ArgumentList $Receiver.NodeName, $Receiver.IPAddress, $ModuleBase, $LogDir, $BufferSize
 
     $ServerRecvCounter = Start-Job -ScriptBlock {
         param ([string] $ServerName, [string] $ServerInterfaceDescription)
@@ -64,15 +69,15 @@ function Invoke-TCP {
     } -ArgumentList $Sender.NodeName,$Sender.InterfaceDescription
 
     $ClientOutput = Start-Job -ScriptBlock {
-        param ([string] $ClientName, [string] $ServerIP, [string] $ClientIP, [string] $ModuleBase, $LogDir)
+        param ([string] $ClientName, [string] $ServerIP, [string] $ClientIP, [string] $ModuleBase, $LogDir, $BufferSize)
 
         Invoke-Command -ComputerName $ClientName -ScriptBlock {
-            param ([string] $ServerIP, [string] $ClientIP, $ModuleBase, $LogDir)
+            param ([string] $ServerIP, [string] $ClientIP, $ModuleBase, $LogDir, $BufferSize)
             Set-Location $ModuleBase
-            cmd /c ".\tools\NTttcp\ntttcp.exe  -s -m 64,*,$ServerIP   -l 65536 -a 16 -v -t 20" | Out-File "$($LogDir)\NTttcp_$($clientip)_Send_$(Get-Date -f yyyy-MM-dd-HHmmss).txt" -Append
-         } -ArgumentList $ServerIP, $ClientIP, $ModuleBase, $LogDir
+            cmd /c ".\tools\NTttcp\ntttcp.exe  -s -m 64,*,$ServerIP   -l $BufferSize -a 16 -v -t 20" | Out-File "$($LogDir)\NTttcp_$($clientip)_Send_$(Get-Date -f yyyy-MM-dd-HHmmss).txt" -Append
+         } -ArgumentList $ServerIP, $ClientIP, $ModuleBase, $LogDir, $BufferSize
 
-    } -ArgumentList $Sender.NodeName, $Receiver.IPAddress, $Sender.IPAddress, $ModuleBase, $LogDir
+    } -ArgumentList $Sender.NodeName, $Receiver.IPAddress, $Sender.IPAddress, $ModuleBase, $LogDir, $BufferSize
 
     Sleep 20
 
