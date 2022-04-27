@@ -161,6 +161,15 @@ Function Test-NetStack {
         [Parameter(Mandatory = $false)]
         [String] $LogPath = "$(Join-Path -Path $((Get-Module -Name Test-Netstack -ListAvailable | Select-Object -First 1).ModuleBase) -ChildPath "Results\NetStackResults-$(Get-Date -f yyyy-MM-dd-HHmmss).txt")"
     )
+
+    $LogFileParentPath = Split-Path -Path $LogPath -Parent -ErrorAction SilentlyContinue
+
+    if (-not (Test-Path $LogFileParentPath -ErrorAction SilentlyContinue)) {
+        $null = New-Item -Path $LogFileParentPath -ItemType Directory -Force -ErrorAction SilentlyContinue
+    }
+
+    $LogFile = New-Item -Path $LogPath -ItemType File -Force -ErrorAction SilentlyContinue
+
     $ExperimentalStages = @('7', '8')
     $ChosenStages = $Stages | Where-Object {$ExperimentalStages -contains $_}
     if ($Experimental -eq $false -and $ChosenStages.Length -gt 0) {
@@ -171,15 +180,7 @@ Function Test-NetStack {
 
     $Global:ProgressPreference = 'SilentlyContinue'
 
-    $LogFileParentPath = Split-Path -Path $LogPath -Parent -ErrorAction SilentlyContinue
-
-    if (-not (Test-Path $LogFileParentPath -ErrorAction SilentlyContinue)) {
-        $null = New-Item -Path $LogFileParentPath -ItemType Directory -Force -ErrorAction SilentlyContinue
-    }
-
-    $LogFile = New-Item -Path $LogPath -ItemType File -Force -ErrorAction SilentlyContinue
-
-    "Starting Test-NetStack - $([System.DateTime]::Now)`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+    Write-LogMessage -Message "Starting Test-NetStack" -LogFile $LogFile
 
     # Each stages adds their results to this and is eventually returned by this function
     $NetStackResults = New-Object -TypeName psobject
@@ -223,17 +224,52 @@ Function Test-NetStack {
         return $NetStackResults
     }
     elseif ($false -in $PrereqStatus) {
-        "Prerequsite tests have failed. Review the NetStack results below for more details." | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+        Write-LogMessage -Message "Prerequsite tests have failed. Review the NetStack results for more details." -LogFile $LogFile
         $NetStackResults.Prerequisites | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-        throw "Prerequsite tests have failed. Review the NetStack results for more details."
+        return $NetStackResults
     }
 
     #region Connectivity Maps
-    if ($Nodes) { $Mapping = Get-ConnectivityMapping -Nodes $Nodes }
-    else        { $Mapping = Get-ConnectivityMapping -IPTarget $IPTarget }
 
+    $RDMAStages = @(3, 4, 5, 6, 7)
+    if ($OnlyConnectivityMap) {
+        Write-LogMessage -Message "'Connectivity Map Only' option specified. Checking for ATC." -LogFile $LogFile
+        $ATCDeploymentStatus = Get-ATCDeploymentStatus -LogFile $LogFile
+    }
+    elseif (($Stage | Where-Object {$RDMAStages -contains $_}).Count -gt 0) {
+        Write-LogMessage -Message "RDMA stages specified. Checking for ATC." -LogFile $LogFile
+        $ATCDeploymentStatus = Get-ATCDeploymentStatus -LogFile $LogFile
+    } else {
+        Write-LogMessage -Message "No RDMA stages specified, skipping check for ATC." -LogFile $LogFile
+        $ATCDeploymentStatus = [ATCDeploymentStatus]::NotDeployed
+    }
+    
+    # If ATC is deployed, generate a list of adapters associated with a storage intent
+    if ($ATCDeploymentStatus -eq [ATCDeploymentStatus]::DeployedCorrectly) {
+        $ATCNICMapping = Get-ATCNICMapping
+    }
+
+    Write-LogMessage -Message "Generating Connectivity Map" -LogFile $LogFile
+    if ($Nodes) {
+        # If ATC is deployed, pass the ATC adapter mapping to the connectivity mapper to fill in StorageIntentSet property
+        if ($ATCDeploymentStatus -eq [ATCDeploymentStatus]::DeployedCorrectly -and $ATCNICMapping.Count -gt 0) {
+            $Mapping = Get-ConnectivityMapping -Nodes $Nodes -ATCNICMapping $ATCNICMapping
+        }
+        else { # Otherwise, run connectivity mapper as usual
+            $Mapping = Get-ConnectivityMapping -Nodes $Nodes 
+        }
+    }
+    else {
+        $Mapping = Get-ConnectivityMapping -IPTarget $IPTarget
+    }
+
+    Write-LogMessage -Message "Determining Testable Networks" -LogFile $LogFile
     $TestableNetworks     = Get-TestableNetworksFromMapping     -Mapping $Mapping
+    Write-LogMessage -Message "Determining Disqualified Networks" -LogFile $LogFile
     $DisqualifiedNetworks = Get-DisqualifiedNetworksFromMapping -Mapping $Mapping
+
+    Write-LogMessage -Message "Connectivity Map Complete" -LogFile $LogFile
+    "`r`n####################################`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
     # If at least one note property doesn't exist, then no disqualified networks were identified
     if (($DisqualifiedNetworks | Get-Member -MemberType NoteProperty).Count) {
@@ -703,11 +739,26 @@ Function Test-NetStack {
                 $TestableNetworks | ForEach-Object {
                     $thisTestableNet = $_
 
-                    $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
+                    # If ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
+                    if ($ATCDeploymentStatus -eq [ATCDeploymentStatus]::DeployedCorrectly) {
+                        $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.StorageIntentSet }
+                    } else {
+                        $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
+                    }
+
+                    if (($GroupToTest | Measure-Object).Count -lt 2) {
+                        Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
+                        $Result = New-Object -TypeName psobject
+                        $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                        $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
+                        $StageResults += $Result
+                    }
+
+                    $GroupToTest | ForEach-Object {
                         $thisSource = $_
                         $thisSourceResult = @()
-                    
-                        $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
+                        
+                        $GroupToTest | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
                             $thisTarget = $_
 
                             $Result = New-Object -TypeName psobject
@@ -715,16 +766,23 @@ Function Test-NetStack {
                             $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
                             $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                            Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
-                            ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            # If ATC is deployed but failed, skip testing and mark failed
+                            if ($ATCDeploymentStatus -ne [ATCDeploymentStatus]::DeployedMarkFailed) {
 
-                            $thisSourceResult = Invoke-NDKPing -Server $thisTarget -Client $thisSource -NDKLog $NDKLog
+                                Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
+                                ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-                            Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
-                            ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                                $thisSourceResult = Invoke-NDKPing -Server $thisTarget -Client $thisSource -NDKLog $NDKLog
 
-                            if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
-                            else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                                Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
+                                ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+
+                                if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                                else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                            } else {
+                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                                $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'ATC Misconfiguration - Not Tested'
+                            }
 
                             $StageResults += $Result
                             Remove-Variable Result -ErrorAction SilentlyContinue
@@ -732,8 +790,6 @@ Function Test-NetStack {
                     }
                 }
             }
-
-            
 
             if ('Fail' -in $StageResults.PathStatus) { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage3 -Value 'Fail'; $StageFailures++ }
             else { $ResultsSummary | Add-Member -MemberType NoteProperty -Name Stage3 -Value 'Pass' }
@@ -765,8 +821,6 @@ Function Test-NetStack {
             $thisStage = $_
             "Stage 4`r`n" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
             "Console Output" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-            Write-Host "Beginning Stage: $thisStage - RDMA Perf 1:1 - $([System.DateTime]::Now)"
-            "Beginning Stage: $thisStage - RDMA Perf 1:1 - $([System.DateTime]::Now)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
             # Using this variable as a placeholder for potential future debug mode options
             # Set to true for now while NDKPerf does not support parallel connections
@@ -865,11 +919,26 @@ Function Test-NetStack {
                 $TestableNetworks | ForEach-Object {
                 $thisTestableNet = $_
 
-                $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
+                # If ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
+                if ($ATCDeploymentStatus -eq [ATCDeploymentStatus]::DeployedCorrectly) {
+                    $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.StorageIntentSet }
+                } else {
+                    $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
+                }
+
+                if (($GroupToTest | Measure-Object).Count -lt 2) {
+                    Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
+                    $Result = New-Object -TypeName psobject
+                    $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                    $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
+                    $StageResults += $Result
+                }
+
+                $GroupToTest | ForEach-Object {
                     $thisSource = $_
                     $thisSourceResult = @()
                     
-                    $thisTestableNet.Group | Where-Object NodeName -ne $thisSource.NodeName | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
+                    $GroupToTest | Where-Object NodeName -ne $thisSource.NodeName | ForEach-Object {
                         $thisTarget = $_
 
                         $Result = New-Object -TypeName psobject
@@ -877,23 +946,29 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
                         $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                        Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
-                        ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                        # If ATC is deployed but failed, skip testing and mark failed
+                        if ($ATCDeploymentStatus -ne [ATCDeploymentStatus]::DeployedMarkFailed) {
+                            Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
+                            ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-                        $thisSourceResult = Invoke-NDKPerf1to1 -Server $thisTarget -Client $thisSource -ExpectedTPUT $Definitions.NDKPerf.TPUT -NDKServerLog $NDKServerLog -NDKClientLog $NDKClientLog
+                            $thisSourceResult = Invoke-NDKPerf1to1 -Server $thisTarget -Client $thisSource -ExpectedTPUT $Definitions.NDKPerf.TPUT -NDKServerLog $NDKServerLog -NDKClientLog $NDKClientLog
 
-                        Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
-                        ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                            Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
+                            ":: Stage $thisStage : $([System.DateTime]::Now) :: [Completed] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-                        $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
-                        $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.ReceivedGbps
-                        $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
-                        $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.NDKPerf.TPUT
+                            $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisSourceResult.ReceiverLinkSpeedGbps
+                            $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.ReceivedGbps
+                            $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisSourceResult.ReceivedPctgOfLinkSpeed
+                            $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.NDKPerf.TPUT
 
-                        if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.NDKPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
-                        else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                            if ($thisSourceResult.ReceivedPctgOfLinkSpeed -ge $Definitions.NDKPerf.TPUT) { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass' }
+                            else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
 
-                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
+                            $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
+                        } else {
+                            $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                            $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'ATC Misconfiguration - Not Tested'
+                        }
 
                         $StageResults += $Result
                         Remove-Variable Result -ErrorAction SilentlyContinue
@@ -937,35 +1012,57 @@ Function Test-NetStack {
             $StageResults = @()
             $TestableNetworks | ForEach-Object {
                 $thisTestableNet = $_
+    
+                # If ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
+                if ($ATCDeploymentStatus -eq [ATCDeploymentStatus]::DeployedCorrectly) {
+                    $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.StorageIntentSet }
+                } else {
+                    $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
+                }
 
-                $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled } | ForEach-Object {
+                if (($GroupToTest | Measure-Object).Count -lt 2) {
+                    Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
+                    $Result = New-Object -TypeName psobject
+                    $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail'
+                    $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
+                    $StageResults += $Result
+                }
+
+                $GroupToTest | ForEach-Object {
                     $thisTarget = $_
-                    $ClientNetwork = @($thisTestableNet.Group | Where-Object NodeName -ne $thisTarget.NodeName | Where-Object -FilterScript { $_.RDMAEnabled })
 
-                    Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))"
-                    ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-
-                    $thisTargetResult = Invoke-NDKPerfNto1 -Server $thisTarget -ClientNetwork $ClientNetwork -ExpectedTPUT $Definitions.NDKPerf.TPUT
+                    $ClientNetwork = @($GroupToTest | Where-Object NodeName -ne $thisTarget.NodeName)
 
                     $Result = New-Object -TypeName psobject
                     $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
                     $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                    $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisTargetResult.ReceiverLinkSpeedGbps
-                    $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisTargetResult.RxGbps
-                    $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisTargetResult.ReceivedPctgOfLinkSpeed
+                    # If ATC is deployed but failed, skip testing and mark failed
+                    if ($ATCDeploymentStatus -ne [ATCDeploymentStatus]::DeployedMarkFailed) {
+                        Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))"
+                        ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-                    if ($thisTargetResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Pass' }
-                    else { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail' }
+                        $thisTargetResult = Invoke-NDKPerfNto1 -Server $thisTarget -ClientNetwork $ClientNetwork -ExpectedTPUT $Definitions.NDKPerf.TPUT
 
-                    $Result | Add-Member -MemberType NoteProperty -Name ClientNetworkTested -Value $thisTargetResult.ClientNetworkTested
-                    $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisTargetResult.RawData
+                        $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value $thisTargetResult.ReceiverLinkSpeedGbps
+                        $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisTargetResult.RxGbps
+                        $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value $thisTargetResult.ReceivedPctgOfLinkSpeed
+
+                        if ($thisTargetResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Pass' }
+                        else { $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail' }
+
+                        $Result | Add-Member -MemberType NoteProperty -Name ClientNetworkTested -Value $thisTargetResult.ClientNetworkTested
+                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisTargetResult.RawData
+
+                        Write-Host ":: $([System.DateTime]::Now) :: [Completed] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))"
+                        ":: $([System.DateTime]::Now) :: [Completed] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                    } else {
+                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail'
+                        $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'ATC Misconfiguration - Not Tested'
+                    }
 
                     $StageResults += $Result
                     Remove-Variable Result -ErrorAction SilentlyContinue
-
-                    Write-Host ":: $([System.DateTime]::Now) :: [Completed] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))"
-                    ":: $([System.DateTime]::Now) :: [Completed] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                 }
             }
 
@@ -983,7 +1080,7 @@ Function Test-NetStack {
 
         '6' { # RDMA Stress N:N
             if ( $ContinueOnFailure -eq $false ) {
-                if ('fail' -in $NetStackResults.Stage3.PathStatus -or 'fail' -in $NetStackResults.Stage4.PathStatus -or 'fail' -in $NetStackResults.Stage5.PathStatus) {
+                if ('fail' -in $NetStackResults.Stage3.PathStatus -or 'fail' -in $NetStackResults.Stage4.PathStatus -or 'fail' -in $NetStackResults.Stage5.ReceiverStatus) {
 
                     $Stage -ge 6 | ForEach-Object {
                         $AbortedStage = $_
@@ -1006,15 +1103,23 @@ Function Test-NetStack {
             $TestableNetworks | ForEach-Object {
                 $thisTestableNet = $_
 
-                $ServerList = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
+                # If ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
+                if ($ATCDeploymentStatus -eq [ATCDeploymentStatus]::DeployedCorrectly) {
+                    $ServerList = $thisTestableNet.Group | Where-Object -FilterScript { $_.StorageIntentSet }
+                } else {
+                    $ServerList = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
+                }
+
+                if (($ServerList | Measure-Object).Count -lt 2) {
+                    Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
+                    $Result = New-Object -TypeName psobject
+                    $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail'
+                    $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
+                    $StageResults += $Result
+                }
 
                 $thisSubnet = ($ServerList | Select-Object -First 1).subnet
                 $thisVLAN = ($ServerList | Select-Object -First 1).VLAN
-
-                Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)"
-                ":: $([System.DateTime]::Now) :: [Started] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-
-                $thisSourceResult = Invoke-NDKPerfNtoN -ServerList $ServerList -ExpectedTPUT $Definitions.NDKPerf.TPUT
 
                 $Result = New-Object -TypeName psobject
                 $thisSubnet = $thisTestableNet.Name.Split(',')[0]
@@ -1022,15 +1127,26 @@ Function Test-NetStack {
                 $Result | Add-Member -MemberType NoteProperty -Name Subnet -Value $thisSubnet
                 $Result | Add-Member -MemberType NoteProperty -Name VLAN -Value $thisVLAN
 
-                $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.RxGbps
+                # If ATC is deployed but failed, skip testing and mark failed
+                if ($ATCDeploymentStatus -ne [ATCDeploymentStatus]::DeployedMarkFailed) {
+                    Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)"
+                    ":: $([System.DateTime]::Now) :: [Started] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
-                if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Pass' }
-                else { $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail' }
+                    $thisSourceResult = Invoke-NDKPerfNtoN -ServerList $ServerList -ExpectedTPUT $Definitions.NDKPerf.TPUT
 
-                $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
+                    $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.RxGbps
 
-                Write-Host ":: $([System.DateTime]::Now) :: [Completed] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)"
-                ":: $([System.DateTime]::Now) :: [Completed] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                    if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Pass' }
+                    else { $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail' }
+
+                    $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
+
+                    Write-Host ":: $([System.DateTime]::Now) :: [Completed] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)"
+                    ":: $([System.DateTime]::Now) :: [Completed] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                } else {
+                    $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail'
+                    $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'ATC Misconfiguration - Not Tested'
+                }
 
                 $StageResults += $Result
                 Remove-Variable Result -ErrorAction SilentlyContinue
