@@ -133,58 +133,68 @@ Function Write-LogMessage {
     "[$([System.DateTime]::Now)] $Message" |  Out-File $LogFile -Append -Encoding utf8 -Width 2000
 }
 
-# ATC Deployment Status:
-#   NotDeployed: ATC is not in use - Test-NetStack will test RDMA based on whether RDMA is enabled on a given adapter.
-#   DeployedCorrectly: ATC has been deployed successfully in a configuration suitable for RDMA testing. Test-NetStack will test RDMA based on whether an adapter belongs to a storage intent.
-#   DeployedMarkFailed: ATC has been deployed, but was either unsuccessful or the configuration does not support RDMA. Test-NetStack will mark all requested RDMA stages as failures.
-enum ATCDeploymentStatus {
+# Storage Intent Deployment Status:
+#   NotDeployed: Network ATC is not in use - Test-NetStack will test RDMA based on whether RDMA is enabled on a given adapter.
+#   DeploymentSuccess: Network ATC has been deployed successfully in a configuration suitable for RDMA testing. Test-NetStack will test RDMA based on whether an adapter belongs to a storage intent.
+#   DeploymentFail: Network ATC has been deployed, but was either unsuccessful or the configuration does not support RDMA. Test-NetStack will mark all requested RDMA stages as failures.
+enum StorageIntentDeploymentStatus {
     NotDeployed
-    DeployedCorrectly
-    DeployedMarkFailed
+    DeploymentSuccess
+    DeploymentFail
 }
 
 # This function will determine:
-#   1. Is ATC deployed?
+#   1. Is Network ATC deployed?
 #   2. Are all intents successfully deployed?
 #   3. Has a storage intent been?
-# and return one of the 3 ATC deployment statuses to tell the Test-NetStack function how to test RDMA stages.
-Function Get-ATCDeploymentStatus {
+# and return an object containing the cluster name, storage intent, and one of the 3 storage intent deployment statuses to tell the Test-NetStack function how to test RDMA stages.
+Function Get-StorageIntentDeploymentStatus {
     param ($LogFile)
 
-    Write-LogMessage -Message "Determining if ATC is deployed in a supported configuration" -LogFile $LogFile
-    # Check for cluster since will need name for ATC commands on older builds
+    Write-LogMessage -Message "Determining if Network ATC is deployed in a supported configuration" -LogFile $LogFile
+
+    # Create PSObject to store cluster name, storage intent, and deployment status
+    $StorageIntentDeployment = New-Object -TypeName psobject
+    $StorageIntentDeployment | Add-Member -MemberType NoteProperty -Name ClusterName -Value $null
+    $StorageIntentDeployment | Add-Member -MemberType NoteProperty -Name StorageIntent -Value $null
+    $StorageIntentDeployment | Add-Member -MemberType NoteProperty -Name DeploymentStatus -Value [StorageIntentDeploymentStatus]::NotDeployed
+
+    # Check for cluster since will need name for Network ATC commands on older builds
     try {
         $ClusterName = Get-Cluster -ErrorAction Stop
+        $StorageIntentDeployment.ClusterName = $ClusterName
     }
     catch {
-        Write-LogMessage -Message "Cluster not found. If this is unexpected, please check for errors in cluster deployment. Otherwise, Test-NetStack will continue in standalone, non-ATC mode." -LogFile $LogFile
-        Return [ATCDeploymentStatus]::NotDeployed
+        Write-LogMessage -Message "Warning: Cluster not found. If this is unexpected, please check for errors in cluster deployment. Otherwise, Test-NetStack will continue in standalone mode, and perform a best-effort test of RDMA based on Get-NetAdapterRDMA Enabled property." -LogFile $LogFile
+        Return $StorageIntentDeployment
     }
 
-    # If a cluster name was returned, proceed with ATC configuration check
+    # If a cluster name was returned, proceed with Network ATC configuration check
     if (-not [String]::IsNullOrEmpty($ClusterName)) {
         try {
             $NetIntentStatusTimeout = 5
             $StartTime = Get-Date
             $EndTime =  (Get-Date).AddMinutes($NetIntentStatusTimeout)
             do {
-                # Check for net intent status to determine 1. is ATC being used and 2. are all intents successfully deployed
+                # Check for net intent status to determine 1. is Network ATC being used and 2. are all intents successfully deployed
                 $NetIntentStatus = Get-NetIntentStatus -ClusterName $ClusterName
-                $IntentsContainFailures = ($NetIntentStatus | Where-Object ConfigurationStatus -eq "Failed").Count -gt 0
+                $IntentsContainFailures = ($NetIntentStatus | Where-Object ConfigurationStatus -eq "Failed" | Measure-Object).Count -gt 0
                 if ($IntentsContainFailures) {
-                    Write-LogMessage -Message "At least one intent failed to be deployed. Please investigate ATC configuration. Test-NetStack will mark any requested RDMA stages as failures." -LogFile $LogFile
-                    Return [ATCDeploymentStatus]::DeployedMarkFailed
+                    Write-LogMessage -Message "At least one intent failed to be deployed. Please investigate Network ATC configuration. Test-NetStack will mark any requested RDMA stages as failures." -LogFile $LogFile
+                    $StorageIntentDeployment.DeploymentStatus = [StorageIntentDeploymentStatus]::DeploymentFail
+                    Return $StorageIntentDeployment
                 }
 
                 # 'Retrying' status indicates an attempt to recover from a failure, so success is unlikely - bail after only one minute
-                $IntentsContainRetrying = ($NetIntentStatus | Where-Object ConfigurationStatus -eq "Retrying").Count -gt 0
+                $IntentsContainRetrying = ($NetIntentStatus | Where-Object ConfigurationStatus -eq "Retrying" | Measure-Object).Count -gt 0
                 if ($IntentsContainRetrying -and ((Get-Date) - $StartTime).TotalSeconds -ge 60) {
-                    Write-LogMessage -Message "At least one intent failed to recover from 'Retrying' status after one minute. Please investigate ATC configuration. Test-NetStack will mark any requested RDMA stages as failures." -LogFile $LogFile
-                    Return [ATCDeploymentStatus]::DeployedMarkFailed
+                    Write-LogMessage -Message "At least one intent failed to recover from 'Retrying' status after one minute. Please investigate Network ATC configuration. Test-NetStack will mark any requested RDMA stages as failures." -LogFile $LogFile
+                    $StorageIntentDeployment.DeploymentStatus = [StorageIntentDeploymentStatus]::DeploymentFail
+                    Return $StorageIntentDeployment
                 }
 
                 # Statuses such as 'Validating', 'Pending', 'Provisioning', and 'ProvisioningUpdate' have a good chance of resolving on their own - retry status check for up to five minutes
-                $AllIntentsSuccessful = ($NetIntentStatus | Where-Object ConfigurationStatus -ne "Success").Count -eq 0
+                $AllIntentsSuccessful = ($NetIntentStatus | Where-Object ConfigurationStatus -ne "Success" | Measure-Object).Count -eq 0
                 if ($AllIntentsSuccessful -eq $false) {
                     Write-LogMessage -Message "Some intents do not have a successful configuration status. Checking again in 60 seconds to allow temporary statuses to resolve." -LogFile $LogFile
                     $NetIntentStatus | ft * | Out-File $LogFile -Append -Encoding utf8 -Width 2000
@@ -194,21 +204,24 @@ Function Get-ATCDeploymentStatus {
 
             if ($AllIntentsSuccessful -eq $false) {
                 Write-LogMessage -Message "Intents not successfully deployed after 5 minutes. Test-NetStack will mark any requested RDMA stages as failures." -LogFile $LogFile
-                Return [ATCDeploymentStatus]::DeployedMarkFailed
+                $StorageIntentDeployment.DeploymentStatus = [StorageIntentDeploymentStatus]::DeploymentFail
+                Return $StorageIntentDeployment
             } else {
                 Write-LogMessage -Message "All intents deployed successfully." -LogFile $LogFile
             }
 
         }
         catch {
-            # Get-NetIntentStatus will throw an error if ATC is not configured, in which case we are here
-            Write-LogMessage -Message "No net intent found. If this is unexpected, please check for errors in ATC deployment. Otherwise, Test-NetStack will continue in non-ATC mode." -LogFile $LogFile
-            Return [ATCDeploymentStatus]::NotDeployed
+            # Get-NetIntentStatus will throw an error if Network ATC is not configured, in which case we are here
+            Write-LogMessage -Message "Warning: No net intent found. If this is unexpected, please check for errors in Network ATC deployment. Otherwise, Test-NetStack will perform a best-effort test of RDMA based on Get-NetAdapterRDMA Enabled property." -LogFile $LogFile
+            Return $StorageIntentDeployment
         }
 
-        # If we've made it to this point, ATC is in use and all intents are successfully deployed
-        if ((Get-NetIntent -ClusterName $ClusterName | Where IsStorageIntentSet -eq $true).Count -eq 1) {
+        # If we've made it to this point, Network ATC is in use and all intents are successfully deployed
+        $StorageIntent = Get-NetIntent -ClusterName $ClusterName | Where IsStorageIntentSet -eq $true
+        if ($StorageIntent.Count -eq 1) {
             Write-LogMessage -Message "Storage intent set." -LogFile $LogFile
+            $StorageIntentDeployment.StorageIntent = $StorageIntent
             $RDMAOverride = (Get-NetIntent -ClusterName $ClusterName).AdapterAdvancedParametersOverride.NetworkDirect
             if ($RDMAOverride -eq $false -or $RDMAOverride -eq 0) {
                 Write-LogMessage -Message "RDMA has been disabled with an override. If this is unexpected, please submit an override enabling the Network Direct adapter property. 
@@ -217,34 +230,50 @@ Function Get-ATCDeploymentStatus {
                         `$AdapterOverride = New-NetIntentAdapterPropertyOverrides`r
                         `$AdapterOverride.NetworkDirect = 0`r
                         Set-NetIntent -Name <Intent Name> -AdapterPropertyOverrides `$AdapterOverride -ClusterName <Cluster Name>" -LogFile $LogFile
-                Return [ATCDeploymentStatus]::DeployedMarkFailed
+                $StorageIntentDeployment.DeploymentStatus = [StorageIntentDeploymentStatus]::DeploymentFail
+                Return $StorageIntentDeployment
             }
         } else {
             Write-LogMessage -Message "No storage intent set. Test-NetStack will mark any requested RDMA stages as failures." -LogFile $LogFile
-            Return [ATCDeploymentStatus]::DeployedMarkFailed
+            $StorageIntentDeployment.DeploymentStatus = [StorageIntentDeploymentStatus]::DeploymentFail
+            Return $StorageIntentDeployment
         }
 
-        # If we've made it to this point, ATC is in use, all intents are successfully deployed, and a storage intent is defined
-        Write-LogMessage -Message "ATC is deployed and successfully configured with a storage intent. Test-NetStack will perform RDMA testing according to net intents." -LogFile $LogFile
-        Return [ATCDeploymentStatus]::DeployedCorrectly
+        # If we've made it to this point, Network ATC is in use, all intents are successfully deployed, and a storage intent is defined
+        Write-LogMessage -Message "Network ATC is deployed and successfully configured with a storage intent. Test-NetStack will perform RDMA testing according to net intents." -LogFile $LogFile
+        $StorageIntentDeployment.DeploymentStatus = [StorageIntentDeploymentStatus]::DeploymentSuccess
+        Return $StorageIntentDeployment
     }
 }
 
-Function Get-ATCNICMapping {
+Function Get-StorageIntentNICMapping {
+    param ($StorageIntentDeployment)
+
     # Go through output of Get-NetIntentAllGoalStates to determine which adapters are associated with a storage intent, and pNIC/vNIC mapping
-    $ClusterName = Get-Cluster
-    $StorageIntent = Get-NetIntent -ClusterName $ClusterName | Where-Object IsStorageIntentSet -eq $true
-    $IntentAllGoalStates = Get-NetIntentAllGoalStates -ClusterName $ClusterName
+    $IntentAllGoalStates = Get-NetIntentAllGoalStates -ClusterName $StorageIntentDeployment.ClusterName
     $NodeNames = (Get-ClusterNode).Name
     $StorageNICMapping = @()
     foreach ($NodeName in $NodeNames) {
-        $IntentAllGoalStates.$NodeName.$($StorageIntent.IntentName).SwitchConfig.StorageVirtualNetworkAdapters | ForEach-Object {
-            $HostNICMapping = New-Object -TypeName psobject
-            $HostNICMapping | Add-Member -MemberType NoteProperty -Name NodeName -Value $NodeName
-            $HostNICMapping | Add-Member -MemberType NoteProperty -Name pNIC -Value $_.TeamedPhysicalAdapterName
-            $HostNICMapping | Add-Member -MemberType NoteProperty -Name vNIC -Value $_.VmAdapterName
-            $StorageNICMapping += $HostNICMapping
+        if ($StorageIntentDeployment.StorageIntent.IsOnlyStorage) {
+            # If an intent is storage only, no vNICs will be created
+            $IntentAllGoalStates.$NodeName.$($StorageIntentDeployment.StorageIntent.IntentName).SwitchConfig.NetAdapters | ForEach-Object {
+                $HostNICMapping = New-Object -TypeName psobject
+                $HostNICMapping | Add-Member -MemberType NoteProperty -Name NodeName -Value $NodeName
+                $HostNICMapping | Add-Member -MemberType NoteProperty -Name pNIC -Value $_.NetAdapterName
+                $HostNICMapping | Add-Member -MemberType NoteProperty -Name vNIC -Value $null
+                $StorageNICMapping += $HostNICMapping
+            }
+        } else {
+            # If an intent is not storage only, store the pNIC/vNIC mappings
+            $IntentAllGoalStates.$NodeName.$($StorageIntentDeployment.StorageIntent.IntentName).SwitchConfig.StorageVirtualNetworkAdapters | ForEach-Object {
+                $HostNICMapping = New-Object -TypeName psobject
+                $HostNICMapping | Add-Member -MemberType NoteProperty -Name NodeName -Value $NodeName
+                $HostNICMapping | Add-Member -MemberType NoteProperty -Name pNIC -Value $_.TeamedPhysicalAdapterName
+                $HostNICMapping | Add-Member -MemberType NoteProperty -Name vNIC -Value $_.VmAdapterName
+                $StorageNICMapping += $HostNICMapping
+            }
         }
+
     }
     Return $StorageNICMapping
 }
@@ -252,7 +281,7 @@ Function Get-ConnectivityMapping {
     param (
         [string[]] $Nodes,
         [string[]] $IPTarget,
-        $ATCNICMapping
+        $StorageIntentNICMapping
    )
 
     #TODO: Add IP Target disqualification if the addressState not eq not preferred
@@ -410,9 +439,9 @@ Function Get-ConnectivityMapping {
                 $Result | Add-Member -MemberType NoteProperty -Name RDMAEnabled -Value $false
             }
 
-            # If we've passed in an ATC NIC mapping, add a property for StorageIntentSet - this will be how we filter for testing in RDMA stages
-            if ($ATCNICMapping.Count -gt 0) {
-                if ($thisNetAdapter.Name -in ($ATCNICMapping | Where NodeName -eq $thisNode).pNIC -or $thisNetAdapter.Name -in ($ATCNICMapping | Where NodeName -eq $thisNode).vNIC) {
+            # If we've passed in a storage intent NIC mapping, add a property for StorageIntentSet - this will be how we filter for testing in RDMA stages
+            if ($StorageIntentNICMapping.Count -gt 0) {
+                if ($thisNetAdapter.Name -in ($StorageIntentNICMapping | Where NodeName -eq $thisNode).pNIC -or $thisNetAdapter.Name -in ($StorageIntentNICMapping | Where NodeName -eq $thisNode).vNIC) {
                     $Result | Add-Member -MemberType NoteProperty -Name StorageIntentSet -Value $true
                 } else {
                     $Result | Add-Member -MemberType NoteProperty -Name StorageIntentSet -Value $false

@@ -233,27 +233,30 @@ Function Test-NetStack {
 
     $RDMAStages = @(3, 4, 5, 6, 7)
     if ($OnlyConnectivityMap) {
-        Write-LogMessage -Message "'Connectivity Map Only' option specified. Checking for ATC." -LogFile $LogFile
-        $ATCDeploymentStatus = Get-ATCDeploymentStatus -LogFile $LogFile
+        Write-LogMessage -Message "'Connectivity Map Only' option specified. Checking for Network ATC." -LogFile $LogFile
+        $StorageIntentDeployment = Get-StorageIntentDeploymentStatus -LogFile $LogFile
     }
     elseif (($Stage | Where-Object {$RDMAStages -contains $_}).Count -gt 0) {
-        Write-LogMessage -Message "RDMA stages specified. Checking for ATC." -LogFile $LogFile
-        $ATCDeploymentStatus = Get-ATCDeploymentStatus -LogFile $LogFile
+        Write-LogMessage -Message "RDMA stages specified. Checking for Network ATC." -LogFile $LogFile
+        $StorageIntentDeployment = Get-StorageIntentDeploymentStatus -LogFile $LogFile
     } else {
-        Write-LogMessage -Message "No RDMA stages specified, skipping check for ATC." -LogFile $LogFile
-        $ATCDeploymentStatus = [ATCDeploymentStatus]::NotDeployed
+        Write-LogMessage -Message "No RDMA stages specified, skipping check for Network ATC." -LogFile $LogFile
+        $StorageIntentDeployment = New-Object -TypeName psobject
+        $StorageIntentDeployment | Add-Member -MemberType NoteProperty -Name ClusterName -Value $null
+        $StorageIntentDeployment | Add-Member -MemberType NoteProperty -Name StorageIntent -Value $null
+        $StorageIntentDeployment | Add-Member -MemberType NoteProperty -Name DeploymentStatus -Value [StorageIntentDeploymentStatus]::NotDeployed
     }
     
     # If ATC is deployed, generate a list of adapters associated with a storage intent
-    if ($ATCDeploymentStatus -eq [ATCDeploymentStatus]::DeployedCorrectly) {
-        $ATCNICMapping = Get-ATCNICMapping
+    if ($StorageIntentDeployment.DeploymentStatus -eq [StorageIntentDeploymentStatus]::DeploymentSuccess) {
+        $StorageIntentNICMapping = Get-StorageIntentNICMapping -StorageIntentDeployment $StorageIntentDeployment
     }
 
     Write-LogMessage -Message "Generating Connectivity Map" -LogFile $LogFile
     if ($Nodes) {
-        # If ATC is deployed, pass the ATC adapter mapping to the connectivity mapper to fill in StorageIntentSet property
-        if ($ATCDeploymentStatus -eq [ATCDeploymentStatus]::DeployedCorrectly -and $ATCNICMapping.Count -gt 0) {
-            $Mapping = Get-ConnectivityMapping -Nodes $Nodes -ATCNICMapping $ATCNICMapping
+        # If Network ATC is deployed, pass the storage intent adapter mapping to the connectivity mapper to fill in StorageIntentSet property
+        if ($StorageIntentDeployment.DeploymentStatus -eq [StorageIntentDeploymentStatus]::DeploymentSuccess -and $StorageIntentNICMapping.Count -gt 0) {
+            $Mapping = Get-ConnectivityMapping -Nodes $Nodes -StorageIntentNICMapping $StorageIntentNICMapping
         }
         else { # Otherwise, run connectivity mapper as usual
             $Mapping = Get-ConnectivityMapping -Nodes $Nodes 
@@ -739,8 +742,8 @@ Function Test-NetStack {
                 $TestableNetworks | ForEach-Object {
                     $thisTestableNet = $_
 
-                    # If ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
-                    if ($ATCDeploymentStatus -eq [ATCDeploymentStatus]::DeployedCorrectly) {
+                    # If Network ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
+                    if ($StorageIntentDeployment.DeploymentStatus -eq [StorageIntentDeploymentStatus]::DeploymentSuccess) {
                         $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.StorageIntentSet }
                     } else {
                         $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
@@ -766,8 +769,8 @@ Function Test-NetStack {
                             $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
                             $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                            # If ATC is deployed but failed, skip testing and mark failed
-                            if ($ATCDeploymentStatus -ne [ATCDeploymentStatus]::DeployedMarkFailed) {
+                            # If Network ATC is deployed but failed, skip testing and mark failed
+                            if ($StorageIntentDeployment.DeploymentStatus -ne [StorageIntentDeploymentStatus]::DeploymentFail) {
 
                                 Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)"
                                 ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
@@ -781,7 +784,7 @@ Function Test-NetStack {
                                 else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
                             } else {
                                 $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
-                                $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'ATC Misconfiguration - Not Tested'
+                                $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'Network ATC Misconfiguration - Not Tested'
                             }
 
                             $StageResults += $Result
@@ -919,8 +922,8 @@ Function Test-NetStack {
                 $TestableNetworks | ForEach-Object {
                 $thisTestableNet = $_
 
-                # If ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
-                if ($ATCDeploymentStatus -eq [ATCDeploymentStatus]::DeployedCorrectly) {
+                # If Network ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
+                if ($StorageIntentDeployment.DeploymentStatus -eq [StorageIntentDeploymentStatus]::DeploymentSuccess) {
                     $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.StorageIntentSet }
                 } else {
                     $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
@@ -946,8 +949,8 @@ Function Test-NetStack {
                         $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisSource.IPaddress
                         $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                        # If ATC is deployed but failed, skip testing and mark failed
-                        if ($ATCDeploymentStatus -ne [ATCDeploymentStatus]::DeployedMarkFailed) {
+                        # If Network ATC is deployed but failed, skip testing and mark failed
+                        if ($StorageIntentDeployment.DeploymentStatus -ne [StorageIntentDeploymentStatus]::DeploymentFail) {
                             Write-Host ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)"
                             ":: Stage $thisStage : $([System.DateTime]::Now) :: [Starting] $($thisSource.IPAddress) -> ($($thisTarget.NodeName)) $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
@@ -967,7 +970,7 @@ Function Test-NetStack {
                             $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
                         } else {
                             $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
-                            $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'ATC Misconfiguration - Not Tested'
+                            $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'Network ATC Misconfiguration - Not Tested'
                         }
 
                         $StageResults += $Result
@@ -1014,7 +1017,7 @@ Function Test-NetStack {
                 $thisTestableNet = $_
     
                 # If ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
-                if ($ATCDeploymentStatus -eq [ATCDeploymentStatus]::DeployedCorrectly) {
+                if ($StorageIntentDeployment.DeploymentStatus -eq [StorageIntentDeploymentStatus]::DeploymentSuccess) {
                     $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.StorageIntentSet }
                 } else {
                     $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
@@ -1037,8 +1040,8 @@ Function Test-NetStack {
                     $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTarget.NodeName
                     $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTarget.IPAddress
 
-                    # If ATC is deployed but failed, skip testing and mark failed
-                    if ($ATCDeploymentStatus -ne [ATCDeploymentStatus]::DeployedMarkFailed) {
+                    # If Network ATC is deployed but failed, skip testing and mark failed
+                    if ($StorageIntentDeployment.DeploymentStatus -ne [StorageIntentDeploymentStatus]::DeploymentFail) {
                         Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))"
                         ":: $([System.DateTime]::Now) :: [Started] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
@@ -1058,7 +1061,7 @@ Function Test-NetStack {
                         ":: $([System.DateTime]::Now) :: [Completed] N -> Interface $($thisTarget.InterfaceIndex) ($($thisTarget.IPAddress))" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                     } else {
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail'
-                        $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'ATC Misconfiguration - Not Tested'
+                        $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'Network ATC Misconfiguration - Not Tested'
                     }
 
                     $StageResults += $Result
@@ -1103,8 +1106,8 @@ Function Test-NetStack {
             $TestableNetworks | ForEach-Object {
                 $thisTestableNet = $_
 
-                # If ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
-                if ($ATCDeploymentStatus -eq [ATCDeploymentStatus]::DeployedCorrectly) {
+                # If Network ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
+                if ($StorageIntentDeployment.DeploymentStatus -eq [StorageIntentDeploymentStatus]::DeploymentSuccess) {
                     $ServerList = $thisTestableNet.Group | Where-Object -FilterScript { $_.StorageIntentSet }
                 } else {
                     $ServerList = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
@@ -1127,8 +1130,8 @@ Function Test-NetStack {
                 $Result | Add-Member -MemberType NoteProperty -Name Subnet -Value $thisSubnet
                 $Result | Add-Member -MemberType NoteProperty -Name VLAN -Value $thisVLAN
 
-                # If ATC is deployed but failed, skip testing and mark failed
-                if ($ATCDeploymentStatus -ne [ATCDeploymentStatus]::DeployedMarkFailed) {
+                # If Network ATC is deployed but failed, skip testing and mark failed
+                if ($StorageIntentDeployment.DeploymentStatus -ne [StorageIntentDeploymentStatus]::DeploymentFail) {
                     Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)"
                     ":: $([System.DateTime]::Now) :: [Started] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
 
@@ -1145,7 +1148,7 @@ Function Test-NetStack {
                     ":: $([System.DateTime]::Now) :: [Completed] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                 } else {
                     $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail'
-                    $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'ATC Misconfiguration - Not Tested'
+                    $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'Network ATC Misconfiguration - Not Tested'
                 }
 
                 $StageResults += $Result
