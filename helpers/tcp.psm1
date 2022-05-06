@@ -30,10 +30,8 @@ function Invoke-TCP {
         ("bps")  {$ClientLinkSpeedBps = [Int]::Parse($ClientLinkSpeed[0]) / 8}
     }
 
-    $BufferSize = 65536
-    if ($ServerLinkSpeed -ge 50) {
-        $BufferSize = $BufferSize * 10
-    }
+    $DefaultBufferSize = 65536
+    $BufferSize = $DefaultBufferSize * $ServerLinkSpeed[0]
 
     $ServerOutput = Start-Job -ScriptBlock {
         param ([string] $ServerName, [string] $ServerIP, $ModuleBase, $LogDir, $BufferSize)
