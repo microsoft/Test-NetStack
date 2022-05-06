@@ -745,6 +745,10 @@ Function Test-NetStack {
                     # If Network ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
                     if ($StorageIntentDeployment.DeploymentStatus -eq [StorageIntentDeploymentStatus]::DeploymentSuccess) {
                         $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.StorageIntentSet }
+                        if (($GroupToTest | Measure-Object).Count -eq 0) {
+                            # This network is not a storage network - skip to the next network ("Return" since we are in ForEach-Object script block)
+                            Return
+                        }
                     } else {
                         $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
                     }
@@ -752,6 +756,10 @@ Function Test-NetStack {
                     if (($GroupToTest | Measure-Object).Count -lt 2) {
                         Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
                         $Result = New-Object -TypeName psobject
+                        # Fill in typical columns so fields will be available for other networks able to be tested, and so it's clear which network failed
+                        $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTestableNet.Group.NodeName
+                        $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisTestableNet.Group.IPAddress
+                        $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTestableNet.Group.IPAddress
                         $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
                         $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
                         $StageResults += $Result
@@ -925,6 +933,10 @@ Function Test-NetStack {
                 # If Network ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
                 if ($StorageIntentDeployment.DeploymentStatus -eq [StorageIntentDeploymentStatus]::DeploymentSuccess) {
                     $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.StorageIntentSet }
+                    if (($GroupToTest | Measure-Object).Count -eq 0) {
+                        # This network is not a storage network - skip to the next network ("Return" since we are in ForEach-Object script block)
+                        Return
+                    }
                 } else {
                     $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
                 }
@@ -932,7 +944,16 @@ Function Test-NetStack {
                 if (($GroupToTest | Measure-Object).Count -lt 2) {
                     Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
                     $Result = New-Object -TypeName psobject
+                    # Fill in typical columns so fields will be available for other networks able to be tested, and so it's clear which network failed
+                    $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTestableNet.Group.NodeName
+                    $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisTestableNet.Group.IPAddress
+                    $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTestableNet.Group.IPAddress
+                    $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value "N/A"
+                    $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value "N/A"
+                    $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value "N/A"
+                    $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.NDKPerf.TPUT
                     $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                    $Result | Add-Member -MemberType NoteProperty -Name RawData -Value "N/A"
                     $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
                     $StageResults += $Result
                 }
@@ -1019,6 +1040,10 @@ Function Test-NetStack {
                 # If ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
                 if ($StorageIntentDeployment.DeploymentStatus -eq [StorageIntentDeploymentStatus]::DeploymentSuccess) {
                     $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.StorageIntentSet }
+                    if (($GroupToTest | Measure-Object).Count -eq 0) {
+                        # This network is not a storage network - skip to the next network ("Return" since we are in ForEach-Object script block)
+                        Return
+                    }
                 } else {
                     $GroupToTest = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
                 }
@@ -1026,8 +1051,16 @@ Function Test-NetStack {
                 if (($GroupToTest | Measure-Object).Count -lt 2) {
                     Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
                     $Result = New-Object -TypeName psobject
+                    # Fill in typical columns so fields will be available for other networks able to be tested, and so it's clear which network failed
+                    $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTestableNet.Group.NodeName
+                    $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTestableNet.Group.IPAddress
+                    $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value "N/A"
+                    $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value "N/A"
+                    $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value "N/A"
                     $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail'
                     $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
+                    $Result | Add-Member -MemberType NoteProperty -Name ClientNetworkTested -Value $thisTestableNet.Group.IPAddress
+                    $Result | Add-Member -MemberType NoteProperty -Name RawData -Value "N/A"
                     $StageResults += $Result
                 }
 
@@ -1109,16 +1142,12 @@ Function Test-NetStack {
                 # If Network ATC is deployed, filter by StorageIntentSet. Otherwise, filter by RDMAEnabled
                 if ($StorageIntentDeployment.DeploymentStatus -eq [StorageIntentDeploymentStatus]::DeploymentSuccess) {
                     $ServerList = $thisTestableNet.Group | Where-Object -FilterScript { $_.StorageIntentSet }
+                    if (($ServerList | Measure-Object).Count -eq 0) {
+                        # This network is not a storage network - skip to the next network ("Return" since we are in ForEach-Object script block)
+                        Return
+                    }
                 } else {
                     $ServerList = $thisTestableNet.Group | Where-Object -FilterScript { $_.RDMAEnabled }
-                }
-
-                if (($ServerList | Measure-Object).Count -lt 2) {
-                    Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
-                    $Result = New-Object -TypeName psobject
-                    $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail'
-                    $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
-                    $StageResults += $Result
                 }
 
                 $thisSubnet = ($ServerList | Select-Object -First 1).subnet
@@ -1130,25 +1159,35 @@ Function Test-NetStack {
                 $Result | Add-Member -MemberType NoteProperty -Name Subnet -Value $thisSubnet
                 $Result | Add-Member -MemberType NoteProperty -Name VLAN -Value $thisVLAN
 
-                # If Network ATC is deployed but failed, skip testing and mark failed
-                if ($StorageIntentDeployment.DeploymentStatus -ne [StorageIntentDeploymentStatus]::DeploymentFail) {
-                    Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)"
-                    ":: $([System.DateTime]::Now) :: [Started] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-
-                    $thisSourceResult = Invoke-NDKPerfNtoN -ServerList $ServerList -ExpectedTPUT $Definitions.NDKPerf.TPUT
-
-                    $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.RxGbps
-
-                    if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Pass' }
-                    else { $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail' }
-
-                    $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
-
-                    Write-Host ":: $([System.DateTime]::Now) :: [Completed] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)"
-                    ":: $([System.DateTime]::Now) :: [Completed] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
-                } else {
+                if (($ServerList | Measure-Object).Count -lt 2) {
+                    Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
+                    # Fill in typical columns so fields will be available for other networks able to be tested, and so it's clear which network failed
+                    $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value "N/A"
                     $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail'
-                    $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'Network ATC Misconfiguration - Not Tested'
+                    $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
+                    $Result | Add-Member -MemberType NoteProperty -Name RawData -Value "N/A"
+                    $StageResults += $Result
+                } else {
+                    # If Network ATC is deployed but failed, skip testing and mark failed
+                    if ($StorageIntentDeployment.DeploymentStatus -ne [StorageIntentDeploymentStatus]::DeploymentFail) {
+                        Write-Host ":: $([System.DateTime]::Now) :: [Started] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)"
+                        ":: $([System.DateTime]::Now) :: [Started] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+
+                        $thisSourceResult = Invoke-NDKPerfNtoN -ServerList $ServerList -ExpectedTPUT $Definitions.NDKPerf.TPUT
+
+                        $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value $thisSourceResult.RxGbps
+
+                        if ($thisSourceResult.ServerSuccess) { $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Pass' }
+                        else { $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail' }
+
+                        $Result | Add-Member -MemberType NoteProperty -Name RawData -Value $thisSourceResult.RawData
+
+                        Write-Host ":: $([System.DateTime]::Now) :: [Completed] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)"
+                        ":: $([System.DateTime]::Now) :: [Completed] N -> N on subnet $($thisSubnet) and VLAN $($thisVLAN)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
+                    } else {
+                        $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail'
+                        $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'Network ATC Misconfiguration - Not Tested'
+                    }
                 }
 
                 $StageResults += $Result
