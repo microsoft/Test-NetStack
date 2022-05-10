@@ -754,13 +754,13 @@ Function Test-NetStack {
                     }
 
                     if (($GroupToTest | Measure-Object).Count -lt 2) {
-                        Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
+                        Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found on this network. Skipping this network." -LogFile $LogFile
                         $Result = New-Object -TypeName psobject
                         # Fill in typical columns so fields will be available for other networks able to be tested, and so it's clear which network failed
                         $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTestableNet.Group.NodeName
                         $Result | Add-Member -MemberType NoteProperty -Name Sender -Value $thisTestableNet.Group.IPAddress
                         $Result | Add-Member -MemberType NoteProperty -Name Receiver -Value $thisTestableNet.Group.IPAddress
-                        $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                        $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Skipped'
                         $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
                         $StageResults += $Result
                     }
@@ -942,7 +942,7 @@ Function Test-NetStack {
                 }
 
                 if (($GroupToTest | Measure-Object).Count -lt 2) {
-                    Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
+                    Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found on this network. Skipping this network." -LogFile $LogFile
                     $Result = New-Object -TypeName psobject
                     # Fill in typical columns so fields will be available for other networks able to be tested, and so it's clear which network failed
                     $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTestableNet.Group.NodeName
@@ -952,7 +952,7 @@ Function Test-NetStack {
                     $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value "N/A"
                     $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value "N/A"
                     $Result | Add-Member -MemberType NoteProperty -Name MinExpectedPctgOfLinkSpeed -Value $Definitions.NDKPerf.TPUT
-                    $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                    $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Skipped'
                     $Result | Add-Member -MemberType NoteProperty -Name RawData -Value "N/A"
                     $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
                     $StageResults += $Result
@@ -1049,7 +1049,7 @@ Function Test-NetStack {
                 }
 
                 if (($GroupToTest | Measure-Object).Count -lt 2) {
-                    Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
+                    Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found on this network. Skipping this network." -LogFile $LogFile
                     $Result = New-Object -TypeName psobject
                     # Fill in typical columns so fields will be available for other networks able to be tested, and so it's clear which network failed
                     $Result | Add-Member -MemberType NoteProperty -Name ReceiverHostName -Value $thisTestableNet.Group.NodeName
@@ -1057,7 +1057,7 @@ Function Test-NetStack {
                     $Result | Add-Member -MemberType NoteProperty -Name RxLinkSpeedGbps -Value "N/A"
                     $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value "N/A"
                     $Result | Add-Member -MemberType NoteProperty -Name RxPctgOfLinkSpeed -Value "N/A"
-                    $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Fail'
+                    $Result | Add-Member -MemberType NoteProperty -Name ReceiverStatus -Value 'Skipped'
                     $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
                     $Result | Add-Member -MemberType NoteProperty -Name ClientNetworkTested -Value $thisTestableNet.Group.IPAddress
                     $Result | Add-Member -MemberType NoteProperty -Name RawData -Value "N/A"
@@ -1160,10 +1160,10 @@ Function Test-NetStack {
                 $Result | Add-Member -MemberType NoteProperty -Name VLAN -Value $thisVLAN
 
                 if (($ServerList | Measure-Object).Count -lt 2) {
-                    Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found. Marking stage $thisStage as failed." -LogFile $LogFile
+                    Write-LogMessage -Message "RDMA stage $thisStage requested, but no RDMA-enabled adapters were found on this network. Skipping this network." -LogFile $LogFile
                     # Fill in typical columns so fields will be available for other networks able to be tested, and so it's clear which network failed
                     $Result | Add-Member -MemberType NoteProperty -Name RxGbps -Value "N/A"
-                    $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Fail'
+                    $Result | Add-Member -MemberType NoteProperty -Name NetworkStatus -Value 'Skipped'
                     $Result | Add-Member -MemberType NoteProperty -Name FailureReason -Value 'RDMA Misconfiguration - Not Tested'
                     $Result | Add-Member -MemberType NoteProperty -Name RawData -Value "N/A"
                     $StageResults += $Result
