@@ -392,7 +392,16 @@ Function Test-NetStack {
 
                             $Result | Add-Member -MemberType NoteProperty -Name Latency -Value $Latency
                             $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $Jitter
+                            
+                            # Pass or fail Stage 1 based on connectivity
+                            if ($Result.Connectivity -eq $true) {
+                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass'
+                            } 
+                            else {
+                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                            }
 
+                            # Evaluate reliability results if collected
                             if ($TotalSent -and $SuccessPercentage -and $Latency -and $Jitter -and
                                 $Definitions.Reliability.ICMPSent  -and $Definitions.Reliability.ICMPReliability  -and
                                 $Definitions.Reliability.ICMPLatency -and $Definitions.Reliability.ICMPJitter) {
@@ -402,12 +411,12 @@ Function Test-NetStack {
                                         $Latency           -le $Definitions.Reliability.ICMPLatency     -and
                                         $Jitter            -le $Definitions.Reliability.ICMPJitter ) {
 
-                                        $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Pass'
+                                        $Result | Add-Member -MemberType NoteProperty -Name ReliabilityStatus -Value 'Pass'
                                     }
-                                    else { $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail' }
+                                    else { $Result | Add-Member -MemberType NoteProperty -Name ReliabilityStatus -Value 'Fail' }
                             }
                             else {
-                                $Result | Add-Member -MemberType NoteProperty -Name PathStatus -Value 'Fail'
+                                $Result | Add-Member -MemberType NoteProperty -Name ReliabilityStatus -Value 'Fail'
                                 "ERROR: Data failed to be collected for path ($($thisComputerName)) $($thisSource.IPAddress) -> $($thisTarget.IPAddress)" | Out-File $LogFile -Append -Encoding utf8 -Width 2000
                             }
 
