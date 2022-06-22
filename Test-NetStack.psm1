@@ -391,7 +391,7 @@ Function Test-NetStack {
                             $Jitter  = Get-Jitter  -RoundTripTime ($thisSourceResult -ne -1)
 
                             $Result | Add-Member -MemberType NoteProperty -Name Latency -Value $Latency
-                            $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $
+                            $Result | Add-Member -MemberType NoteProperty -Name Jitter -Value $Jitter
                             
                             # Pass or fail Stage 1 based on connectivity
                             if ($Result.Connectivity -eq $true) {
