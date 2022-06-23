@@ -73,6 +73,5 @@ ForEach ($Module in $PowerShellModules) {
     else {
         Install-Module $Module -Scope AllUsers -Force -Repository PSGallery -AllowClobber
         Import-Module $Module
-        Get-Module $Module
     }
 }
